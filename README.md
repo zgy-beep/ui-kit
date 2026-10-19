@@ -3,6 +3,7 @@
 > 版本：**v2.2.0**（语义化版本；破坏性改名/删 token 升大版本，新增组件/新增 token 升小版本，调 token 取值/动效打磨/反馈修复升补丁版本）
 > 来源：从 novel-stream 扩展（另一个 SillyTavern 插件）的浮动 UI（设置弹窗 / 悬浮入口 / 图片预览 / 提示层）中提炼，已在实际酒馆宿主（深/浅主题、桌面/手机）上验证；**v2.0.0 起升级为「Flat Glass（扁平玻璃）」设计语言**（扁平化 + 玻璃拟态 + 动效体系 + 能力降级）；**v2.0.1 玻璃更透、浮层描边更柔和、动效补强（16 关键帧）**；**v2.1.0 新增「SillyTavern 插件面板布局标准（桌面 / 手机）」（第 12 章）**；**v2.1.1 描边再减弱、焦点环单圈 1.5px、面板固定尺寸、隐藏滚动条**；**v2.2.0 描边精致化（圆角玻璃去外框 1px 描边，改柔光+阴影成形；ghost/空态/指示器去圆角描边；焦点环回到单圈 2px 整数像素）并新增可选 `nvui-api.js` 设计调用 API、`tokens.json` 机器可读令牌镜像与 `AI-GUIDE.md` AI 协作指南（第 13 章）**。
 > 定位：**独立项目 + SillyTavern 插件自有的 body 级浮动 UI**。本目录自带 `package.json` / `LICENSE` / `CHANGELOG` / `test/`，**不依赖任何外部仓库或父目录，可整目录复制/移动到任意文件夹或仓库**。不接管聊天区、原生抽屉等宿主区域（那些区域必须沿用酒馆主题变量）。
+> 演示：**[在线组件预览（GitHub Pages）](https://zgy-beep.github.io/ui-kit/preview.html)**（免下载直接体验；可切换深/浅主题与实心/玻璃模式、演示面板布局）。
 
 | 文件 | 作用 |
 | :--- | :--- |
@@ -11,7 +12,7 @@
 | [`nvui-api.js`](nvui-api.js) | **可选**的零依赖运行时 JS API（v2.2.0 新增）：`createPanel` / `showToast` / `switchRow` / `inputRow` / `accordion` / `progress` 等，生成符合面板布局标准与无障碍契约的 DOM；Node 下 require 不访问 DOM |
 | [`tokens.json`](tokens.json) | `tokens.css` 的机器可读镜像（v2.2.0 新增）：`dark` 109 个 / `light` 47 个覆盖，供其它软件、构建工具与 AI 读取 |
 | [`AI-GUIDE.md`](AI-GUIDE.md) | 给 AI 的协作指南（v2.2.0 新增）：硬约束、读文件顺序、SillyTavern 插件面板标准流程、其它软件移植规范、提示词模板、API 速查、验收清单 |
-| [`preview.html`](preview.html) | 离线组件预览页（双击即可打开；可切换深/浅主题与实心/玻璃模式，支持 URL 参数 `?theme=light`、`?solid=1`） |
+| [`preview.html`](preview.html) | 离线组件预览页（双击即可打开；可切换深/浅主题与实心/玻璃模式，支持 URL 参数 `?theme=light`、`?solid=1`；在线版见上方演示） |
 | [`test/test-ui-kit.js`](test/test-ui-kit.js) | 规范守护测试（token 完整性 / 三方覆盖 / 无硬编码颜色 / WCAG AA 与玻璃合成对比度 / 宿主兼容红线 / 金标准取值 / 动效与降级红线）；`npm test` 或 `node test/test-ui-kit.js` |
 | [`AUDIT.md`](AUDIT.md) | 架构审核报告：v1.1.0 界面架构评估、问题清单（P0/P1/P2/P3）、v2.0.0 升级方案映射与独立复核结论、v2.0.1 修订复核 |
 | [`package.json`](package.json) | 独立项目元信息与 `npm test` 入口（零依赖，无需 `npm install`） |
@@ -85,11 +86,13 @@ ui-kit/                  <- 可整目录移动到任意位置或仓库
 ```
 
 - **独立验证**：`cd ui-kit` 后运行 `npm test`（等价于 `node test/test-ui-kit.js`），无需 `npm install`；
-- **独立预览**：双击 `preview.html` 即可（离线可用）；
+- **独立预览**：双击 `preview.html` 即可（离线可用），或直接访问 [GitHub Pages 在线预览](https://zgy-beep.github.io/ui-kit/preview.html)；
 - **移动/复用**：整个目录复制到新插件里，或作为独立仓库单独维护；
 - Node.js 要求：>= 16（仅测试需要；`tokens.css` / `components.css` 在浏览器/酒馆中使用，无 Node 依赖）。
 
 ### 2.1 引入
+
+#### 2.1.1 方式 A：本地目录引入（常规酒馆插件）
 
 新插件的 `style.css` 顶部（`@import` 必须在所有规则之前）：
 
@@ -143,6 +146,57 @@ panel.open();
 - `nvui-api.js` 是**可选**运行时（零依赖、不引入框架）；不引入也不影响纯 CSS 用法。
 - 用 API 生成的 DOM 自动符合第 12 章面板布局标准与 §7 无障碍契约（`role`/`aria`、桌面 tabs 与手机底部导航同步、焦点管理、Esc / 点遮罩关闭；动效降级交给 CSS）。
 - 完整函数表、渲染控制器与更多示例见 [第 13 章](#13-js-api-与-ai-协作指南)；给 AI 的逐步指南见 [`AI-GUIDE.md`](AI-GUIDE.md)；令牌的机器可读镜像见 [`tokens.json`](tokens.json)。
+
+#### 2.1.2 方式 B：在线 CDN 引入（网页 / 外部项目）
+
+无需下载文件，直接通过公共 CDN（jsDelivr）引入：
+
+```html
+<!-- 设计令牌与组件样式 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.2.0/tokens.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.2.0/components.css">
+
+<!-- 可选运行时 API -->
+<script src="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.2.0/nvui-api.js"></script>
+```
+
+#### 2.1.3 方式 C：酒馆助手（Tavern Helper）单文件脚本引入
+
+在「酒馆助手」（Tavern Helper / JS-Slash-Runner）等单文件用户脚本中，可以在脚本初始化时动态拉取 CDN 资源，自动处理 `window.parent` 顶层文档挂载：
+
+```javascript
+// 酒馆助手脚本：按需动态加载 NVUI Kit
+async function ensureNVUI() {
+    const W = window.parent || window, D = W.document;
+    if (W.NVUI) return W.NVUI;
+    const CDN = 'https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.2.0';
+    if (!D.getElementById('nvui-css-tokens')) {
+        const link = D.createElement('link'); link.id = 'nvui-css-tokens'; link.rel = 'stylesheet'; link.href = `${CDN}/tokens.css`; D.head.appendChild(link);
+    }
+    if (!D.getElementById('nvui-css-components')) {
+        const link = D.createElement('link'); link.id = 'nvui-css-components'; link.rel = 'stylesheet'; link.href = `${CDN}/components.css`; D.head.appendChild(link);
+    }
+    if (!W.NVUI) {
+        await new Promise((res, rej) => {
+            const s = D.createElement('script'); s.id = 'nvui-js-api'; s.src = `${CDN}/nvui-api.js`; s.onload = res; s.onerror = rej; D.head.appendChild(s);
+        });
+    }
+    return W.NVUI;
+}
+
+// 业务调用
+(async () => {
+    const NVUI = await ensureNVUI();
+    const panel = NVUI.createPanel({
+        id: 'my_helper_panel',
+        title: '我的酒馆助手工具',
+        version: 'v1.0.0',
+        tabs: [{ key: 'basic', label: '基本设置', icon: 'fa-solid fa-sliders' }]
+    });
+    panel.addSwitch('basic', { label: '开启功能', value: true });
+    panel.open();
+})();
+```
 
 ### 2.2 作用域
 

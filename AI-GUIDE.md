@@ -99,6 +99,8 @@
 
 API 会自动完成：面板/遮罩/标题栏/关闭按钮/顶部 tabs + 底部导航/`aria-*` 同步/粘连指示器/进出场动画/Esc 与点遮罩关闭/焦点移入与归还。
 
+> **单文件 / 酒馆助手脚本提示**：若是单文件用户脚本（不能拷贝本地文件夹），可通过 CDN 动态加载样式与 JS API（`https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.2.0/nvui-api.js`，完整配方见 `README.md` §2.1.3），然后同样使用 `NVUI.createPanel` 生成，全自动满足规范。
+
 ### 2.3 手写 DOM 时的最小骨架
 
 ```html
