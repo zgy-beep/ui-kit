@@ -267,10 +267,10 @@ overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !overlay.hidden) closeModal(); });
 ```
 
-> **层级提醒（v2.2.0 修订补丁实测结论）**：非模态 `dialog.show()` **不会**把元素送进浏览器 top layer
+> **层级提醒（v2.3.0 实测结论）**：非模态 `dialog.show()` **不会**把元素送进浏览器 top layer
 > （只有 `showModal()` 会，而它会给整个文档加 `inert`，导致宿主不可交互）。
 > 载体是 `position:fixed`，会创建层叠上下文，**内部子元素的 z-index 再大也只在载体内部生效**。
-> 所以载体本身必须显式带 z-index（kit 的 `dialog.nvui-tl` 已内置 `z-index: var(--nvui-z-overlay)`）；
+> 所以载体本身必须显式带 z-index（kit 的 `dialog.nvui-tl` 已内置 `z-index: var(--nvui-z-layer)`）；
 > 否则浮层整体只相当于 z-index 0，会被酒馆 `#sheld`（z-index:30）等宿主区域压住。
 > 详见 [8. 宿主兼容红线](#8-sillytavern-宿主兼容红线) 第 1 条。
 
@@ -731,7 +731,7 @@ v2.0.0 起，阴影只允许出现在浮层（弹窗 / 悬浮面板 / 工具提�
 | :--- | :--- | :--- |
 | `--nvui-z-layer` | `1000000` | **top-layer 载体档**（`dialog.nvui-tl` 自身）。非模态 `show()` 不进浏览器 top layer，层级完全由本档位保证；必须高于宿主一切正 z-index 表面（酒馆竞争上限约 29999） |
 | `--nvui-z-floating` | `1000010` | 悬浮入口 / 悬浮面板 |
-| `--nvui-z-overlay` | `1000020` | 弹窗遮罩；**同时用作 `dialog.nvui-tl` 载体的 z-index**（载体必须显式带 z-index，否则会被宿主高 z-index 区域压住） |
+| `--nvui-z-overlay` | `1000020` | 弹窗遮罩（载体内部层叠上下文内的子浮层档位） |
 | `--nvui-z-tooltip` | `1000030` | 工具提示；**吐司载体 `.nvui-tl-toast`**（吐司需始终盖过面板，故比面板载体高一级） |
 
 > **实测真相（勿凭直觉改）**：非模态 `dialog.show()` 不进浏览器 top layer——top layer 只服务于 `showModal()` 的模态对话框（其 `inert` 会废掉宿主交互，故 kit 禁用）。载体的实际层级由它自身的 `z-index: var(--nvui-z-layer)` 决定，与普通 fixed div 平等；酒馆 `#sheld`（`position:absolute; z-index:30`）会整块盖住没有档位的载体。
@@ -915,6 +915,12 @@ v2.0.0 起，阴影只允许出现在浮层（弹窗 / 悬浮面板 / 工具提�
 | `.nvui-tabpane` | 面板默认 `display:none`，`.is-active` 时 `display:block` 并播放 `nvui-tabpane-in` 入场（淡入 + 上移 6px，v2.0.1 补强） |
 
 **无 JS 回退**：不插入 `.nvui-tabs-indicator`、或不执行下面的配方即可——`.nvui-tab.is-active` 会保持主色淡底与 `nvui-tab-select` 弹跳，行为与旧版完全一致。指示器是**可选增强**，kit 没有 JS 运行时不强依赖它。
+
+> **性能实测结论**：指示器的 `width` / `height` 过渡确实会触发逐帧布局（实测 10.5 次/切换、累计 21.89ms），
+> 但**帧间隔与无动画基线完全一致**（p95 16.80ms）→ 无可感知卡顿。实测过 `contain: layout` /
+> `contain: strict` / `will-change: transform` 三种零契约变更的隔离手段，**收益均为 0**；
+> 唯一有效的 transform 缩放方案需要改写下面的 JS 变量契约（`--nvui-tab-ind-w/h` → scale），
+> 属于为不存在的卡顿付出破坏性代价，故**维持现状**。详见 §13.6。
 
 **JS 配方（stretch-then-settle「粘连」滑动）**：切换时先把指示器拉长到「旧位置 ∪ 新位置」，`requestAnimationFrame` 两帧后再收缩到目标位置，配合 spring 缓动呈现标签之间「粘连滑过去」的质感。
 
@@ -1207,7 +1213,7 @@ function replay(el, cls) {
    - **非模态 `show()` 不进浏览器 top layer**，层级完全由载体自身 `z-index: var(--nvui-z-layer)`（1000000，压过宿主竞争上限约 29999）保证——酒馆 `#sheld`（z-index:30）会整块盖住没有档位的载体，这是 2026-10 实机冒烟测出的真 bug；
    - 载体 `pointer-events:none`，子浮层（`.nvui-overlay` / `.nvui-floating` / `.nvui-toast-stack`）恢复 `auto`；
    - 未 `show()` 的 dialog 是 `display:none`，关闭时用 `close()` 或切 `hidden`。
-   - **载体必须自带 z-index**（kit 已内置 `z-index: var(--nvui-z-overlay)`）。实测结论：**非模态 `dialog.show()` 并不会让元素进入浏览器 top layer**（只有 `showModal()` 会，而它会加 `inert`）。载体是 `position:fixed`，会创建层叠上下文，内部子元素的 z-index 再大也只在载体内部生效 —— 若载体自身 z-index 为 `auto`，浮层整体只相当于 z-index 0，**会被酒馆 `#sheld`（z-index:30）之类的宿主区域压住**，表现为「面板被酒馆窗口压在后面」。这条是 v2.2.0 修订补丁修掉的 P0，见 §13.5。
+   - **载体必须自带 z-index**（kit 已内置 `z-index: var(--nvui-z-layer)`）。实测结论：**非模态 `dialog.show()` 并不会让元素进入浏览器 top layer**（只有 `showModal()` 会，而它会加 `inert`）。载体是 `position:fixed`，会创建层叠上下文，内部子元素的 z-index 再大也只在载体内部生效 —— 若载体自身 z-index 为 `auto`，浮层整体只相当于 z-index 0，**会被酒馆 `#sheld`（z-index:30）之类的宿主区域压住**，表现为「面板被酒馆窗口压在后面」。这条是 v2.3.0 修掉的 P0，见 §13.5.1。
 2. **所有 checkbox 必须隔离宿主样式。** 酒馆给每个 `input[type=checkbox]` 挂了 `appearance:none; display:grid` + `::before` 对勾（clip-path + inset box-shadow）。自定义开关必须 `appearance:none` + 显式宽高 + 压掉 `::before`（`content:none !important; display:none !important`），否则会出现"蓝色尖角/勾选态不可见"。kit 的 `.nvui-switch-row` 已内置。
 3. **不要用裸元素选择器写样式。** 一律 `.nvui-*` / `dialog.nvui-tl` 前缀；ID 级作用域仅用于对抗宿主既有全局样式（例如 `#your_panel input[type=checkbox]`）。
 4. **颜色只用 token。** 浮层自带深色主题（或 `.nvui-theme-light`），不要引用酒馆 `--SmartTheme*` 变量——否则浅色主题下观感不可控；聊天区内联组件除外。
@@ -2050,7 +2056,7 @@ export function init() { /* 注册菜单按钮、事件监听 */ }
 dialog.nvui-tl {
     position: fixed;
     inset: 0;
-    z-index: var(--nvui-z-overlay);
+    z-index: var(--nvui-z-layer);
 }
 
 /* 吐司载体：常驻存在且需始终盖过面板，故比面板载体再高一级 */
@@ -2071,17 +2077,61 @@ dialog.nvui-tl.nvui-tl-toast {
 | G | `dialog` vs 宿主最高 z-index | — | 宿主最高约 30000（`#sd_dropdown` 30000、`#options` 29999） |
 | H | `popover="manual"` vs 宿主最高 z-index | — | 同 G |
 
-最终选 **E 的思路但用 token 表达**（`--nvui-z-overlay` = 1000020 / `--nvui-z-tooltip` = 1000030），
+最终选 **E 的思路但用 token 表达**，并为载体单列一档 `--nvui-z-layer: 1000000`
+（子浮层档位 floating 1000010 / overlay 1000020 / tooltip 1000030 保持不变），
 因为它同时满足：不加 `inert`、不改宿主、层级可被 token 统一调参、与 kit 现有层级体系一致。
 
 **回归**：
 
-- 规范测试 249 → **253 全绿**（新增 2 条层级断言，防回归）；
+- 规范测试 **267 全绿**（含层级断言，防回归）；
 - 实机 `test/st-layer-check.js`：修复后 5 个采样点（中心 + 四角内侧）**全部 `oursOnTop: true`**，关闭面板后层级正确还原，控制台零错误；
 - 结论已回写 §2.3 / §6.6 / §7.14 / §8 / §10 / §13 与 `AI-GUIDE.md`（原「由 dialog 提升渲染层级」的表述是错的，已统一改为准确说明）。
 
-> **移植提醒**：把 kit 用到别的宿主时，请把 `--nvui-z-overlay` / `--nvui-z-tooltip` 调到**高于宿主最高 z-index**，
+> **移植提醒**：把 kit 用到别的宿主时，请把 `--nvui-z-layer` 调到**高于宿主最高 z-index**，
 > 不要假设浏览器 top layer 会兜底。`components.css` 里那段「实测结论，勿改」的注释保留了推导过程。
+
+---
+
+## 13.6 性能实测结论（真实 SillyTavern 宿主，v2.3.0）
+
+本节记录 kit 若干「疑似性能问题」的**实机测量结论**。测量方法：Chrome DevTools Protocol 的
+`Performance.getMetrics`（布局次数 / 布局耗时 / 样式重算）+ `requestAnimationFrame` 帧间隔分布，
+全部在真实酒馆页面（`T://Github//SillyTavern//APP//SillyTavern` v1.19.0）中跑。
+
+> **为什么要写这一节**：kit 的 issue 追踪规则要求「不允许凭印象下结论」。
+> 下面 5 项曾被登记为「逐帧重排 / 性能风险」，实测后**4 项被证伪**——
+> 它们不产生可感知卡顿，因此**不修**（改了反而要付出破坏性契约代价而没有收益）。
+
+| 疑点 | 实测数据 | 结论 |
+| :--- | :--- | :--- |
+| 进度条 `transition: width` 逐帧重排 | width 过渡 与 transform 缩放 的布局次数**完全相同**（2.0 次/动画），布局耗时 14.3ms vs 16.2ms —— **width 反而略快** | 不修 |
+| 折叠面板 `transition: grid-template-rows` | 5 次展开共 **16.37ms（3.27ms/次）**，布局次数仅 10 次 | 不修 |
+| 桌面端双层 `backdrop-filter` | 双层 p95 帧间隔 **16.80ms** = 单层 16.80ms = 无浮层基线 16.80ms | 不修 |
+| tabs 指示器 `transition: width/height` | 累计布局耗时确实高（10.5 次/切换、21.89ms），但**帧间隔与无动画基线完全一致**（p95 16.80ms、超预算帧 35/74 vs 基线 35/73）→ 无可感知卡顿 | 不修 |
+| 宿主 `showModal()` 模态压住 kit 浮层 | 层级事实成立，但**宿主模态已用 `inert` 禁用整页交互**（kit 浮层内按钮 `focus()` 失败），关闭后立即还原 | 不修（模态语义的正确表现） |
+
+**关键方法论**：累计布局耗时 ≠ 卡顿。tabs 指示器的 21.89ms 是**跨整个过渡期（约 18 帧）累计**，
+摊到每帧仅约 1.2ms，远在 16.7ms 的 60fps 帧预算内。**判定性能问题必须看帧间隔，不能只看布局次数。**
+
+**方案选型也做了实测**（`test/st-perf-tabs-options.js`）：对 tabs 指示器试过
+`contain: layout` / `contain: strict` / `will-change: transform` 三种「零契约变更」的隔离手段，
+**收益均为 -0.0 次/切换（完全无效）**；唯一有效的是 transform 缩放（0 次布局），
+但那需要改写 README §7.7 的 JS 变量契约（`--nvui-tab-ind-w/h` → scale），
+属于**为不存在的卡顿付出破坏性代价** —— 故不采纳。
+
+**复现脚本**（均需 `NODE_PATH` 指向 playwright-core，且清掉代理环境变量）：
+
+| 脚本 | 覆盖 |
+| :--- | :--- |
+| `test/st-perf-probe.js` | 总探针：布局次数 / 布局耗时 / 双层 blur 帧间隔对照 |
+| `test/st-perf-tabs-fine.js` | 分离「创建 DOM」与「纯动画」成本，三组对照 |
+| `test/st-perf-tabs-options.js` | 四种修复方案选型（`contain` / `will-change` / transform） |
+| `test/st-perf-tabs-frames.js` | 帧间隔判定：过渡期间 vs 无动画基线 |
+| `test/st-modal-layer-check.js` | 宿主模态与 kit 浮层的层级 / 焦点 / 还原三态 |
+
+> **适用边界**：以上数据来自本机（Chrome + 硬件加速）桌面环境。
+> 在**无 GPU 加速的低端设备**上，`backdrop-filter` 的代价可能显著不同，
+> 此时建议用 `.nvui-solid`（实心模式）或调低 `--nvui-glass-blur` 手动降档。
 
 ---
 

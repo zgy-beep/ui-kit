@@ -112,10 +112,52 @@
   `getContext()` 快照不可缓存；扩展菜单是 Popper 浮层且点击后自动收起（故需 `focusFallback`）；
   扩展菜单 DOM 动态创建；`hooks.activate` 指向入口导出的函数名。
 
+**性能疑点实机复核（ISSUES.md 待办区 5 项全部结清）**
+
+上一轮登记的 5 项性能/层级疑点（#8 / #9 / #10 / #12 / #16）本轮在**真实 SillyTavern 宿主**
+中逐项实测，**结论是 5 项全部「已确认-不修」**——它们要么被证伪，要么本就不是缺陷。
+**本轮未改动任何运行时行为**（`components.css` / `nvui-api.js` / `tokens.css` 的实现零变更），
+只新增测量脚本与文档结论。
+
+测量方法：Chrome DevTools Protocol 的 `Performance.getMetrics`（布局次数 / 布局耗时 / 样式重算）
++ `requestAnimationFrame` 帧间隔分布，全部在真实酒馆页面（v1.19.0）中跑。
+
+| # | 原疑点 | 实测数据 | 结论 |
+| :--- | :--- | :--- | :--- |
+| 8 | 进度条 `transition: width` 逐帧重排 | width 过渡 与 transform 缩放 布局次数**完全相同**（2.0 次/动画），耗时 14.3ms vs 16.2ms —— width 反而略快 | 不修 |
+| 9 | tabs 指示器 `transition: width/height` 逐帧重排 | 累计布局耗时确实高（10.5 次/切换、21.89ms），但**帧间隔与无动画基线完全一致**（p95 16.80ms；超 16.7ms 帧 35/74 vs 基线 35/73） | 不修 |
+| 10 | 折叠面板 `transition: grid-template-rows` 逐帧重排 | 5 次展开共 16.37ms（**3.27ms/次**），布局次数仅 10 次 | 不修 |
+| 12 | 桌面端双层 `backdrop-filter` 开销显著 | 双层 p95 **16.80ms** = 单层 16.80ms = 无浮层基线 16.80ms | 不修 |
+| 16 | 宿主 `showModal()` 模态压住 kit 浮层 | 层级事实成立，但宿主模态已用 `inert` 禁用整页交互（kit 浮层内按钮 `focus()` 失败），关闭后立即还原 | 不修（模态语义正确表现） |
+
+**关键方法论（已写进 README §13.6 与 ISSUES.md 规则 2c）**：**累计布局耗时 ≠ 卡顿**。
+tabs 指示器的 21.89ms 是跨整个过渡期（约 18 帧）累计，摊到每帧仅约 1.2ms，
+远在 16.7ms 的 60fps 帧预算内 —— 判定性能问题必须看帧间隔。
+
+**方案选型也做了实测**：对 tabs 指示器试过 `contain: layout` / `contain: strict` /
+`will-change: transform` 三种「零契约变更」的隔离手段，**收益均为 -0.0 次/切换（完全无效）**；
+唯一有效的 transform 缩放（0 次布局）需要改写 README §7.7 的 JS 变量契约
+（`--nvui-tab-ind-w/h` → scale），属于**为不存在的卡顿付出破坏性代价**，故不采纳。
+
+**新增实机脚本**（5 个）：
+
+- `test/st-perf-probe.js`：性能总探针（#8 / #9 / #10 / #12）；
+- `test/st-perf-tabs-fine.js`：分离「创建 DOM」与「纯动画」成本，三组对照；
+- `test/st-perf-tabs-options.js`：四种修复方案选型；
+- `test/st-perf-tabs-frames.js`：帧间隔判定（过渡期间 vs 无动画基线）；
+- `test/st-modal-layer-check.js`：宿主模态与 kit 浮层的层级 / 焦点 / 还原三态。
+
+**文档**
+
+- README 新增 §13.6「性能实测结论」（方法论 + 5 项实测表 + 方案选型 + 适用边界）；
+- README §7.7 加「性能实测结论」旁注；§13.5.1 补 `--nvui-z-layer` 载体档表述；
+- README / AI-GUIDE 中载体 z-index 的 `--nvui-z-overlay` → `--nvui-z-layer` 漂移全部修正（v2.3.0 合并遗留）；
+- ISSUES.md 待办区清零，5 项转入「已确认-不修」区并附实测数据与复现脚本；规则补 2b / 2c 两条。
+
 **测试**
 
 - `test/test-ui-kit.js` 新增第 9 节「运行时契约（nvui-api.js 行为红线）」14 条断言
-  与第 10 节「ST 扩展模板自洽」13 条断言；总数 236 → **261**，全绿（本轮新增层级 / 动效降级 / 玻璃探测 / preview 性能等 12 条断言）。
+  与第 10 节「ST 扩展模板自洽」13 条断言；总数 236 → **271**，全绿（本轮新增层级 / 动效降级 / 玻璃探测 / preview 性能 / 载体档位防漂移 / ISSUES 结清等断言）。
 - 新增实机脚本：`test/st-live-check.js`（真实 ST 宿主运行时回归 6 项）、`test/st-template-check.js`（模板实机验证 7 项）、
   `test/st-glass-fallback-check.js`（玻璃实心回退，9 项）、`test/st-layer-check.js`（层级回归，5 采样点 `oursOnTop` 判定）、
   `test/st-layer-probe.js`（层级根因探针，5 方案对照）、`test/st-focus-probe.js`（焦点归还根因探针）、

@@ -1592,6 +1592,33 @@ check('README 新增 ### 10.8 v2.2.0 -> v2.3.0 载体层级修复说明（含 --
     && readme.includes('#sheld'));
 check('AI-GUIDE 硬约束 3 修正为「非模态不进 top layer + 载体自身 z-index 档位」',
     /非模态.*top layer|载体自身/.test(aiGuide) && aiGuide.includes('--nvui-z-layer'));
+// 防漂移：载体档位一旦定档，文档/CSS/AI-GUIDE 三处不得再把载体写成 --nvui-z-overlay。
+// （v2.3.0 合并时曾出现这类漂移，故加断言守护。）
+const carrierTokenDocs = [readme, aiGuide, componentsClean];
+check('载体档位在三处文档中一致为 --nvui-z-layer（不得回退成 --nvui-z-overlay）',
+    carrierTokenDocs.every((t) => !/载体[^\n]{0,80}--nvui-z-overlay/.test(t))
+    && carrierTokenDocs.every((t) => t.includes('--nvui-z-layer')));
+check('README 层级表把 --nvui-z-overlay 描述为子浮层档位（不再兼任载体档）',
+    /--nvui-z-overlay[^\n]*1000020[^\n]*子浮层/.test(readme));
+check('README 新增 13.6 性能实测结论章节（含帧间隔判定与「累计布局耗时 ≠ 卡顿」方法论）',
+    /## 13\.6 性能实测结论/.test(readme)
+    && readme.includes('帧间隔')
+    && readme.includes('累计布局耗时')
+    && readme.includes('st-perf-probe.js')
+    && readme.includes('st-modal-layer-check.js'));
+check('ISSUES.md 待办区已清零（5 项均转为已确认-不修并附实机数据）',
+    (() => {
+        const issues = readText(path.join(KIT, 'ISSUES.md'));
+        // 用「下一个二级标题」切分，不能用字符串 split('## 已确认-不修') ——
+        // 待办区的状态列里就含「已确认-不修」，按字符串切会提前截断。
+        const m = /## 待办([\s\S]*?)(?=\n## )/.exec(issues);
+        const todoSec = m ? m[1] : '';
+        const rows = todoSec.split(/\r?\n/).filter((l) => /^\|\s*\d+\s*\|/.test(l));
+        return rows.length === 0
+            && /已确认-不修/.test(issues)
+            && issues.includes('st-perf-tabs-frames.js')
+            && issues.includes('st-modal-layer-check.js');
+    })());
 check('AI-GUIDE.md 覆盖 AI 协作指南关键词（SillyTavern / nvui-api / tokens.json / 提示词 / 验收 / 其它软件）',
     ['SillyTavern', 'nvui-api', 'tokens.json', '提示词', '验收', '其它软件']
         .every((k) => aiGuide.includes(k)));

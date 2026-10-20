@@ -9,6 +9,9 @@
 
 1. 任何在 review / 实机测试中发现的**疑似**问题，先登记到本文件「待办」区，写明**复现证据**（文件路径 + 行号 / 实机观测数据），不允许凭印象下结论。
 2. 确认是真问题后：修代码 → 补回归断言（`test/test-ui-kit.js` 或实机脚本）→ 更新 CHANGELOG → 在本文件标记「已修复」并写明修复版本。
+2b. 若经**实机测量**证明并非真问题（如：累计布局耗时高但帧间隔与基线一致 → 无可感知卡顿），
+    则转入「已确认-不修」区，并**附上实测数据与复现脚本**。禁止仅凭推理下「不修」结论。
+2c. 判定性能类问题必须看**帧间隔**，不能只看布局次数 / 累计布局耗时（详见 README §13.6）。
 3. 涉及公开行为或使用体验的，**同时**在 GitHub 建 issue，编号写回本文件。
 4. 状态取值：`待办` / `修复中` / `已修复` / `已确认-不修` / `已上报`。
 
@@ -34,13 +37,13 @@
 
 ## 待办
 
+> 规则：疑似问题先登记在此区并写明**复现证据**（文件路径 + 行号 / 实机观测数据），
+> 不允许凭印象下结论。确认是真问题后再转「已修复」或「已确认-不修」。
+
 | # | 问题 | 严重度 | 状态 | 证据 / 说明 |
 | :--- | :--- | :--- | :--- | :--- |
-| 8 | 进度条 `.nvui-progress-bar` 用 `transition: width` → 逐帧触发布局重排 | P2 性能 | 待办 | `components.css` L1173。改 `transform: scaleX()` 可上合成层，但会改变 `--nvui-progress-bar` 的宽度语义（需保证圆角与 min-width 表现一致），且 `.nvui-progress-bar::after` 的 shimmer 是 `inset:0` + `translateX` 百分比动画，改 scale 后 shimmer 会被缩放 → 需要改成独立的绝对定位层 |
-| 9 | tabs 粘连指示器 `.nvui-tabs-indicator` 的 `transition` 含 `width` / `height` → 逐帧重排 | P2 性能 | 待办 | `components.css` L652-655。指示器宽度/高度是 JS 写入的 `--nvui-tab-ind-w/h`，与 `--nvui-tab-ind-x/y`（transform）不同源，要一起改成 scale 方案需要重新设计 JS 契约（README §7.7 配方） |
-| 10 | 折叠面板 `.nvui-acc-body` 用 `transition: grid-template-rows`（0fr→1fr） | P2 性能 | 待办 | `components.css` L833-839。grid-template-rows 过渡虽可过渡但会逐帧重排；替代方案（max-height 猜测值 / JS 计算高度）各有精度或复杂度代价 |
-| 12 | 双层 `backdrop-filter`（`.nvui-overlay` 全屏 blur + `.nvui-panel` blur） | P2 性能 | 待办 | `components.css` L122 / `.nvui-panel`。全屏 backdrop-filter 在低端 GPU 上开销显著；窄屏已有降档到 `--nvui-glass-blur-sm`，但桌面端仍是双层 |
-| 16 | 宿主用 `showModal()` 打开弹窗（真 top layer）时，kit 浮层无法越层 | P2 层级 | 待办 | top layer 优先级高于任何 z-index。当前方案（z-index）无法覆盖真 top layer 元素。若需绝对可靠，需改用 `popover=manual` 载体（实测 `popover=manual` 能压过 `z-index:2147483647` 的普通元素），但会变更 DOM 契约，属破坏性变更 |
+| — | **暂无待办** | — | — | 上一轮登记的 5 项（#8 / #9 / #10 / #12 / #16）已全部经**实机测量**判定为「已确认-不修」，转入下方「已确认-不修」区并附实测数据。新问题请先按上方规则登记到本区。 |
+
 
 ---
 
@@ -49,7 +52,22 @@
 | # | 事项 | 说明 |
 | :--- | :--- | :--- |
 | - | 复用 `--nvui-z-overlay` 作为载体档 | 最初为避免「109 令牌」计数契约变动而复用 `--nvui-z-overlay`。**该方案已被推翻**：载体与子浮层混用同一档位语义不清，且 `--nvui-z-overlay` 实际比载体高一档，层级语义倒挂。最终改为新增专属 `--nvui-z-layer: 1000000`，token 总数 109 → 110，版本号按语义化规则升 **v2.3.0**（小版本，新增 token 不破坏既有取值） |
-| - | 载体改用 `popover=manual` | 见待办 #16：能免疫一切 z-index，但变更 DOM 契约（`<dialog class="nvui-tl">` → `<div popover="manual">`），属破坏性变更，需单独规划版本 |
+| - | 载体改用 `popover=manual` | 见 #16 实测结论：宿主模态打开时 kit 浮层本就因 `inert` 不可交互，「被压住」是模态语义的正确表现。改 `popover=manual` 会变更 DOM 契约（`<dialog class="nvui-tl">` → `<div popover="manual">`），属破坏性变更，收益不成立 |
+| - | 进度条 / tabs 指示器 / 折叠面板 改用 transform 方案 | 见 #8 / #9 / #10 实测：三者均**无可感知卡顿**（帧间隔与基线一致），且替代方案要么无效（`contain` / `will-change`）、要么需破坏性改 JS 契约。维持现状 |
+| - | 桌面端取消双层 `backdrop-filter` | 见 #12 实测：双层与单层帧间隔完全一致（p95 均为 16.80ms）。保留全档是 Flat Glass 设计意图，且窄屏已有降档 |
+
+### 由待办转入的 5 项（附实机测量数据）
+
+下表各项**曾登记为「逐帧重排 / 性能风险」**，经真实 SillyTavern 宿主实测后判定为**无需修改**。
+测量方法与完整数据见 README §13.6。
+
+| # | 原疑点 | 实测结论 | 实测数据 |
+| :--- | :--- | :--- | :--- |
+| 8 | 进度条 `transition: width` 逐帧触发布局重排 | **不修**：width 过渡与 transform 缩放的布局次数完全相同，width 反而略快；改 scale 需重做 shimmer 独立层 + 改宽度语义，收益为负 | A(width) = 2.0 次/动画、14.3ms；B(transform) = 2.0 次/动画、16.2ms |
+| 9 | tabs 指示器 `transition: width/height` 逐帧重排 | **不修**：累计布局耗时虽高（10.5 次/切换、21.89ms），但**帧间隔与无动画基线完全一致** → 无可感知卡顿。`contain` / `will-change` 三种零契约变更手段实测收益均为 0；唯一有效的 transform 方案需破坏性改 JS 契约 | 帧间隔 p95 = 16.80ms（基线 16.80ms）、超 16.7ms 帧 35/74 vs 基线 35/73、max 17.00ms |
+| 10 | 折叠面板 `transition: grid-template-rows` 逐帧重排 | **不修**：5 次展开共 16.37ms（3.27ms/次），布局次数仅 10 次；替代方案（max-height 猜测 / JS 计算高度）精度或复杂度代价更高 | 3.27ms/次、2.0 次布局/次 |
+| 12 | 桌面端双层 `backdrop-filter` 开销显著 | **不修**：双层与单层与无浮层基线的帧间隔**三者完全一致**；窄屏已有降档，桌面端保留全档是 Flat Glass 设计意图 | 双层 p95 16.80ms = 单层 16.80ms = 基线 16.80ms |
+| 16 | 宿主 `showModal()` 模态压住 kit 浮层 | **不修**：层级事实成立，但宿主模态已用 `inert` 禁用整页交互（kit 浮层内按钮 `focus()` 失败），「被压住」是模态语义的正确表现；关闭后立即还原。改 `popover=manual` 属破坏性 DOM 变更，收益不成立 | 命中栈顶层 = 宿主模态；`focusWorked: false`；关闭后顶层回到 `nvui-panel-body` |
 
 ---
 
@@ -65,6 +83,11 @@
 | `test/st-glass-fallback-check.js` | 玻璃实心回退（#15）9 项：宿主 no-blur 下探测值 / 根节点自动挂 `.nvui-solid` / 面板背景不透明 / 移除 no-blur 后对照恢复 blur / 零控制台错误 |
 | `test/st-focus-probe.js` | 焦点归还根因探针 |
 | `test/st-toplayer-probe.js` | top-layer 行为探针：实测非模态 `dialog.show()` 是否进浏览器 top layer（结论：不进） |
+| `test/st-perf-probe.js` | 性能总探针（#8 / #9 / #10 / #12）：CDP `Performance.getMetrics` 测布局次数 / 布局耗时 + 双层 blur 帧间隔对照 |
+| `test/st-perf-tabs-fine.js` | #9 精测：分离「创建 DOM」与「纯动画」成本，三组对照（width 过渡 / 无过渡 / transform） |
+| `test/st-perf-tabs-options.js` | #9 方案选型：`contain: layout` / `contain: strict` / `will-change: transform` / transform 缩放，四组对照 |
+| `test/st-perf-tabs-frames.js` | #9 帧间隔判定：过渡期间 rAF 帧间隔分布 vs 无动画基线（判定是否真掉帧） |
+| `test/st-modal-layer-check.js` | #16 模态层级：宿主 `showModal()` 打开时 kit 浮层是否被压住 / 是否可聚焦 / 关闭后是否还原 |
 
 运行环境：本机 SillyTavern `T:\Github\SillyTavern\APP\SillyTavern`（v1.19.0，http://127.0.0.1:8000）。
 用 `playwright-core` 直连本机 Chrome（`NODE_PATH` 注入模块解析路径）。
