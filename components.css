@@ -1,7 +1,7 @@
 /**
  * SillyTavern 插件通用 UI Kit · 组件样式
  * ------------------------------------------------------------------
- * 版本：ui-kit v2.3.0；依赖：tokens.css（必须先引入或先拼进来）
+ * 版本：ui-kit v2.4.0；依赖：tokens.css（必须先引入或先拼进来）
  *
  * 本目录是独立项目（自带 package.json / LICENSE / CHANGELOG / test/），
  * 可整目录复制/移动到任意文件夹或仓库，不依赖任何外部文件。
@@ -127,6 +127,43 @@ dialog.nvui-tl.nvui-tl-toast {
 
 dialog.nvui-tl:not([open]) {
     display: none;
+}
+
+/* --------------------------------------------------------------------------
+ * 宿主模态降级态（v2.4.0 新增）
+ * --------------------------------------------------------------------------
+ * 实测真相（真实 ST 宿主，见 README §13.7）：
+ *   宿主用 `dialog.showModal()` 打开弹窗时，kit 浮层**无法**压过它 ——
+ *   原因不是 z-index，而是模态会给整个文档加 `inert`，inert 元素不参与
+ *   命中测试。任何 z-index / top layer 手段都无效（`popover=manual` 亦然）。
+ *
+ *   此时正确的行为不是「硬压过去」，而是**主动让位**：
+ *   载体加 `.is-host-modal` → 整体降级（不可点 + 压暗），避免用户以为
+ *   「面板坏了点不动」，同时明确告知宿主模态优先。
+ *
+ *   由 `NVUI.syncHostModalState()` 自动维护（监听 `dialog:modal` 数量变化）。
+ * -------------------------------------------------------------------------- */
+dialog.nvui-tl.is-host-modal {
+    /* 模态期间不可交互：kit 浮层内的所有内容一并让位 */
+    pointer-events: none;
+    /* 视觉降级：整体压暗，明确「当前由宿主模态主导」 */
+    opacity: 0.35;
+    filter: grayscale(0.6);
+    transition: opacity var(--nvui-duration-base) var(--nvui-ease-standard),
+        filter var(--nvui-duration-base) var(--nvui-ease-standard);
+}
+
+/* 恢复时不要有淡入拖尾 */
+dialog.nvui-tl:not(.is-host-modal) {
+    transition: opacity var(--nvui-duration-base) var(--nvui-ease-standard),
+        filter var(--nvui-duration-base) var(--nvui-ease-standard);
+}
+
+/* 降级态下的子浮层同样不可点 */
+dialog.nvui-tl.is-host-modal > .nvui-overlay,
+dialog.nvui-tl.is-host-modal > .nvui-floating,
+dialog.nvui-tl.is-host-modal > .nvui-toast-stack {
+    pointer-events: none;
 }
 
 dialog.nvui-tl > .nvui-overlay,

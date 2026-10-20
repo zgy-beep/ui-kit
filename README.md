@@ -1,7 +1,7 @@
 # SillyTavern 插件 UI Kit · 设计规范
 
-> 版本：**v2.3.0**（语义化版本；破坏性改名/删 token 升大版本，新增组件/新增 token 升小版本，调 token 取值/动效打磨/反馈修复升补丁版本）
-> 来源：从 novel-stream 扩展（另一个 SillyTavern 插件）的浮动 UI（设置弹窗 / 悬浮入口 / 图片预览 / 提示层）中提炼，已在实际酒馆宿主（深/浅主题、桌面/手机）上验证；**v2.0.0 起升级为「Flat Glass（扁平玻璃）」设计语言**（扁平化 + 玻璃拟态 + 动效体系 + 能力降级）；**v2.0.1 玻璃更透、浮层描边更柔和、动效补强（16 关键帧）**；**v2.1.0 新增「SillyTavern 插件面板布局标准（桌面 / 手机）」（第 12 章）**；**v2.1.1 描边再减弱、焦点环单圈 1.5px、面板固定尺寸、隐藏滚动条**；**v2.2.0 描边精致化（圆角玻璃去外框 1px 描边，改柔光+阴影成形；ghost/空态/指示器去圆角描边；焦点环回到单圈 2px 整数像素）并新增可选 `nvui-api.js` 设计调用 API、`tokens.json` 机器可读令牌镜像与 `AI-GUIDE.md` AI 协作指南（第 13 章）**；**v2.3.0 修复浮层载体层级 bug——非模态 `dialog.show()` 实测不进浏览器 top layer，新增 `--nvui-z-layer: 1000000` 载体档位，否则会被宿主正 z-index 表面（酒馆 `#sheld` z-index:30）整块盖住**。
+> 版本：**v2.4.0**（语义化版本；破坏性改名/删 token 升大版本，新增组件/新增 token 升小版本，调 token 取值/动效打磨/反馈修复升补丁版本）
+> 来源：从 novel-stream 扩展（另一个 SillyTavern 插件）的浮动 UI（设置弹窗 / 悬浮入口 / 图片预览 / 提示层）中提炼，已在实际酒馆宿主（深/浅主题、桌面/手机）上验证；**v2.0.0 起升级为「Flat Glass（扁平玻璃）」设计语言**（扁平化 + 玻璃拟态 + 动效体系 + 能力降级）；**v2.0.1 玻璃更透、浮层描边更柔和、动效补强（16 关键帧）**；**v2.1.0 新增「SillyTavern 插件面板布局标准（桌面 / 手机）」（第 12 章）**；**v2.1.1 描边再减弱、焦点环单圈 1.5px、面板固定尺寸、隐藏滚动条**；**v2.2.0 描边精致化（圆角玻璃去外框 1px 描边，改柔光+阴影成形；ghost/空态/指示器去圆角描边；焦点环回到单圈 2px 整数像素）并新增可选 `nvui-api.js` 设计调用 API、`tokens.json` 机器可读令牌镜像与 `AI-GUIDE.md` AI 协作指南（第 13 章）**；**v2.3.0 修复浮层载体层级 bug——非模态 `dialog.show()` 实测不进浏览器 top layer，新增 `--nvui-z-layer: 1000000` 载体档位，否则会被宿主正 z-index 表面（酒馆 `#sheld` z-index:30）整块盖住**。**v2.4.0 完善浮层载体与宿主模态的共存——宿主 `showModal()` 模态会给整页加 `inert`（`inert` 元素不参与命中测试），kit 浮层**无法**压过它（`popover=manual` 亦然），故改为**主动让位**：新增 `.is-host-modal` 降级态（不可点 + 压暗）与三个宿主模态 API（`countHostModals` / `syncHostModalState` / `getCarrierState`），宿主模态关闭后自动还原（见 §13.7）**。
 > 定位：**独立项目 + SillyTavern 插件自有的 body 级浮动 UI**。本目录自带 `package.json` / `LICENSE` / `CHANGELOG` / `test/`，**不依赖任何外部仓库或父目录，可整目录复制/移动到任意文件夹或仓库**。不接管聊天区、原生抽屉等宿主区域（那些区域必须沿用酒馆主题变量）。
 > 演示：**[在线组件预览（GitHub Pages）](https://zgy-beep.github.io/ui-kit/preview.html)**（免下载直接体验；可切换深/浅主题与实心/玻璃模式、演示面板布局）。
 
@@ -15,6 +15,7 @@
 | [`st-extension-template/`](st-extension-template/) | **可直接复制使用的 SillyTavern 扩展模板骨架**（v2.2.0 修订新增）：`manifest.json` / `index.js` / `style.css` + `ui-kit/` 内嵌运行时，复制到 `public/scripts/extensions/third-party/<name>/` 即可加载 |
 | [`preview.html`](preview.html) | 离线组件预览页（双击即可打开；可切换深/浅主题与实心/玻璃模式，支持 URL 参数 `?theme=light`、`?solid=1`；在线版见上方演示） |
 | [`test/test-ui-kit.js`](test/test-ui-kit.js) | 规范守护测试（token 完整性 / 三方覆盖 / 无硬编码颜色 / WCAG AA 与玻璃合成对比度 / 宿主兼容红线 / 金标准取值 / 动效与降级红线）；`npm test` 或 `node test/test-ui-kit.js` |
+| [`test/st-*.js`](test/) | **真实 SillyTavern 宿主**实机脚本（需 `playwright-core` + 本机 Chrome）：层级回归、玻璃降级、宿主模态让位、性能实测等；配合 `test/out/` 出具 JSON 报告 |
 | [`AUDIT.md`](AUDIT.md) | 架构审核报告：v1.1.0 界面架构评估、问题清单（P0/P1/P2/P3）、v2.0.0 升级方案映射与独立复核结论、v2.0.1 修订复核 |
 | [`package.json`](package.json) | 独立项目元信息与 `npm test` 入口（零依赖，无需 `npm install`） |
 | [`LICENSE`](LICENSE) | MIT 许可 |
@@ -739,6 +740,8 @@ v2.0.0 起，阴影只允许出现在浮层（弹窗 / 悬浮面板 / 工具提�
 > 载体（`dialog.nvui-tl`）与宿主内容的层级关系**由载体自身的 z-index 决定**（详见 [8. 宿主兼容红线](#8-sillytavern-宿主兼容红线) 第 1 条）。载体内部（`.nvui-overlay` / `.nvui-floating` / `.nvui-toast-stack`）的 z-index 只在该载体的层叠上下文内比较。
 >
 > 吐司堆栈使用 `--nvui-z-tooltip`，放进 `dialog.nvui-tl` 载体（见 [7.14](#714-吐司)）。
+>
+> **宿主模态例外（v2.4.0）**：宿主若用 `dialog.showModal()` 打开模态弹窗，**上面任何档位都无效**——模态会给整页加 `inert`，`inert` 元素不参与命中测试。此时 kit 载体自动加 `.is-host-modal`（不可点 + 压暗）**主动让位**，模态关闭后自动还原。详见 [13.7 载体与宿主模态](#137-载体与宿主模态v240--主动让位而非硬压)。
 
 ---
 
@@ -1230,6 +1233,11 @@ function replay(el, cls) {
    - **手动回退**：提供 `.nvui-solid` 实心模式（根节点开关），并保证回退后 `pointer-events` 行为不变（浮层仍可点、遮罩仍拦截）；
    - **降级后对比度**：回退表面的文字对比度必须继续满足 AA（`--nvui-bg` / `--nvui-bg-2` 已验算，见 4.1）；
    - **不要用玻璃表达状态**：状态色必须是实色文字/图标/圆点，不能只靠"玻璃色调"。
+10. **宿主模态弹窗期间，kit 浮层必须主动让位（v2.4.0 新增）。**
+   - 宿主用 `dialog.showModal()` 打开模态时，会给**整个文档**加 `inert`；`inert` 元素**不参与命中测试**，因此 kit 浮层在此期间**物理上不可能**既压过模态又保持可交互——**任何 z-index / top layer 手段都无效**（`popover="manual"` 亦然，实测证伪）。
+   - 正确做法：宿主模态开启时给 kit 载体加 `.is-host-modal`（`pointer-events:none` + `opacity:0.35` + `grayscale(0.6)`），让位并给出视觉反馈；模态关闭后**自动还原**。kit 的 `nvui-api.js` 已内置该机制（`syncHostModalState()` + 幂等 watcher），宿主**无需任何配合**。
+   - 反过来：若宿主希望「模态期间仍能操作 kit 浮层」，**不要用 `showModal()`**，改用非模态 `<dialog>` + 自绘遮罩。
+   - 详见 [13.7 载体与宿主模态](#137-载体与宿主模态v240--主动让位而非硬压)。
    - **宿主全局禁用玻璃时**：酒馆有 `body.no-blur`（用户关闭背景模糊）会用 `body.no-blur * { backdrop-filter: unset !important }` 把模糊全局关掉。此时浏览器**仍然支持** `backdrop-filter`，所以 `@supports not` 降级块不会触发，玻璃只剩半透明底色、下层文字会透出重影。**v2.2.0 修订补丁已自动处理**：`nvui-api.js` 的 `NVUI.syncGlassFallback()` 造一个隐藏 `.nvui-glass` 探针读**渲染后的实际计算值**（不猜宿主类名，避免与宿主实现耦合），发现模糊被禁用时自动给根节点挂 `.nvui-solid`；`createPanel()` / `showToast()` 已内置该调用。纯手写 DOM（不走 API）的用户，需自行在 `no-blur` 时给根节点挂 `.nvui-solid`。
 
 ---
@@ -1455,12 +1463,35 @@ v2.3.0 是**小版本**：修复一个靠沙盒测试发现不了、只在真实
 2. 若业务自己写过 body 级浮层：确认它在 `dialog.nvui-tl` 载体内，或自带 ≥ 30000 的 z-index；
 3. 运行 `npm test`（测试已同步 2.3.0：token 110 + 载体层级回归断言）。
 
+### 10.9 v2.3.0 → v2.4.0 载体完善（宿主模态让位机制 + 3 个新 API）
+
+v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API；**无删除 / 重命名类与 token、无破坏性 DOM 变更**
+（110 令牌 / 47 浅色 / 78 类 / 16 关键帧），覆盖 CSS + 可选 `nvui-api.js` 即可升级。
+
+**背景**：v2.3.0 解决了「kit 浮层被宿主**常规内容**压住」；本版解决「宿主自己开**模态弹窗**时 kit 怎么办」。
+
+| 变更 | v2.3.0 | v2.4.0 | 影响 / 说明 |
+| :--- | :--- | :--- | :--- |
+| 宿主模态共存 | 无处理（kit 浮层在宿主模态期间点不动，用户不知为何） | 载体自动加 `.is-host-modal`（不可点 + 压暗 0.35 + 去色），模态关闭后自动还原 | 纯新增 CSS 状态类，不影响既有 DOM 结构与选择器 |
+| 层级认知 | 认为「popover=manual 能压过一切」 | 证伪：模态靠 `inert` 禁掉整页命中，**任何** z-index / top layer 手段都无效 | §13.5.1 对照表 F 行、§13.7 已更正 |
+| 运行时 API | 无 | `countHostModals()` / `syncHostModalState()` / `getCarrierState()` | 均为**新增导出**，不改动既有函数签名 |
+| 令牌 | 110 | **110（不变）** | 复用 `--nvui-z-layer`，不新增 token |
+
+升级动作：
+
+1. 覆盖 `tokens.css` / `components.css`（新增 `.is-host-modal` 状态规则，无破坏性）；
+2. 若使用 `nvui-api.js`：覆盖即可，旧代码无需修改（新 API 全部为增量）；
+3. 运行 `npm test`（测试已同步 2.4.0：token 110 + 载体让位机制断言）；
+4. 可选：宿主若用 `showModal()` 开弹窗，kit 会自动让位，**无需业务代码改动**。
+
 ---
 
 ## 11. 版本管理
 
-- 当前 **v2.3.0**（2026-10-20）：**浮层载体层级修复**——非模态 `dialog.show()` 实测不进浏览器 top layer（只有 `showModal()` 进，但其 `inert` 会废掉宿主交互），载体此前无 z-index，会被宿主正 z-index 表面（酒馆 `#sheld` z-index:30，聊天非空时）整块盖住；新增 `--nvui-z-layer: 1000000` 载体档位并修正文档中「dialog 提升渲染层级」的错误论断；110 令牌 / 47 浅色 / 78 类 / 16 关键帧，无破坏性变更（小版本）。
+- 当前 **v2.4.0**（2026-10-20）：**浮层载体完善**——宿主 `showModal()` 模态会给整页加 `inert`（`inert` 不参与命中测试），kit 浮层**无法**压过它（`popover=manual` 亦然，实测证伪）；改为**主动让位**：新增 `.is-host-modal` 降级态（不可点 + 压暗）与 3 个宿主模态 API（`countHostModals` / `syncHostModalState` / `getCarrierState`），宿主模态开关时自动降级/还原；110 令牌 / 47 浅色 / 78 类 / 16 关键帧，无破坏性变更（小版本）。
+- 上一版 **v2.3.0**（2026-10-20）：**浮层载体层级修复**——非模态 `dialog.show()` 实测不进浏览器 top layer（只有 `showModal()` 进，但其 `inert` 会废掉宿主交互），载体此前无 z-index，会被宿主正 z-index 表面（酒馆 `#sheld` z-index:30，聊天非空时）整块盖住；新增 `--nvui-z-layer: 1000000` 载体档位并修正文档中「dialog 提升渲染层级」的错误论断；110 令牌 / 47 浅色 / 78 类 / 16 关键帧，无破坏性变更（小版本）。
 - 变更记录（倒序）：
+  - **v2.4.0**：新增 `.is-host-modal` 宿主模态降级态（`pointer-events:none` + `opacity:0.35` + `grayscale(0.6)`，子浮层一并让位）；`nvui-api.js` 新增 `countHostModals()` / `syncHostModalState()` / `getCarrierState()` 三个 API，并在 `createPanel()` / `showToast()` / `openLayer()` 中同步降级态；装幂等 watcher（`MutationObserver` 监听 `dialog[open]` + 捕获 `close` 事件）实现宿主模态动态开关的自动降级/还原；README 新增 §13.7 与 §10.9；实测脚本 `test/st-carrier-host-modal-check.js`（18 项断言）；CHANGELOG / package.json / tokens.json 升 2.4.0（令牌数不变）。
   - **v2.3.0**：新增 `--nvui-z-layer: 1000000`（`dialog.nvui-tl` 载体档位，非模态无 top layer 提升、档位即生命线）；修正 §6.6 / §7.3 / §8 红线 1 / §10.8 / AI-GUIDE 中「dialog 提升层级 / top layer 决定层级 / html transform」等错误论断为实测真相；测试新增宿主 z-30 遮挡 + elementFromPoint 命中回归断言（共 229 条）；README 新增 §10.8；CHANGELOG / package.json / tokens.json 升 2.3.0。
   - **v2.2.0**：描边精致化（6 处分圆角玻璃去外框 1px、7 处直线分隔改玻璃分隔色、ghost/空态/指示器去圆角描边、焦点环 1.5px → 2px 单圈）；新增可选 JS API（`nvui-api.js`，`createPanel` / `showToast` 等）、`tokens.json`（109/47）、`AI-GUIDE.md`；README 新增第 13 章「JS API 与 AI 协作指南」（原许可顺延第 14 章）、§10.7 修订说明；无破坏性变更。
   - **v2.1.1**：补丁迭代——描边 token 再降一档（line / line-2 / dash / block-line / block-line-2 / glass-line / glass-highlight）、`--nvui-focus-ring-w` 2px → 1.5px 且单圈不叠边、`.nvui-panel` 固定高度（折叠展开不跳变）、`.nvui-panel-body` / `.nvui-modal-body` 隐藏滚动条（保留滚动）；README §10.6 记录修订，第 12 章补固定尺寸与滚动条说明；无破坏性变更。
@@ -1471,9 +1502,9 @@ v2.3.0 是**小版本**：修复一个靠沙盒测试发现不了、只在真实
   - **v1.0.0**：首个版本。token 体系、组件样式、预览页、规范文档、`test/test-ui-kit.js`。
 - 兼容性约定：
   - 修 bug / 调整单个 token 值 / 动效打磨 / 反馈修复：补丁版本（2.1.x）；
-  - 新增组件 / 新增 token / 新增可选文件（不破坏既有 DOM 与取值）：小版本（2.x.0）；当前 **2.3.0** 即小版本迭代（载体层级修复 + 新增 `--nvui-z-layer`），无破坏性变更，覆盖 CSS 即可升级；
+  - 新增组件 / 新增 token / 新增可选文件 / 新增可选 API（不破坏既有 DOM 与取值）：小版本（2.x.0）；当前 **2.4.0** 即小版本迭代（载体让位机制 + 3 个新 API），无破坏性变更，覆盖 CSS 即可升级；
   - 重命名类/token、删除 token、修改 DOM 契约：大版本（x.0.0），并同步更新本文件的迁移对照表与 `test/test-ui-kit.js` 的金标准/必填清单。
-- 升级步骤：用新版本目录覆盖 `tokens.css` / `components.css` → 打开 `preview.html` 确认视觉无回归 → 在本目录运行 `npm test` →（若集成在插件中）再跑该插件的测试。v2.0.1 的升级细节见 [10.4](#104-v200--v201-修订说明)，v2.1.0 面板布局接入见 [10.5](#105-v201--v210-新增面板布局标准) 与 [第 12 章](#12-sillytavern-插件面板布局标准桌面--手机)，v2.1.1 描边 / 尺寸 / 滚动条调整见 [10.6](#106-v210--v211-描边再减弱--单圈焦点环--固定面板尺寸--隐藏滚动条)，v2.2.0 描边精致化与 API 接入见 [10.7](#107-v211--v220-描边精致化--新增-js-api--tokensjson--ai-指南) 与 [第 13 章](#13-js-api-与-ai-协作指南)，v2.3.0 浮层载体层级修复见 [10.8](#108-v220--v230-浮层载体层级修复新增---nvui-z-layer)。
+- 升级步骤：用新版本目录覆盖 `tokens.css` / `components.css` → 打开 `preview.html` 确认视觉无回归 → 在本目录运行 `npm test` →（若集成在插件中）再跑该插件的测试。v2.0.1 的升级细节见 [10.4](#104-v200--v201-修订说明)，v2.1.0 面板布局接入见 [10.5](#105-v201--v210-新增面板布局标准) 与 [第 12 章](#12-sillytavern-插件面板布局标准桌面--手机)，v2.1.1 描边 / 尺寸 / 滚动条调整见 [10.6](#106-v210--v211-描边再减弱--单圈焦点环--固定面板尺寸--隐藏滚动条)，v2.2.0 描边精致化与 API 接入见 [10.7](#107-v211--v220-描边精致化--新增-js-api--tokensjson--ai-指南) 与 [第 13 章](#13-js-api-与-ai-协作指南)，v2.3.0 浮层载体层级修复见 [10.8](#108-v220--v230-浮层载体层级修复新增---nvui-z-layer)，v2.4.0 载体完善见 [10.9](#109-v230--v240-载体完善宿主模态让位机制--3-个新-api) 与 [13.7](#137-载体与宿主模态v240--主动让位而非硬压)。
 
 > 备注：`ui-kit/` 作为独立项目时，版本号只看本目录内的 `package.json` / `CHANGELOG.md`；它不代表任何宿主插件的版本。
 
@@ -1813,7 +1844,7 @@ v2.2.0 新增三个可选的协作资产，让「用 Kit 规范做界面」从"�
 ```js
 // Node（测试 / 构建期静态生成；不触发 DOM）
 const NVUI = require('./nvui-api.js');
-console.log(NVUI.version);        // '2.2.0'
+console.log(NVUI.version);        // '2.4.0'
 console.log(typeof NVUI.createPanel); // 'function'
 ```
 
@@ -1828,6 +1859,9 @@ console.log(typeof NVUI.createPanel); // 'function'
 | `NVUI.setTheme(theme, options?)` | 切换主题 / 实心模式（`theme: 'light'`、`options.solid: true`；只切类名，不写颜色） | `void` |
 | `NVUI.detectGlassSupport(options?)` | 探测宿主是否**实际**禁用了 `backdrop-filter`（读渲染后的计算值，不猜宿主类名）；`options.force` 强制重探 | `boolean` |
 | `NVUI.syncGlassFallback(options?)` | 探测并在模糊不可用时自动给根节点加 `.nvui-solid`（实心回退）。`createPanel()` / `showToast()` 已内置调用 | `boolean` |
+| `NVUI.countHostModals()` | 统计当前文档中处于模态状态的**宿主**原生 `<dialog>` 数量（用 `:modal` 伪类，自动排除 kit 自身载体） | `number` |
+| `NVUI.syncHostModalState()` | 同步「宿主模态」降级态：宿主有模态时给所有 kit 载体加 `.is-host-modal`（不可点 + 压暗），无模态时移除并还原 | `number`（当前宿主模态数） |
+| `NVUI.getCarrierState()` | 查询浮层载体与宿主模态的层级快照（诊断 / 宿主集成用） | `{ carrierZ, hostModalCount, degraded, carriers: [{ id, className, zIndex, degraded, open }] }` |
 | `NVUI.openLayer(dialogEl, overlayEl)` | 打开浮层载体（非模态 `dialog.show()`，避免 `inert`） | `void` |
 | `NVUI.closeLayer(dialogEl, overlayEl, done?)` | 关闭载体（`is-closing` 退场 → `animationend` 或 260ms 兜底 → `hidden` + `close()`） | `void` |
 | `NVUI.switchRow(options)` | 生成胶囊开关行（`label`/`value`/`disabled`/`feature`/`onChange`） | `HTMLElement` |
@@ -2073,7 +2107,7 @@ dialog.nvui-tl.nvui-tl-toast {
 | :--- | :--- | :--- | :--- |
 | D | `dialog` + `z-index: auto` | 1 / 3 | 不通过：修复前的状态，会被宿主压住 |
 | E | `dialog` + `z-index: 2147483647` | 3 / 3 | 通过，但属硬编码魔法值 |
-| F | `popover="manual"` | 3 / 3 | 通过：真正进 top layer，能压过一切，但宿主兼容性面更窄 |
+| F | `popover="manual"` | 3 / 3 | 通过（对宿主**常规内容**）；但**压不过 `showModal()` 模态**——模态靠 `inert` 禁整页命中，见 §13.7 |
 | G | `dialog` vs 宿主最高 z-index | — | 宿主最高约 30000（`#sd_dropdown` 30000、`#options` 29999） |
 | H | `popover="manual"` vs 宿主最高 z-index | — | 同 G |
 
@@ -2092,7 +2126,7 @@ dialog.nvui-tl.nvui-tl-toast {
 
 ---
 
-## 13.6 性能实测结论（真实 SillyTavern 宿主，v2.3.0）
+### 13.6 性能实测结论（真实 SillyTavern 宿主，v2.3.0）
 
 本节记录 kit 若干「疑似性能问题」的**实机测量结论**。测量方法：Chrome DevTools Protocol 的
 `Performance.getMetrics`（布局次数 / 布局耗时 / 样式重算）+ `requestAnimationFrame` 帧间隔分布，
@@ -2128,10 +2162,80 @@ dialog.nvui-tl.nvui-tl-toast {
 | `test/st-perf-tabs-options.js` | 四种修复方案选型（`contain` / `will-change` / transform） |
 | `test/st-perf-tabs-frames.js` | 帧间隔判定：过渡期间 vs 无动画基线 |
 | `test/st-modal-layer-check.js` | 宿主模态与 kit 浮层的层级 / 焦点 / 还原三态 |
+| `test/st-carrier-host-modal-check.js` | v2.4.0 载体让位机制：宿主模态下自动降级 / 不可点 / 压暗 / 关闭后还原（18 项断言） |
 
 > **适用边界**：以上数据来自本机（Chrome + 硬件加速）桌面环境。
 > 在**无 GPU 加速的低端设备**上，`backdrop-filter` 的代价可能显著不同，
 > 此时建议用 `.nvui-solid`（实心模式）或调低 `--nvui-glass-blur` 手动降档。
+
+### 13.7 载体与宿主模态（v2.4.0 · 主动让位，而非硬压）
+
+§13.5.1 解决了「kit 浮层被宿主**常规内容**压住」的问题（载体自带 `--nvui-z-layer`）。
+本节解决另一类、**性质不同**的问题：宿主自己打开**模态弹窗**时，kit 浮层该怎么办。
+
+**实测真相（真实 ST 宿主，`test/st-carrier-host-modal-check.js` + `test/st-modal-layer-check.js`）**
+
+| 问题 | 实测结论 |
+| :--- | :--- |
+| `dialog.showModal()` 会进浏览器 top layer 吗？ | **会**。模态在 top layer 内优先级最高，任何 z-index 都压不过 |
+| 那 `popover="manual"` 能压过模态吗？ | **不能**。实测无论 show 先后，模态恒胜（§13.5.1 对照表 F 行「能压过一切」的说法在此被证伪） |
+| 根因是什么？ | **不是 z-index**。`showModal()` 会给**整个文档**加 `inert`，而 `inert` 元素**不参与命中测试**（`elementsFromPoint` 不返回它们），也无法获得焦点 |
+| kit 浮层在宿主模态期间能被点到吗？ | **不能**。宿主已用 `inert` 禁掉整页交互（kit 按钮 `focus()` 失败） |
+| 宿主模态关闭后 kit 浮层会恢复吗？ | **会**，立即还原 |
+
+**设计决策：不硬压，改为主动让位。**
+
+既然宿主模态期间 kit 浮层在物理上**不可能**既压过它又保持可交互（`inert` 是文档级的），
+那么正确的产品行为不是「继续硬压导致用户点了没反应」，而是**明确让位并给出视觉反馈**：
+
+```css
+/* 宿主模态降级态（v2.4.0 新增） */
+dialog.nvui-tl.is-host-modal {
+    pointer-events: none;      /* 让位：不可交互 */
+    opacity: 0.35;             /* 压暗：视觉上退居其次 */
+    filter: grayscale(0.6);
+    transition: opacity var(--nvui-duration-base) var(--nvui-ease-standard),
+        filter var(--nvui-duration-base) var(--nvui-ease-standard);
+}
+
+/* 降级态下的子浮层同样不可点 */
+dialog.nvui-tl.is-host-modal > .nvui-overlay,
+dialog.nvui-tl.is-host-modal > .nvui-floating,
+dialog.nvui-tl.is-host-modal > .nvui-toast-stack {
+    pointer-events: none;
+}
+```
+
+> 载体本身永远是 `pointer-events: none`（透明放行，由子浮层各自恢复 `auto`），
+> 所以降级态实际禁用的是**子浮层**的命中，页面其余部分不受影响。
+
+**运行时维护（`nvui-api.js`）**
+
+| API | 作用 |
+| :--- | :--- |
+| `NVUI.countHostModals()` | 用 `dialog:modal` 伪类统计宿主模态数（自动排除 kit 自身载体，避免自我降级）；不支持 `:modal` 的浏览器退化为「存在 `open` 的非 kit dialog」 |
+| `NVUI.syncHostModalState()` | 同步 `.is-host-modal` 类到所有 kit 载体；返回当前宿主模态数 |
+| `NVUI.getCarrierState()` | 返回层级快照（载体 z-index、宿主模态数、是否降级、每个载体的状态），供诊断与宿主集成 |
+
+触发时机：`createPanel()` / `showToast()` / `openLayer()` 各调用一次；
+此外运行时还装了一个**幂等**的监听（`MutationObserver` 监听 `<dialog>` 的 `open` 属性变化
++ 捕获阶段 `close` 事件），因此**宿主模态在面板已打开之后才弹出**时，
+kit 载体也会自动降级，模态关闭后自动还原 —— 无需宿主配合、无需业务代码干预。
+
+**宿主集成建议**
+
+1. 宿主自己的模态弹窗用标准 `dialog.showModal()` 即可，kit 会自动让位；
+2. 若宿主需要「模态期间仍允许操作 kit 浮层」，请**不要**用 `showModal()`（改用非模态 + 自绘遮罩），
+   否则 `inert` 会让整页（含 kit）都不可交互；
+3. 排查层级问题时，先调 `NVUI.getCarrierState()` 看 `carrierZ` / `hostModalCount` / `degraded`，
+   而不是凭肉眼判断。
+
+**实机回归**：`test/st-carrier-host-modal-check.js` 共 18 项断言全绿
+（正常态无降级 / 模态打开后自动降级 + 不可点 + 压暗 / `getCarrierState()` 快照正确 /
+模态关闭后自动还原 / `countHostModals()` 不自我降级），控制台零错误。
+
+> **本节不引入新 token**：`--nvui-z-layer` 复用不变，110 令牌契约保持。
+> 若宿主不使用原生 `<dialog>` 模态（如自绘全屏遮罩），本节机制不会触发，kit 行为与 v2.3.0 完全一致。
 
 ---
 

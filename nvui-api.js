@@ -1,7 +1,7 @@
 /**
  * SillyTavern NVUI Kit · 可选运行时 API（零依赖）
  * ------------------------------------------------------------------
- * 版本：ui-kit v2.2.0（与 package.json / tokens.css / components.css 版本号保持一致）
+ * 版本：ui-kit v2.4.0（与 package.json / tokens.css / components.css 版本号保持一致）
  * 用途：给插件/其它软件一个「可调用的设计接口」——用函数创建符合本 Kit 规范的面板、
  *       标签页、折叠分组、开关行、输入行、进度条、吐司，自动带上布局标准、无障碍属性、
  *       动效降级与焦点管理，避免每个插件各写一套 DOM。
@@ -52,7 +52,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this), function () {
     'use strict';
 
-    var VERSION = '2.3.0';
+    var VERSION = '2.4.0';
     var PANEL_CLASS = 'nvui-panel';
     var TOAST_LAYER_ID = 'nvui-api-toast-layer';
 
@@ -207,6 +207,8 @@
      */
     function openLayer(dialogEl, overlayEl) {
         if (!dialogEl || !overlayEl) return;
+        /* 打开瞬间同步一次宿主模态降级态（watcher 已覆盖动态开关，这里兜底首开） */
+        syncHostModalState();
         if (dialogEl.open) {
             overlayEl.hidden = false;
             return;
@@ -441,6 +443,110 @@
         }
     }
 
+    /* ---------------------- 浮层载体与宿主模态 ---------------------- */
+
+    /** 当前文档里处于模态状态的原生 dialog 数量。
+     *  浏览器支持 `:modal` 伪类时用它判定（Chrome 105+ / Edge 105+ / Safari 17.4+）；
+     *  不支持时退化为「存在 open 的 dialog 且非 kit 自身载体」。 */
+    function countHostModals() {
+        if (!isDomAvailable()) return 0;
+        var selectorSupported = false;
+        try { selectorSupported = CSS.supports('selector(:modal)'); } catch (err) { selectorSupported = false; }
+        if (selectorSupported) {
+            var modals = document.querySelectorAll('dialog:modal');
+            var n = 0;
+            for (var i = 0; i < modals.length; i++) {
+                /* 排除 kit 自己的载体（kit 载体是非模态 show()，理论上不会是 :modal，
+                   但若宿主误用 showModal 打开 kit 载体，这里也排除以免自我降级） */
+                if (modals[i].classList.contains('nvui-tl')) continue;
+                n += 1;
+            }
+            return n;
+        }
+        /* 回退：kit 载体永远用非模态 show()，所以任何 :modal 的 dialog 都视为宿主模态 */
+        var all = document.querySelectorAll('dialog[open]');
+        var count = 0;
+        for (var j = 0; j < all.length; j++) {
+            if (all[j].classList.contains('nvui-tl')) continue;
+            count += 1;
+        }
+        return count;
+    }
+
+    /** 同步「宿主模态」降级态到所有 kit 载体。
+     *  宿主用 showModal() 打开弹窗时，会给整个文档加 inert —— kit 浮层**无法**
+     *  压过它（不是 z-index 问题，popover=manual 也一样，见 README §13.7）。
+     *  正确做法是主动让位：给 kit 载体加 `.is-host-modal`（不可点 + 压暗）。
+     *  返回当前宿主模态数量。 */
+    function syncHostModalState() {
+        if (!isDomAvailable()) return 0;
+        var modalCount = countHostModals();
+        var degraded = modalCount > 0;
+        var carriers = document.querySelectorAll('dialog.nvui-tl');
+        for (var i = 0; i < carriers.length; i++) {
+            if (degraded) carriers[i].classList.add('is-host-modal');
+            else carriers[i].classList.remove('is-host-modal');
+        }
+        return modalCount;
+    }
+
+    /** 自动监听宿主模态的开关（幂等，只装一次）。
+     *  两条触发源：
+     *   1. MutationObserver 监听 <dialog> 的 open 属性变化（showModal() / show() / close()）；
+     *   2. document 捕获阶段的 'close' 事件（dialog 关闭不冒泡，需捕获）。
+     *  命中后调用 syncHostModalState()，使 kit 载体在宿主模态期间自动降级。 */
+    var hostModalWatcherInstalled = false;
+    function installHostModalWatcher() {
+        if (hostModalWatcherInstalled || !isDomAvailable()) return;
+        hostModalWatcherInstalled = true;
+        try {
+            var observer = new MutationObserver(function (records) {
+                for (var i = 0; i < records.length; i++) {
+                    if (records[i].type === 'attributes' && records[i].attributeName === 'open') {
+                        syncHostModalState();
+                        return;
+                    }
+                }
+            });
+            observer.observe(document.documentElement, {
+                subtree: true,
+                attributes: true,
+                attributeFilter: ['open'],
+            });
+            document.addEventListener('close', function () { syncHostModalState(); }, true);
+        } catch (err) {
+            /* 观察器不可用时降级为「仅手动调用 syncHostModalState()」，不影响功能 */
+            hostModalWatcherInstalled = false;
+        }
+    }
+
+    /** 查询浮层载体与宿主模态的层级关系快照（诊断 / 宿主集成用）。
+     *  返回 { carrierZ, hostModalCount, degraded, carriers: [{ id, className, zIndex, degraded }] } */
+    function getCarrierState() {
+        if (!isDomAvailable()) {
+            return { carrierZ: '', hostModalCount: 0, degraded: false, carriers: [] };
+        }
+        var modalCount = countHostModals();
+        var carriers = [];
+        var list = document.querySelectorAll('dialog.nvui-tl');
+        for (var i = 0; i < list.length; i++) {
+            var cs = window.getComputedStyle(list[i]);
+            carriers.push({
+                id: list[i].id || '',
+                className: list[i].className,
+                zIndex: cs.zIndex,
+                degraded: list[i].classList.contains('is-host-modal'),
+                open: list[i].hasAttribute('open'),
+            });
+        }
+        return {
+            carrierZ: getToken('--nvui-z-layer'),
+            hostModalCount: modalCount,
+            degraded: modalCount > 0,
+            carriers: carriers,
+        };
+    }
+
     /* ---------------------- 面板（布局标准） ---------------------- */
 
     /**
@@ -464,6 +570,10 @@
 
         /* 宿主若全局禁用了 backdrop-filter，先做实心回退，避免玻璃只剩半透明底色 */
         syncGlassFallback();
+        /* 宿主若正处于模态弹窗（showModal），kit 载体应主动让位而非硬压 */
+        syncHostModalState();
+        /* 装一次监听：宿主模态动态开关时自动降级/还原 */
+        installHostModalWatcher();
 
         var dialog = el('dialog', 'nvui-tl', { id: id + '-layer', 'aria-label': (opts.title || '面板') + ' 浮层' });
         var overlay = el('div', 'nvui-overlay is-panel', { id: id + '-overlay', hidden: '' });
@@ -732,6 +842,9 @@
         var opts = options || {};
         syncGlassFallback();
         var layer = ensureToastLayer();
+        /* 吐司层可能在宿主模态之后才创建，需在其存在后同步降级态 */
+        syncHostModalState();
+        installHostModalWatcher();
         var stack = q('.nvui-toast-stack', layer);
         var toast = el('div', 'nvui-toast' + (opts.type ? ' is-' + opts.type : ''), { role: 'status' });
         var ic = iconNode(opts.icon || 'fa-solid fa-circle-info');
@@ -804,6 +917,9 @@
         setTheme: setTheme,
         detectGlassSupport: detectGlassSupport,
         syncGlassFallback: syncGlassFallback,
+        countHostModals: countHostModals,
+        syncHostModalState: syncHostModalState,
+        getCarrierState: getCarrierState,
         openLayer: openLayer,
         closeLayer: closeLayer,
         switchRow: switchRow,

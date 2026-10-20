@@ -6,6 +6,66 @@
 - 新增组件 / 新增 token（不破坏既有 DOM 与取值）：小版本（2.x.0）
 - 重命名类 / token、删除 token、修改 DOM 契约：大版本（x.0.0）
 
+## v2.4.0（2026-10-20）· 浮层载体完善（宿主模态让位机制 + 3 个新 API）
+
+本轮把「浮层载体」从一个**层级档位**升级为一个**完整的宿主共存机制**。
+v2.3.0 解决的是「kit 浮层被宿主**常规内容**压住」；本版解决的是性质不同的另一类问题：
+**宿主自己打开模态弹窗时，kit 浮层该怎么办。**
+
+**关键结论（真实 ST 宿主实测，证伪了 v2.3.0 的一处乐观假设）**
+
+- 宿主 `dialog.showModal()` 打开的模态会进入浏览器 top layer，**任何 z-index 都压不过**；
+- **`popover="manual"` 也压不过**（v2.3.0 README §13.5.1 对照表 F 行原写「能压过一切」，本次实测证伪并更正）——
+  无论 popover 与 modal 谁先 show，模态恒胜；
+- **根因不是 z-index，而是 `inert`**：`showModal()` 会给**整个文档**加 `inert`，
+  而 `inert` 元素**不参与命中测试**（`elementsFromPoint` 不返回它们），也无法获得焦点；
+- 因此 kit 浮层在宿主模态期间**物理上不可能**既压过模态又保持可交互；
+- 宿主模态关闭后，kit 浮层**立即还原**（层级与交互均恢复）。
+
+**设计决策：不硬压，改为主动让位**
+
+既然硬压不可能，正确的产品行为不是「继续盖着导致用户点了没反应」，而是**明确让位 + 视觉反馈**：
+
+- `components.css` 新增宿主模态降级态 `dialog.nvui-tl.is-host-modal`：
+  `pointer-events: none`（不可点）+ `opacity: 0.35`（压暗）+ `filter: grayscale(0.6)`（去色），
+  并对子浮层（`.nvui-overlay` / `.nvui-floating` / `.nvui-toast-stack`）一并禁用命中；
+  恢复态用 `dialog.nvui-tl:not(.is-host-modal)` 声明 transition，避免淡入拖尾。
+  **纯新增状态类，不改动任何既有选择器与 DOM 结构。**
+- `nvui-api.js` 新增三个 API（均为**增量导出**，不改既有函数签名）：
+  - `countHostModals()` —— 统计宿主模态数，用 `dialog:modal` 伪类（Chrome/Edge 105+、Safari 17.4+），
+    并**自动排除 kit 自身载体**（避免自我降级）；不支持 `:modal` 的浏览器退化为「存在 `open` 的非 kit dialog」；
+  - `syncHostModalState()` —— 同步 `.is-host-modal` 类到所有 kit 载体，返回当前宿主模态数；
+  - `getCarrierState()` —— 返回层级快照 `{ carrierZ, hostModalCount, degraded, carriers[] }`，供诊断与宿主集成。
+- 触发时机：`createPanel()` / `showToast()` / `openLayer()` 各调用一次；
+  另装**幂等** watcher（`MutationObserver` 监听 `<dialog>` 的 `open` 属性变化 + 捕获阶段 `close` 事件），
+  因此**宿主模态在面板已打开之后才弹出**时也会自动降级，关闭后自动还原，**宿主无需任何配合**。
+
+**令牌与兼容性**
+
+- **未新增 / 未删除 / 未重命名任何 token**：110 深色 / 47 浅色 / 78 类 / 16 关键帧契约保持不变，
+  复用既有 `--nvui-z-layer`；
+- 无破坏性 DOM 变更 → **小版本**；
+- 宿主不使用原生 `<dialog>` 模态（如自绘全屏遮罩）时，本机制不会触发，行为与 v2.3.0 完全一致。
+
+**文档**
+
+- README 新增 **§13.7「载体与宿主模态」**（实测真相表 / 设计决策 / CSS 配方 / API 表 / 宿主集成建议）、
+  **§10.9「v2.3.0 → v2.4.0 修订说明」**；
+- README **§13.6 标题层级修正**（`## 13.6` → `### 13.6`，此前误用二级标题导致其脱离第 13 章目录层级）；
+- README §6.6 层级表补「宿主模态例外」说明；§8 宿主兼容红线**新增第 10 条**「宿主模态期间 kit 浮层必须主动让位」；
+- README §13.5.1 方案对照表 F 行更正（`popover=manual` 压不过模态）；
+- README §13.1 API 速查表补三行新 API；§11 版本管理更新；
+- `AI-GUIDE.md` 升至 v2.4.0：硬约束第 3 条补「宿主模态让位」子项、API 速查补三行、第 6 章版本信息更新。
+
+**测试**
+
+- 规范测试新增 8 条断言（降级态 CSS 存在 / 三个 API 导出 / 三处调用点 / `:modal` 且排除自身载体 /
+  版本全量对齐 2.4.0 / 模板与主目录资产一致 / 新实机脚本存在 / README §13.7 章节存在），**271 → 279 条全绿**；
+- 新增实机脚本 `test/st-carrier-host-modal-check.js`（18 项断言全绿，控制台零错误）：
+  正常态无降级 → 宿主 `showModal()` 后自动加 `.is-host-modal`（`pointer-events:none` + `opacity:0.35`）→
+  `getCarrierState()` 快照正确（`hostModalCount` / `degraded` / 各载体 `degraded`）→
+  模态关闭后自动移除并恢复可命中 → `countHostModals()` 不自我降级。
+
 ## v2.3.0（2026-10-20）· 浮层载体层级修复 + 运行时正确性修复 + ST 扩展模板
 
 本轮针对 `nvui-api.js` 做了一轮代码审查，并在**真实 SillyTavern 宿主（v1.19.0）**中实机复现与回归验证。

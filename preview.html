@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SillyTavern UI Kit v2.3.0 · Flat Glass 组件预览</title>
+<title>SillyTavern UI Kit v2.4.0 · Flat Glass 组件预览</title>
 <!--
-  SillyTavern 插件通用 UI Kit v2.3.0「Flat Glass」组件预览页
+  SillyTavern 插件通用 UI Kit v2.4.0「Flat Glass」组件预览页
   ------------------------------------------------------------------
   v2.0.1 修订（2026-10-17，用户反馈迭代）：玻璃更通透（弹窗级 0.64 / popover 级 0.80，
   受光边 0.06 / 内高光 0.04，blur 20px / 12px，saturate 150%）；新增 nvui-tabpane-in 与
@@ -35,7 +35,7 @@
   空态去掉虚线圆角边、标签指示器去掉 1px 内环改底部直线强调；焦点环回到单圈 2px（整数像素更清晰）。
   ② 新增设计调用文件（均为零依赖、离线相对路径）：nvui-api.js（可选运行时：createPanel / showToast /
   switchRow / inputRow / accordion / progress / openLayer / closeLayer / getToken / setTheme）、
-  tokens.json（tokens.css 的机器可读镜像，109 深色 + 47 浅色覆盖）、AI-GUIDE.md（给 AI 的硬约束、
+  tokens.json（tokens.css 的机器可读镜像，110 深色 + 47 浅色覆盖）、AI-GUIDE.md（给 AI 的硬约束、
   文件阅读顺序、ST 插件面板标准流程、其它软件迁移规范、提示词模板、API 速查与验收清单）。
   第 19 节演示用 ./nvui-api.js 真实创建面板/吐司，支持 ?api=1 载入即开。
   ------------------------------------------------------------------
@@ -45,6 +45,12 @@
   盖住——本页无宿主层级竞争所以看不出来。修复：新增令牌 --nvui-z-layer: 1000000（载体档），
   dialog.nvui-tl 增加 z-index: var(--nvui-z-layer)；子浮层仍在载体内按 floating/overlay/
   tooltip 排位。测试新增「宿主 z-30 遮挡物 + elementFromPoint 命中」回归断言。
+  ------------------------------------------------------------------
+  v2.4.0 完善（2026-10-20）：宿主 dialog.showModal() 模态会给整页加 inert（inert 不参与
+  命中测试），kit 浮层压不过它（popover=manual 亦然，实测证伪）——故改为「主动让位」：
+  载体加 .is-host-modal（pointer-events:none + opacity:0.35 + grayscale(0.6)），宿主模态
+  关闭后自动还原。新增 API：countHostModals / syncHostModalState / getCarrierState。
+  令牌数不变（110 深色 + 47 浅色）。
   ------------------------------------------------------------------
   单文件离线：只依赖同目录的 ./tokens.css 与 ./components.css，以及可选的 ./nvui-api.js；
   无外链脚本 / 外链样式 / 字体 / CDN / 图片，无 emoji，可整目录复制后直接双击打开。
@@ -1103,7 +1109,7 @@
         <div class="pv-hero-main">
             <h1>
                 <span>SillyTavern UI Kit</span>
-                <span class="nvui-badge is-accent">v2.3.0</span>
+                <span class="nvui-badge is-accent">v2.4.0</span>
                 <span class="nvui-badge">Flat Glass</span>
             </h1>
             <p class="nvui-hint pv-hero-sub">

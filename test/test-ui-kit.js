@@ -357,8 +357,8 @@ for (const [name, p] of Object.entries(REQUIRED_FILES)) {
     check(`独立项目文件存在：${name}`, fs.existsSync(p) && fs.statSync(p).size > 10, p);
 }
 const KIT_VERSION = pkg.version;
-check('package.json 版本为合法 semver（2.2.0）',
-    /^2\.3\.0$/.test(String(KIT_VERSION)), String(KIT_VERSION));
+check('package.json 版本为合法 semver（2.4.0）',
+    /^2\.4\.0$/.test(String(KIT_VERSION)), String(KIT_VERSION));
 check('package.json 声明 MIT 许可且与 LICENSE 文件一致',
     pkg.license === 'MIT' && /^MIT License/.test(license));
 check('package.json scripts.test 指向项目内测试（可 npm test）',
@@ -1601,11 +1601,79 @@ check('载体档位在三处文档中一致为 --nvui-z-layer（不得回退成 
 check('README 层级表把 --nvui-z-overlay 描述为子浮层档位（不再兼任载体档）',
     /--nvui-z-overlay[^\n]*1000020[^\n]*子浮层/.test(readme));
 check('README 新增 13.6 性能实测结论章节（含帧间隔判定与「累计布局耗时 ≠ 卡顿」方法论）',
-    /## 13\.6 性能实测结论/.test(readme)
+    /### 13\.6 性能实测结论/.test(readme)
     && readme.includes('帧间隔')
     && readme.includes('累计布局耗时')
     && readme.includes('st-perf-probe.js')
     && readme.includes('st-modal-layer-check.js'));
+check('README 新增 13.7 载体与宿主模态章节（说明 inert 根因与主动让位策略）',
+    /### 13\.7 载体与宿主模态/.test(readme)
+    && readme.includes('inert')
+    && readme.includes('is-host-modal')
+    && readme.includes('st-carrier-host-modal-check.js'));
+check('CSS 提供宿主模态降级态 .is-host-modal（不可点 + 压暗 + 子浮层让位）',
+    /dialog\.nvui-tl\.is-host-modal\s*\{[^}]*pointer-events:\s*none/.test(componentsClean)
+    && /dialog\.nvui-tl\.is-host-modal\s*\{[^}]*opacity:\s*0?\.35/.test(componentsClean)
+    && /\.is-host-modal\s*>\s*\.nvui-overlay[\s\S]*?pointer-events:\s*none/.test(componentsClean));
+check('nvui-api 导出三个宿主模态 API（countHostModals / syncHostModalState / getCarrierState）',
+    ['countHostModals', 'syncHostModalState', 'getCarrierState']
+        .every((k) => new RegExp(`\\b${k}:\\s*${k}\\b`).test(apiSrc)));
+check('nvui-api 在 createPanel / showToast / openLayer 中同步宿主模态降级态',
+    (apiSrc.match(/syncHostModalState\(\)/g) || []).length >= 3
+    && /function installHostModalWatcher/.test(apiSrc));
+check('宿主模态降级态不依赖 :modal 之外的选择器，且排除 kit 自身载体（不自我降级）',
+    /dialog:modal/.test(apiSrc)
+    && /classList\.contains\('nvui-tl'\)\)\s*continue/.test(apiSrc));
+check('版本号全量对齐 v2.4.0（package.json / tokens.json / tokens.css / components.css）',
+    pkg.version === '2.4.0'
+    && tokensJson.version === '2.4.0'
+    && /ui-kit v2\.4\.0/.test(tokensCss)
+    && /ui-kit v2\.4\.0/.test(componentsCss));
+check('st-extension-template 与主目录的 kit 资产一致（防模板漂移）',
+    ['nvui-api.js', 'components.css', 'tokens.css'].every((f) => {
+        const tpl = path.join(KIT, 'st-extension-template', 'ui-kit', f);
+        if (!fs.existsSync(tpl)) return false;
+        return readText(tpl) === readText(path.join(KIT, f));
+    }));
+check('新增实机脚本 st-carrier-host-modal-check.js 存在',
+    fs.existsSync(path.join(KIT, 'test', 'st-carrier-host-modal-check.js')));
+check('README 排版规范（标题层级不跳级 / 表格列数一致 / 代码围栏配对 / 无连续空行）',
+    (() => {
+        const lines = readme.split(/\r?\n/);
+        const problems = [];
+        let inFence = false;
+        let headingLevel = 0;
+        let table = [];
+        const flushTable = () => {
+            if (table.length) {
+                const counts = new Set(table.map((r) => r[1].split('|').length));
+                if (counts.size > 1) problems.push(`L${table[0][0]} 表格列数不一致`);
+            }
+            table = [];
+        };
+        lines.forEach((line, idx) => {
+            const i = idx + 1;
+            if (line.trim().startsWith('```')) { inFence = !inFence; flushTable(); return; }
+            if (inFence) return;
+            const h = /^(#{1,6}) \S/.exec(line);
+            if (h) {
+                const lv = h[1].length;
+                if (headingLevel && lv > headingLevel + 1) problems.push(`L${i} 标题跳级 h${headingLevel}->h${lv}`);
+                headingLevel = lv;
+            }
+            const st = line.trim();
+            if (st.startsWith('|') && st.endsWith('|') && st.split('|').length >= 3) {
+                table.push([i, st]);
+            } else {
+                flushTable();
+            }
+            if (idx > 0 && line === '' && lines[idx - 1] === '') problems.push(`L${i} 连续空行`);
+        });
+        flushTable();
+        const fences = (readme.match(/^```/gm) || []).length;
+        if (fences % 2 !== 0) problems.push('代码围栏未配对');
+        return problems.length === 0;
+    })());
 check('ISSUES.md 待办区已清零（5 项均转为已确认-不修并附实机数据）',
     (() => {
         const issues = readText(path.join(KIT, 'ISSUES.md'));
