@@ -14,9 +14,9 @@
 
 1. **只用 Kit 的类名与令牌**：所有类名 `nvui-` 前缀、状态类 `is-` 前缀；颜色/圆角/间距/动效一律用 `var(--nvui-*)`，禁止 `#hex`、`rgb()`、`hsl()` 字面量。
 2. **不污染宿主**：禁止裸元素选择器（`button {}`、`input {}`）、禁止全局重置、禁止 `!important`（Kit 只在宿主 checkbox 隔离与 reduced-motion 降级里使用）。
-3. **SillyTavern 浮层必须进 `<dialog class="nvui-tl">` 载体**：非模态 `dialog.show()`，禁止 `showModal()`（会给文档加 `inert`）、禁止裸 `position: fixed` 挂 body（宿主 `html` 有 transform，手机端会被顶出屏幕）。
-   - **载体必须自带 z-index**（Kit 已内置 `z-index: var(--nvui-z-overlay)`）。实测：**非模态 `dialog.show()` 不会进入浏览器 top layer**（只有 `showModal()` 会，而它会加 `inert`）。载体是 `position:fixed`，会创建层叠上下文，内部子元素的 z-index 只在载体内部生效 —— 载体自身若为 `z-index:auto`，浮层整体只相当于 z-index 0，会被酒馆 `#sheld`（z-index:30）压住，表现为「面板被酒馆窗口压在后面」。
-   - 吐司载体请加 `.nvui-tl-toast`（`NVUI.showToast` 已内置），使其层级高于面板载体。
+3. **SillyTavern 浮层必须进 `<dialog class="nvui-tl">` 载体**：非模态 `dialog.show()`（禁止 `showModal()`——会给文档加 `inert`；也**不要**以为非模态能靠浏览器 top layer 提层——实测它不进 top layer）、禁止裸 `position: fixed` 挂 body（宿主 `html` 有 transform，手机端会被顶出屏幕）。
+   - **载体必须自带 z-index**（Kit 已内置 `z-index: var(--nvui-z-layer)`）。实测：非模态 `dialog.show()` 不会进入浏览器 top layer（只有 `showModal()` 会，而它会加 `inert`）。载体是 `position:fixed`，会创建层叠上下文，内部子元素的 z-index 只在载体内部生效 —— 载体自身若为 `z-index:auto`，浮层整体只相当于 z-index 0，会被酒馆 `#sheld`（z-index:30）压住，表现为「面板被酒馆窗口压在后面」。
+   - 吐司载体请加 `.nvui-tl-toast`（`NVUI.showToast` 已内置），使其层级（`--nvui-z-tooltip`）高于面板载体（`--nvui-z-layer`）。
 4. **无障碍内建**：面板 `role="dialog" aria-modal="true" aria-labelledby`；标签页 `role="tablist"/"tab"/"tabpanel"` + `aria-selected` + `aria-controls`；折叠 `aria-expanded`；关闭按钮 `aria-label`；打开时焦点移入、关闭后归还触发元素（README §2.3 配方）。
 5. **尊重系统偏好**：动效必须可被 `prefers-reduced-motion` 降级（Kit 已内置）；玻璃必须可被 `prefers-reduced-transparency` / 不支持 `backdrop-filter` / `.nvui-solid` 降级。
 6. **无 emoji 图标**：用 Font Awesome `<i class="fa-solid ...">` 或纯 CSS 图形；README/CSS/JS 文案中也不要写 emoji。
@@ -27,7 +27,7 @@
 
 ## 1. 读文件顺序（AI 开工前）
 
-1. `tokens.json` —— 机器可读的 109 个令牌（深色 109 / `.nvui-theme-light` 47 个覆盖），快速知道有哪些颜色/尺寸/动效变量；
+1. `tokens.json` —— 机器可读的 110 个令牌（深色 110 / `.nvui-theme-light` 47 个覆盖），快速知道有哪些颜色/尺寸/动效变量；
 2. `tokens.css` —— 令牌注释与语义（表面层级、玻璃、焦点环、动效体系、面板尺寸）；
 3. `components.css` —— 组件 DOM 契约（尤其第 19 节「插件面板布局标准」与玻璃/降级规则）；
 4. `README.md` §12「SillyTavern 插件面板布局标准」 + §7 组件规范；

@@ -6,9 +6,18 @@
 - 新增组件 / 新增 token（不破坏既有 DOM 与取值）：小版本（2.x.0）
 - 重命名类 / token、删除 token、修改 DOM 契约：大版本（x.0.0）
 
-## v2.2.0 修订补丁（2026-10-20）· 运行时正确性修复 + ST 扩展模板
+## v2.3.0（2026-10-20）· 浮层载体层级修复 + 运行时正确性修复 + ST 扩展模板
 
-本轮针对 `nvui-api.js` 做了一轮代码审查，并在**真实 SillyTavern 宿主（v1.19.0）**中实机复现与回归验证。版本号仍为 2.2.0（无 token / 类名 / DOM 契约破坏性变更），但运行时行为有修正。
+本轮针对 `nvui-api.js` 做了一轮代码审查，并在**真实 SillyTavern 宿主（v1.19.0）**中实机复现与回归验证。
+本条目与下述「浮层载体层级修复」合并为 **v2.3.0**：新增 1 个层级 token（`--nvui-z-layer`），无类名 / DOM 契约破坏性变更。
+
+**bug 背景（novel-stream 实机冒烟测试定位，2026-10-20）**
+
+- 沙盒测试无宿主层级竞争，集体失明；真实酒馆里 `#sheld`（聊天容器，`position:absolute; z-index:30`）在聊天非空时
+  整块盖住 kit 面板（鼠标点击被 `.mes` 拦截）；
+- 中性页对照实验（Edge 152）证实：`show()` 的 dialog 输给 `z-index:30` 的 div，`showModal()` 才赢——
+  top layer 只服务于模态对话框，而模态的 `inert` 会废掉宿主交互，故 kit 禁用；
+- 此前 README / CSS 注释中「由 dialog 提升渲染层级」「实际层级由浏览器 top layer 决定」为错误论断，本次一并修正。
 
 **层级 P0 修复（浮层被酒馆内容压在后面）**
 
@@ -19,14 +28,15 @@
   而它会给整个文档加 `inert`，导致宿主完全不可交互，此路已排除）；
   ② `position: fixed` **总是**创建层叠上下文，载体内部子元素的 z-index 只在载体内部生效；
   而修复前载体是 `z-index: auto`（整体仅相当于 z-index 0），因此被宿主高 z-index 区域压住。
-- **修复**：`components.css` 载体显式声明 `z-index: var(--nvui-z-overlay)`；
+- **修复**：新增令牌 `--nvui-z-layer: 1000000`（载体档；宿主竞争上限约 29999，floating 1000010 / overlay 1000020 / tooltip 1000030 不变）；
+  `components.css` 载体显式声明 `z-index: var(--nvui-z-layer)`（新增的专属载体档，1000000）；
   新增 `dialog.nvui-tl.nvui-tl-toast { z-index: var(--nvui-z-tooltip); }`；
   `nvui-api.js` 的吐司载体加 `.nvui-tl-toast` 类（使吐司层级高于面板载体）。
-  **未新增 token**，复用既有 `--nvui-z-overlay` / `--nvui-z-tooltip`，零契约破坏。
+  **新增 1 个 token**（`--nvui-z-layer`），子浮层档位（floating / overlay / tooltip）不变，零破坏性变更。
 - **方案对照实验**（`test/st-layer-probe.js`，真实宿主内 5 组）：
   `dialog` + `z-index:auto` 3 采样点仅胜 1；`dialog` + 极大 z-index 胜 3；
   `popover="manual"` 胜 3（真 top layer，但宿主兼容面更窄）。最终采用 token 化的 z-index 方案。
-- **回归**：规范测试 249 → **253 全绿**（新增 2 条层级断言防回归）；
+- **回归**：规范测试新增层级断言防回归，最终 261 条全绿（详见下文「测试」）；
   实机 `test/st-layer-check.js` 修复后 5 个采样点全部 `oursOnTop: true`，关闭后层级还原，控制台零错误。
 
 **文档论断修正（重要）**
@@ -39,18 +49,8 @@
 **新增目录**
 
 - `ISSUES.md`：本地 issue 追踪表，与 GitHub Issues 双向对应。
-  当前登记 **7 条已修复**、**9 条待办**（#8–#16）、**2 条已确认不修**（附不修理由）、
-  以及 6 个实机测试脚本索引。规则：疑似问题先登记、写明复现证据、不允许凭印象下结论。
-
-**测试**
-
-- `test/test-ui-kit.js` 新增第 9 节「运行时契约（nvui-api.js 行为红线）」14 条断言
-  与第 10 节「ST 扩展模板自洽」13 条断言。
-- 新增实机脚本：`test/st-glass-fallback-check.js`（玻璃实心回退，9 项）、`test/st-layer-check.js`（层级回归，5 采样点 `oursOnTop` 判定）、
-  `test/st-layer-probe.js`（层级根因探针，5 方案对照）、
-  `test/st-glass-probe.js`（玻璃生效探测）、`test/st-toplayer-probe.js`（top-layer 行为探针）。
-- 使用 `playwright-core` 直连本机 Chrome；运行时须清掉代理环境变量
-  （`env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY`），否则 Chromium 导航被代理劫持报 `ERR_CONNECTION_REFUSED`。
+  当前登记 **11 条已修复**、**5 条待办**（#8 / #9 / #10 / #12 / #16）、**2 条已确认不修**（附不修理由）、
+  以及 7 个实机测试脚本索引。规则：疑似问题先登记、写明复现证据、不允许凭印象下结论。
 
 **已修复的正确性问题**
 
@@ -116,8 +116,12 @@
 
 - `test/test-ui-kit.js` 新增第 9 节「运行时契约（nvui-api.js 行为红线）」14 条断言
   与第 10 节「ST 扩展模板自洽」13 条断言；总数 236 → **261**，全绿（本轮新增层级 / 动效降级 / 玻璃探测 / preview 性能等 12 条断言）。
-- 新增 `test/st-live-check.js`（真实 ST 宿主运行时回归 6 项）、`test/st-template-check.js`（模板实机验证 7 项）、
-  `test/st-focus-probe.js`（焦点归还根因探针）；使用 `playwright-core` 直连本机 Chrome。
+- 新增实机脚本：`test/st-live-check.js`（真实 ST 宿主运行时回归 6 项）、`test/st-template-check.js`（模板实机验证 7 项）、
+  `test/st-glass-fallback-check.js`（玻璃实心回退，9 项）、`test/st-layer-check.js`（层级回归，5 采样点 `oursOnTop` 判定）、
+  `test/st-layer-probe.js`（层级根因探针，5 方案对照）、`test/st-focus-probe.js`（焦点归还根因探针）、
+  `test/st-glass-probe.js`（玻璃生效探测）、`test/st-toplayer-probe.js`（top-layer 行为探针）。
+- 实机脚本统一使用 `playwright-core` 直连本机 Chrome；运行时须清掉代理环境变量
+  （`env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY`），否则 Chromium 导航被代理劫持报 `ERR_CONNECTION_REFUSED`。
 
 ## v2.2.0（2026-10-17）
 

@@ -48,7 +48,7 @@
 
 | # | 事项 | 说明 |
 | :--- | :--- | :--- |
-| - | 新增 `--nvui-z-layer` token | 原计划新增独立 token 以表达载体层级，但会破坏「109 令牌 / 47 浅色」的文档与测试计数契约（按 kit 自身语义化规则，新增 token 属小版本变更）。改为复用现有 `--nvui-z-overlay` / `--nvui-z-tooltip`，零契约破坏 |
+| - | 复用 `--nvui-z-overlay` 作为载体档 | 最初为避免「109 令牌」计数契约变动而复用 `--nvui-z-overlay`。**该方案已被推翻**：载体与子浮层混用同一档位语义不清，且 `--nvui-z-overlay` 实际比载体高一档，层级语义倒挂。最终改为新增专属 `--nvui-z-layer: 1000000`，token 总数 109 → 110，版本号按语义化规则升 **v2.3.0**（小版本，新增 token 不破坏既有取值） |
 | - | 载体改用 `popover=manual` | 见待办 #16：能免疫一切 z-index，但变更 DOM 契约（`<dialog class="nvui-tl">` → `<div popover="manual">`），属破坏性变更，需单独规划版本 |
 
 ---
@@ -64,6 +64,7 @@
 | `test/st-glass-probe.js` | 玻璃生效探测：宿主 no-blur 下 backdrop-filter 是否被关掉 |
 | `test/st-glass-fallback-check.js` | 玻璃实心回退（#15）9 项：宿主 no-blur 下探测值 / 根节点自动挂 `.nvui-solid` / 面板背景不透明 / 移除 no-blur 后对照恢复 blur / 零控制台错误 |
 | `test/st-focus-probe.js` | 焦点归还根因探针 |
+| `test/st-toplayer-probe.js` | top-layer 行为探针：实测非模态 `dialog.show()` 是否进浏览器 top layer（结论：不进） |
 
 运行环境：本机 SillyTavern `T:\Github\SillyTavern\APP\SillyTavern`（v1.19.0，http://127.0.0.1:8000）。
 用 `playwright-core` 直连本机 Chrome（`NODE_PATH` 注入模块解析路径）。
