@@ -58,6 +58,8 @@
 
 ### 由待办转入的 5 项（附实机测量数据）
 
+> 已在 GitHub 开 issue #3 公开这轮实测方法与数据：https://github.com/zgy-beep/ui-kit/issues/3
+
 下表各项**曾登记为「逐帧重排 / 性能风险」**，经真实 SillyTavern 宿主实测后判定为**无需修改**。
 测量方法与完整数据见 README §13.6。
 
