@@ -6,6 +6,119 @@
 - 新增组件 / 新增 token（不破坏既有 DOM 与取值）：小版本（2.x.0）
 - 重命名类 / token、删除 token、修改 DOM 契约：大版本（x.0.0）
 
+## v2.2.0 修订补丁（2026-10-20）· 运行时正确性修复 + ST 扩展模板
+
+本轮针对 `nvui-api.js` 做了一轮代码审查，并在**真实 SillyTavern 宿主（v1.19.0）**中实机复现与回归验证。版本号仍为 2.2.0（无 token / 类名 / DOM 契约破坏性变更），但运行时行为有修正。
+
+**层级 P0 修复（浮层被酒馆内容压在后面）**
+
+- **现象**：真实 ST 宿主中打开面板，NVUI 面板整体被酒馆聊天区压在后面，可见但点不到（用户截图报障）。
+- **实机证据**：`elementsFromPoint()` 命中栈 —— 面板中心点顶层是宿主 `fa-solid fa-address-card`（ST 消息区按钮），
+  kit 元素排在第 5 位；宿主 `#sheld`（聊天列）是 `z-index: 30` 的 absolute 元素。
+- **根因**：① 实测确认**非模态 `dialog.show()` 并不会进入浏览器 top layer**（只有 `showModal()` 会，
+  而它会给整个文档加 `inert`，导致宿主完全不可交互，此路已排除）；
+  ② `position: fixed` **总是**创建层叠上下文，载体内部子元素的 z-index 只在载体内部生效；
+  而修复前载体是 `z-index: auto`（整体仅相当于 z-index 0），因此被宿主高 z-index 区域压住。
+- **修复**：`components.css` 载体显式声明 `z-index: var(--nvui-z-overlay)`；
+  新增 `dialog.nvui-tl.nvui-tl-toast { z-index: var(--nvui-z-tooltip); }`；
+  `nvui-api.js` 的吐司载体加 `.nvui-tl-toast` 类（使吐司层级高于面板载体）。
+  **未新增 token**，复用既有 `--nvui-z-overlay` / `--nvui-z-tooltip`，零契约破坏。
+- **方案对照实验**（`test/st-layer-probe.js`，真实宿主内 5 组）：
+  `dialog` + `z-index:auto` 3 采样点仅胜 1；`dialog` + 极大 z-index 胜 3；
+  `popover="manual"` 胜 3（真 top layer，但宿主兼容面更窄）。最终采用 token 化的 z-index 方案。
+- **回归**：规范测试 249 → **253 全绿**（新增 2 条层级断言防回归）；
+  实机 `test/st-layer-check.js` 修复后 5 个采样点全部 `oursOnTop: true`，关闭后层级还原，控制台零错误。
+
+**文档论断修正（重要）**
+
+- 原文档多处表述「由 `dialog.show()` 提升渲染层级 / 进入 top layer」是**错误的**。
+  已逐处改为准确说明，覆盖 `README.md` §2.3 / §6.6 / §7.14 / §8 / §10 / §13 与 `AI-GUIDE.md`；
+  `components.css` 中保留「实测结论，勿改」的推导注释，避免后人再误改。
+- `README.md` 新增 §13.5.1「层级 P0 修复」，含根因、对照实验表、修复代码与移植提醒。
+
+**新增目录**
+
+- `ISSUES.md`：本地 issue 追踪表，与 GitHub Issues 双向对应。
+  当前登记 **7 条已修复**、**9 条待办**（#8–#16）、**2 条已确认不修**（附不修理由）、
+  以及 6 个实机测试脚本索引。规则：疑似问题先登记、写明复现证据、不允许凭印象下结论。
+
+**测试**
+
+- `test/test-ui-kit.js` 新增第 9 节「运行时契约（nvui-api.js 行为红线）」14 条断言
+  与第 10 节「ST 扩展模板自洽」13 条断言。
+- 新增实机脚本：`test/st-glass-fallback-check.js`（玻璃实心回退，9 项）、`test/st-layer-check.js`（层级回归，5 采样点 `oursOnTop` 判定）、
+  `test/st-layer-probe.js`（层级根因探针，5 方案对照）、
+  `test/st-glass-probe.js`（玻璃生效探测）、`test/st-toplayer-probe.js`（top-layer 行为探针）。
+- 使用 `playwright-core` 直连本机 Chrome；运行时须清掉代理环境变量
+  （`env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY`），否则 Chromium 导航被代理劫持报 `ERR_CONNECTION_REFUSED`。
+
+**已修复的正确性问题**
+
+- `animationend` 冒泡截断退场动画（P0，实机复现）：面板内部的子动画（如 `.nvui-tabpane-in`）结束时会冒泡到 overlay，
+  旧实现未校验 `event.target`，导致 overlay 自身的退场动画被提前截断、面板瞬间消失。
+  修复：`onAnimEnd` 增加 `event.target !== overlayEl` 校验；吐司 `dismiss()` 同样处理并校验 `animationName`。
+- `el()` 的 `html` → `innerHTML` 通道（XSS 缺口）：移除该分支，只保留 `text` → `textContent`，
+  其余属性一律 `setAttribute`。
+- document 级 `keydown` 监听器泄漏：每次 `createPanel` 都在 document 上挂一个监听器且从不注销。
+  修复：新增**全局单例 Esc 调度器**（`escapeStack`），只有最上层可见浮层响应 Esc，面板销毁时自动注销。
+- 重复 id / dialog 永不销毁：同名面板会产生重复 `id`（含 `-layer` / `-overlay` / `-title` 派生 id）。
+  修复：新增 `uniqueId()` + `idTaken()`，冲突时自动加后缀；新增 `destroy()` 移除 DOM 并注销监听。
+- `aria-modal="true"` 名不副实：没有焦点陷阱，Tab 会跑到面板外。
+  修复：面板内实现 focus trap（Tab / Shift+Tab 循环）。
+- 焦点归还失败（ST 宿主真实行为）：ST 的 wand 菜单点击菜单项后自动收起，触发按钮随之不可聚焦，
+  `opener.focus()` 静默失败、焦点掉到 `body`。修复：新增 `isFocusable()` 校验 + `focusFallback` 三级兜底
+  （触发元素 → `focusFallback` → 面板本身）。
+
+**本轮新增修复（ISSUES.md 待办区）**
+
+- **#13 `prefers-reduced-motion` 门禁作用域不足（P2 无障碍）**：原降级块只覆盖 `.nvui-scope *` 与
+  `dialog.nvui-tl *` —— 宿主把 kit 组件挂进自己的容器却**没加** `.nvui-scope` 时，组件动画照常播放，
+  无障碍红线被绕过。修复：降级块改为**两层** —— 层 1 保留原有通配（覆盖作用域内的自定义子项），
+  层 2 用 `:is(...)` **逐个点名 27 个自身带 animation/transition 的 kit 类**（含 `::before`/`::after`
+  变体、`.nvui-stagger > *`、开关 checkbox）。点名而非通配，是为了**不波及宿主元素**。
+  **未新增 `!important`**（仍 5 个，预算 ≤ 8 不变）。回归断言：扫描 `components.css` 中所有带
+  `animation:`/`transition:` 的规则，提取 kit 基类并逐一断言出现在降级块选择器中。
+- **#14 `preview.html` 性能（P3）**：`replayMotion` 原本逐节点读 `offsetWidth`（N 节点 = N 次同步强制回流），
+  改为「批量摘类 → 全局只读一次 `document.body.offsetWidth` → 批量挂回」，并对 stagger 子项单独触发回流；
+  滚动监听（`capture: true`）改用 `requestAnimationFrame` 合并为每帧至多一次重定位。
+- **#11 进度条扫光常驻（P2）**：扫光是「进行中」的语义装饰，0% / 100% 时继续跑无限循环纯属浪费合成层资源。
+  新增**可选**状态类 `.nvui-progress.is-idle`（0%）/ `.is-complete`（100%），CSS 侧 `animation: none`；
+  `NVUI.progress().setValue()` 自动维护（`syncActivity`）。**不确定进度（`is-indeterminate`）永远保持扫光**。
+  未新增 token、未改既有 DOM 契约（手写 DOM 不加类时行为与旧版一致）。
+- **#15 宿主 `no-blur` 下玻璃重影（P2 视觉）**：宿主实际规则是
+  `body.no-blur * { backdrop-filter: unset !important }` —— 浏览器**仍支持** `backdrop-filter`，
+  所以 `@supports not` 降级块根本不触发，玻璃只剩半透明底色、下层文字直接透出形成重影。
+  修复：`nvui-api.js` 新增 `detectGlassSupport()` / `syncGlassFallback()` ——
+  **造一个隐藏 `.nvui-glass` 探针读渲染后的实际计算值**（`getComputedStyle().backdropFilter`），
+  为 `none` 即判定被外部禁用，自动给根节点挂 `.nvui-solid` 实心回退。
+  **不猜宿主类名**（避免与宿主实现耦合）。`createPanel()` / `showToast()` 已内置该调用。
+  实机 `test/st-glass-fallback-check.js` **9/9 全绿**（宿主 no-blur 下探测值 `none`、
+  面板背景 `rgb(22,26,36)` 不透明、移除 no-blur 后恢复 `blur(20px) saturate(1.5)`、零控制台错误）。
+
+**新增能力**
+
+- `NVUI.detectGlassSupport(options?)` / `NVUI.syncGlassFallback(options?)`：玻璃能力探测与实心回退。
+- `NVUI.progress()` 的 `setValue()` 现在自动维护 `.is-idle` / `.is-complete` 状态类。
+- `createPanel(options)` 新增 `focusFallback`（CSS 选择器或元素）与 `destroy`（清理回调）两个选项；
+  控制器新增 `destroy()` 方法。
+- 退场动画兜底定时器改为可清理（`clearTimeout`），避免动画未触发时定时器泄漏。
+
+**新增目录**
+
+- `st-extension-template/`：可直接复制使用的 SillyTavern 扩展模板骨架
+  （`manifest.json` / `index.js` / `style.css` + `ui-kit/` 内嵌运行时），
+  已在本机真实 ST 宿主完成扩展加载 / 面板打开 / tab 切换 / 吐司 / Esc 焦点归还 / 设置回写 / 移动端布局 7 项实机验证。
+  模板中已沉淀 ST 宿主陷阱：`extension_settings` 是模块级导出（非 window 全局）、需实时读取；
+  `getContext()` 快照不可缓存；扩展菜单是 Popper 浮层且点击后自动收起（故需 `focusFallback`）；
+  扩展菜单 DOM 动态创建；`hooks.activate` 指向入口导出的函数名。
+
+**测试**
+
+- `test/test-ui-kit.js` 新增第 9 节「运行时契约（nvui-api.js 行为红线）」14 条断言
+  与第 10 节「ST 扩展模板自洽」13 条断言；总数 236 → **261**，全绿（本轮新增层级 / 动效降级 / 玻璃探测 / preview 性能等 12 条断言）。
+- 新增 `test/st-live-check.js`（真实 ST 宿主运行时回归 6 项）、`test/st-template-check.js`（模板实机验证 7 项）、
+  `test/st-focus-probe.js`（焦点归还根因探针）；使用 `playwright-core` 直连本机 Chrome。
+
 ## v2.2.0（2026-10-17）
 
 描边精致化（修复 1px 圆角描边锯齿）+ 新增设计调用 API / 机器可读令牌 / AI 协作指南（小版本；无破坏性变更）。

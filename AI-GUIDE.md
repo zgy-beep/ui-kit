@@ -14,7 +14,9 @@
 
 1. **只用 Kit 的类名与令牌**：所有类名 `nvui-` 前缀、状态类 `is-` 前缀；颜色/圆角/间距/动效一律用 `var(--nvui-*)`，禁止 `#hex`、`rgb()`、`hsl()` 字面量。
 2. **不污染宿主**：禁止裸元素选择器（`button {}`、`input {}`）、禁止全局重置、禁止 `!important`（Kit 只在宿主 checkbox 隔离与 reduced-motion 降级里使用）。
-3. **SillyTavern 浮层必须进 top-layer 载体**：`<dialog class="nvui-tl">` + 非模态 `dialog.show()`，禁止 `showModal()`（会给文档加 `inert`）、禁止裸 `position: fixed` 挂 body（宿主 `html` 有 transform，手机端会被顶出屏幕）。
+3. **SillyTavern 浮层必须进 `<dialog class="nvui-tl">` 载体**：非模态 `dialog.show()`，禁止 `showModal()`（会给文档加 `inert`）、禁止裸 `position: fixed` 挂 body（宿主 `html` 有 transform，手机端会被顶出屏幕）。
+   - **载体必须自带 z-index**（Kit 已内置 `z-index: var(--nvui-z-overlay)`）。实测：**非模态 `dialog.show()` 不会进入浏览器 top layer**（只有 `showModal()` 会，而它会加 `inert`）。载体是 `position:fixed`，会创建层叠上下文，内部子元素的 z-index 只在载体内部生效 —— 载体自身若为 `z-index:auto`，浮层整体只相当于 z-index 0，会被酒馆 `#sheld`（z-index:30）压住，表现为「面板被酒馆窗口压在后面」。
+   - 吐司载体请加 `.nvui-tl-toast`（`NVUI.showToast` 已内置），使其层级高于面板载体。
 4. **无障碍内建**：面板 `role="dialog" aria-modal="true" aria-labelledby`；标签页 `role="tablist"/"tab"/"tabpanel"` + `aria-selected` + `aria-controls`；折叠 `aria-expanded`；关闭按钮 `aria-label`；打开时焦点移入、关闭后归还触发元素（README §2.3 配方）。
 5. **尊重系统偏好**：动效必须可被 `prefers-reduced-motion` 降级（Kit 已内置）；玻璃必须可被 `prefers-reduced-transparency` / 不支持 `backdrop-filter` / `.nvui-solid` 降级。
 6. **无 emoji 图标**：用 Font Awesome `<i class="fa-solid ...">` 或纯 CSS 图形；README/CSS/JS 文案中也不要写 emoji。
@@ -42,7 +44,7 @@
 | :--- | :--- |
 | 设置页、图库、请求历史等多分区功能 | **面板布局标准**：`dialog.nvui-tl > .nvui-overlay.is-panel > .nvui-panel`（电脑居中 880×88vh / 手机底部抽屉 100%×92dvh + 底部导航） |
 | 轻量确认、单表单 | `.nvui-modal`（弹窗骨架，README §2.3） |
-| 操作反馈 | `NVUI.showToast` / `.nvui-toast`（放在 top-layer 载体内） |
+| 操作反馈 | `NVUI.showToast` / `.nvui-toast`（放在 `dialog.nvui-tl` 载体内） |
 | 常驻入口/小工具窗 | `.nvui-floating`（drag 逻辑业务侧实现） |
 | 表单设置项 | `.nvui-switch-row` / `.nvui-input-row` / `.nvui-acc` 折叠分组 |
 
@@ -97,9 +99,29 @@
 </script>
 ```
 
-API 会自动完成：面板/遮罩/标题栏/关闭按钮/顶部 tabs + 底部导航/`aria-*` 同步/粘连指示器/进出场动画/Esc 与点遮罩关闭/焦点移入与归还。
+API 会自动完成：面板/遮罩/标题栏/关闭按钮/顶部 tabs + 底部导航/`aria-*` 同步/粘连指示器/进出场动画/Esc 与点遮罩关闭/焦点移入与归还/Tab 焦点陷阱。
+
+**ST 扩展场景的两个必填选项**：
+
+```js
+var panel = NVUI.createPanel({
+    id: 'my_plugin_panel',
+    title: '我的插件设置',
+    focusFallback: '#extensionsMenuButton',   // 触发按钮不可聚焦时的兜底（ST 菜单点击后会自动收起）
+    destroy: function () { /* 解绑自有监听 */ }
+});
+```
+
+- `focusFallback`：接受 CSS 选择器或元素。关闭面板时按「触发元素 → `focusFallback` → 面板本身」三级兜底归还焦点；
+  不传时若触发元素已消失，焦点会掉到 `body`（键盘用户会「丢失位置」）。
+- `destroy`：面板销毁时的清理回调（解绑业务监听、清理定时器）。
+- 面板需彻底移除时调用 `panel.destroy()`：移除 DOM、注销全局 Esc 监听、触发 `destroy` 回调。
 
 > **单文件 / 酒馆助手脚本提示**：若是单文件用户脚本（不能拷贝本地文件夹），可通过 CDN 动态加载样式与 JS API（`https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.2.0/nvui-api.js`，完整配方见 `README.md` §2.1.3），然后同样使用 `NVUI.createPanel` 生成，全自动满足规范。
+
+> **ST 扩展直接开箱用**：`st-extension-template/` 是一份已在本机真实 ST 宿主验证过的扩展骨架
+> （`manifest.json` / `index.js` / `style.css` + `ui-kit/`）。复制到
+> `public/scripts/extensions/third-party/<插件名>/` 改名字即可加载，宿主陷阱清单见 `README.md` §13.5。
 
 ### 2.3 手写 DOM 时的最小骨架
 
@@ -201,7 +223,7 @@ JS 只需三件事：非模态 `show()`/关闭收尾（README §2.3）、tabs �
 
 ### 3.3 需要替换的宿主约束
 
-- **没有 SillyTavern 的 html transform** 时：仍推荐「浮层 + 遮罩」的同一套结构；若你的宿主不允许 `<dialog>`，可把 `.nvui-overlay` 直接放进 `body`（会失去 top-layer，但视觉/组件规则不变），并在文档里注明差异；
+- **没有 SillyTavern 的 html transform** 时：仍推荐「浮层 + 遮罩」的同一套结构；若你的宿主不允许 `<dialog>`，可把 `.nvui-overlay` 直接放进 `body`（需自行保证足够的 z-index，视觉/组件规则不变），并在文档里注明差异；
 - 宿主自带全局 `input`/`button` 样式时：沿用 Kit 的作用域与「对抗宿主样式」的隔离写法（只加必要规则，不要全局重置）；
 - 移动端：保留 600px 断点（面板 → 底部抽屉）、`env(safe-area-inset-bottom)`、`100dvh`；
 - 品牌色：整体替换 `--nvui-accent*` 与语义色，重新跑对比度（README §4.4 的验算方法）。
@@ -267,13 +289,14 @@ JS 只需三件事：非模态 `show()`/关闭收尾（README §2.3）、tabs �
 | `NVUI.version` | Kit/API 版本（2.2.0） |
 | `NVUI.getToken(name)` | 读取当前作用域的设计令牌值 |
 | `NVUI.setTheme('light'|'dark', { solid })` | 切换浅色 / 实心扁平模式（只切类名） |
-| `NVUI.openLayer(dialog, overlay)` / `closeLayer(dialog, overlay, cb)` | 非模态 top-layer 浮层开合（含退场动画收尾） |
+| `NVUI.syncGlassFallback()` | 宿主全局禁用 `backdrop-filter` 时自动挂 `.nvui-solid` 实心回退（`createPanel`/`showToast` 已内置） |
+| `NVUI.openLayer(dialog, overlay)` / `closeLayer(dialog, overlay, cb)` | 非模态浮层载体开合（含退场动画收尾） |
 | `NVUI.switchRow({ label, value, feature, onChange })` | 胶囊开关行 |
 | `NVUI.inputRow({ label, type, value, min, max, step, onChange })` | 输入行（number 默认隐藏原生步进按钮） |
 | `NVUI.accordion({ title, summary, open, content })` | 折叠分组 |
 | `NVUI.progress({ value, variant, indeterminate })` | 进度条（返回元素带 `setValue`） |
-| `NVUI.createPanel(options)` | 完整面板（见 §2.2），返回 `{ open, close, setTab, addSwitch, addInput, addAccordion, addProgress, addNode, addSectionTitle }` |
-| `NVUI.showToast({ message, type, duration, icon })` | 吐司通知（自动进 top-layer、自动清理） |
+| `NVUI.createPanel(options)` | 完整面板（见 §2.2），返回 `{ open, close, destroy, setTab, syncIndicator, addSwitch, addInput, addAccordion, addProgress, addNode, addSectionTitle }` |
+| `NVUI.showToast({ message, type, duration, icon })` | 吐司通知（自动建独立载体、自动清理） |
 
 > API 是**可选**的：不用 JS 时，手写 DOM + CSS 同样有效；API 只是把布局标准与无障碍细节固化成可复用函数。
 

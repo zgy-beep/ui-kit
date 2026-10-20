@@ -65,8 +65,15 @@
  * --------------------------------------------------------------------------
  * 酒馆 html 上存在 transform，使 position:fixed 的包含块变成文档盒子，手机端
  * 会把浮层推出可视区。解法：把浮层放进 <dialog class="nvui-tl"> 并调用
- * dialog.show()（非模态，避免给文档加 inert），由 dialog 提升渲染层级；
- * 载体本身不吃指针事件，只把指针放行给子浮层（含吐司堆栈）。
+ * dialog.show()（非模态，避免给文档加 inert），由载体统一承接浮层。
+ *
+ * 层级说明（实测结论，勿改）：
+ *   非模态 dialog.show() **不会**进入浏览器 top layer（只有 showModal() 会，
+ *   而 showModal() 会给整个文档加 inert，导致宿主不可交互，一并禁用）。
+ *   因此载体必须靠自身的 z-index 参与常规层叠：position:fixed 会创建层叠
+ *   上下文，载体内部子元素的 z-index 再大也只在载体内部生效，无法越过宿主
+ *   的高 z-index 区域（酒馆 #sheld 是 z-index:30 的 absolute 元素）。
+ *   → 载体必须显式给一个高于宿主的 z-index，否则浮层会被宿主内容压住。
  *
  * DOM：
  *   <dialog class="nvui-tl"><div class="nvui-overlay"> ... </div></dialog>
@@ -87,6 +94,14 @@ dialog.nvui-tl {
     background: transparent;
     color: inherit;
     pointer-events: none; /* 载体透明放行；子浮层各自恢复 auto */
+    /* 载体层级：必须高于宿主常规层叠（酒馆最高约 30000）。
+       多个载体同级时由 DOM 顺序决定，故吐司载体另用 .nvui-tl-toast 提级。 */
+    z-index: var(--nvui-z-overlay);
+}
+
+/* 吐司载体：常驻存在且需始终盖过面板，故比面板载体再高一级 */
+dialog.nvui-tl.nvui-tl-toast {
+    z-index: var(--nvui-z-tooltip);
 }
 
 dialog.nvui-tl:not([open]) {
@@ -1168,6 +1183,16 @@ dialog.nvui-tl > .nvui-toast-stack {
     animation: nvui-shimmer var(--nvui-shimmer-duration) var(--nvui-ease-standard) infinite;
 }
 
+/* v2.2.0 修订补丁（ISSUES.md #11）：空闲（0%）与完成（100%）时停止扫光。
+ * 扫光是「进行中」的语义装饰 —— 0% 还没开始、100% 已经结束，此时继续跑
+ * 无限循环动画纯属浪费合成层资源。状态类由 NVUI.progress().setValue() 自动
+ * 维护；手写 DOM 时可按需手动加 .is-idle / .is-complete（可选，不加则行为同旧版）。
+ * 不确定进度（is-indeterminate）永远保持扫光，因为它本身就表示「进行中」。 */
+.nvui-progress.is-idle .nvui-progress-bar::after,
+.nvui-progress.is-complete .nvui-progress-bar::after {
+    animation: none;
+}
+
 .nvui-progress.is-ok .nvui-progress-bar {
     background: var(--nvui-ok);
 }
@@ -2061,7 +2086,18 @@ dialog.nvui-tl > .nvui-toast-stack {
     }
 }
 
-/* 尊重系统「减少动态效果」偏好：停掉所有动画/过渡，并清掉 stagger 延迟 */
+/* 尊重系统「减少动态效果」偏好：停掉所有动画/过渡，并清掉 stagger 延迟
+ *
+ * 作用域策略（v2.2.0 修订补丁修复 ISSUES.md #13）：
+ *   层 1「作用域通配」：.nvui-scope 内的一切 + dialog.nvui-tl 载体的一切。
+ *       这层覆盖 kit 作用域内的自定义子元素（stagger 子项、用户自绘的微动效）。
+ *   层 2「精确点名」：所有**自身带动画/过渡**的 kit 类，逐个点名。
+ *       解决的问题：宿主把 kit 组件挂进自己的容器却**没加** .nvui-scope 时，
+ *       原来只有层 1 生效 → 组件动画不会降级（无障碍红线被绕过）。
+ *       点名而非通配，是为了**不波及宿主元素**（宿主 DOM 树庞大，通配会误伤）。
+ *
+ * 两层共用同一组 !important 声明（合计 5 个，预算 ≤ 8）。
+ */
 @media (prefers-reduced-motion: reduce) {
     .nvui-scope *,
     .nvui-scope *::before,
@@ -2069,7 +2105,94 @@ dialog.nvui-tl > .nvui-toast-stack {
     dialog.nvui-tl,
     dialog.nvui-tl *,
     dialog.nvui-tl *::before,
-    dialog.nvui-tl *::after {
+    dialog.nvui-tl *::after,
+    :is(
+        .nvui-overlay,
+        .nvui-modal,
+        .nvui-icon-btn,
+        .nvui-btn,
+        .nvui-switch-row,
+        .nvui-input,
+        .nvui-tabs-indicator,
+        .nvui-tab,
+        .nvui-tabpane,
+        .nvui-acc,
+        .nvui-acc-head,
+        .nvui-acc-chev,
+        .nvui-acc-body,
+        .nvui-status-dot,
+        .nvui-spinner,
+        .nvui-skeleton,
+        .nvui-progress,
+        .nvui-progress-bar,
+        .nvui-tooltip,
+        .nvui-toast,
+        .nvui-fade-in,
+        .nvui-slide-up,
+        .nvui-pop-in,
+        .nvui-stagger,
+        .nvui-pulse,
+        .nvui-bottom-nav-item
+    ),
+    :is(
+        .nvui-overlay,
+        .nvui-modal,
+        .nvui-icon-btn,
+        .nvui-btn,
+        .nvui-switch-row,
+        .nvui-input,
+        .nvui-tabs-indicator,
+        .nvui-tab,
+        .nvui-tabpane,
+        .nvui-acc,
+        .nvui-acc-head,
+        .nvui-acc-chev,
+        .nvui-acc-body,
+        .nvui-status-dot,
+        .nvui-spinner,
+        .nvui-skeleton,
+        .nvui-progress,
+        .nvui-progress-bar,
+        .nvui-tooltip,
+        .nvui-toast,
+        .nvui-fade-in,
+        .nvui-slide-up,
+        .nvui-pop-in,
+        .nvui-stagger,
+        .nvui-pulse,
+        .nvui-bottom-nav-item
+    )::before,
+    :is(
+        .nvui-overlay,
+        .nvui-modal,
+        .nvui-icon-btn,
+        .nvui-btn,
+        .nvui-switch-row,
+        .nvui-input,
+        .nvui-tabs-indicator,
+        .nvui-tab,
+        .nvui-tabpane,
+        .nvui-acc,
+        .nvui-acc-head,
+        .nvui-acc-chev,
+        .nvui-acc-body,
+        .nvui-status-dot,
+        .nvui-spinner,
+        .nvui-skeleton,
+        .nvui-progress,
+        .nvui-progress-bar,
+        .nvui-tooltip,
+        .nvui-toast,
+        .nvui-fade-in,
+        .nvui-slide-up,
+        .nvui-pop-in,
+        .nvui-stagger,
+        .nvui-pulse,
+        .nvui-bottom-nav-item
+    )::after,
+    .nvui-stagger > *,
+    .nvui-switch-row input[type="checkbox"],
+    .nvui-switch-row input[type="checkbox"]::after {
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
         animation-delay: 0.01ms !important;

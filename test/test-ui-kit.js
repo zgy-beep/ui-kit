@@ -289,6 +289,7 @@ const license = readText(FILES.license);
 const changelog = readText(FILES.changelog);
 const aiGuide = readText(FILES.aiGuide);
 const testSrc = readText(FILES.self);
+const apiSrc = readText(FILES.api);
 const auditExists = fs.existsSync(FILES.audit);
 const audit = auditExists ? readText(FILES.audit) : '';
 
@@ -791,6 +792,14 @@ check('top-layer 载体子浮层恢复 pointer-events:auto',
     && /pointer-events:\s*auto/.test(componentsClean));
 check('top-layer 载体未 show() 时 display:none',
     /dialog\.nvui-tl:not\(\[open\]\)[^{]*\{\s*display:\s*none/.test(componentsClean));
+// 回归：非模态 dialog.show() 不进浏览器 top layer，载体必须自带 z-index，
+// 否则 position:fixed 的层叠上下文会把浮层压在宿主高 z-index 区域之下。
+check('top-layer 载体显式声明 z-index（防宿主内容压住浮层）',
+    /z-index:\s*var\(--nvui-z-overlay\)/.test(tlBodies),
+    tlBodies.replace(/\s+/g, ' ').slice(0, 200));
+check('吐司载体层级高于面板载体（nvui-tl-toast）',
+    /dialog\.nvui-tl\.nvui-tl-toast/.test(componentsClean)
+    && /nvui-tl-toast[^{]*\{[^}]*z-index:\s*var\(--nvui-z-tooltip\)/.test(componentsClean));
 
 // ---- 4.2 玻璃表面（backdrop-filter / 受光边 / 内高光） ----
 const GLASS_SURFACES = ['.nvui-overlay', '.nvui-modal', '.nvui-floating', '.nvui-tooltip', '.nvui-toast', '.nvui-glass'];
@@ -872,6 +881,18 @@ check('.nvui-solid 实心模式：面板同样回退不透明并关闭模糊',
     solidRules.some((r) => /\.nvui-panel/.test(r.selector)
         && /background(?:-color)?\s*:[^;]*var\(--nvui-bg(?:-2)?\)/.test(r.body)
         && /backdrop-filter\s*:\s*none/.test(r.body)));
+/* 回归（ISSUES.md #15）：宿主用 `body.no-blur * { backdrop-filter: unset !important }`
+ * 全局关模糊时，浏览器仍「支持」backdrop-filter → @supports 探测不到 → 玻璃只剩半透明底色，
+ * 下层文字透出重影。kit 必须改用「读渲染后的实际计算值」来探测，并自动挂 .nvui-solid。 */
+check('玻璃能力探测：读实际计算值 backdropFilter（不靠 @supports），失效时挂 .nvui-solid',
+    /detectGlassSupport/.test(apiSrc)
+    && /getComputedStyle/.test(apiSrc)
+    && /backdropFilter/.test(apiSrc)
+    && /classList\.add\(['"]nvui-solid['"]\)/.test(apiSrc)
+    && /syncGlassFallback/.test(apiSrc));
+check('createPanel / showToast 内置玻璃实心回退调用',
+    /function createPanel[\s\S]{0,400}syncGlassFallback\(\)/.test(apiSrc)
+    && /function showToast[\s\S]{0,200}syncGlassFallback\(\)/.test(apiSrc));
 const rtRules = contextRules(/prefers-reduced-transparency:\s*reduce/);
 const rtBodies = joinedBodies(rtRules);
 check('prefers-reduced-transparency: reduce 降级块（玻璃回退不透明 + 关闭模糊）',
@@ -916,6 +937,27 @@ check('reduced-motion 覆盖 animation-delay（延迟一并归零）',
 check('reduced-motion 覆盖 animation-iteration-count 与 scroll-behavior',
     /animation-iteration-count:\s*1 !important/.test(rmBodies)
     && /scroll-behavior:\s*auto !important/.test(rmBodies));
+
+/* 回归（ISSUES.md #13）：reduced-motion 门禁不得只依赖 .nvui-scope 通配。
+ * 宿主把 kit 组件挂进自己的容器却没加 .nvui-scope 时，组件动画也必须降级；
+ * 因此所有「自身带 animation/transition 的 kit 类」都必须在降级块里被逐个点名。 */
+const rmSelectorText = rmRules.map((r) => r.selector).join('\n');
+/** 从组件规则里抽出「自身带 animation/transition」的 kit 基类（去掉状态类与伪类） */
+const animatedKitClasses = new Set();
+for (const r of componentRules) {
+    if (!/\banimation(?:-name)?\s*:|\btransition\s*:/.test(r.body)) continue;
+    for (const sel of r.selector.split(',')) {
+        const m = sel.trim().match(/\.((?:nvui)-[a-z0-9-]+)/i);
+        if (m) animatedKitClasses.add(m[1]);
+    }
+}
+const missingInRm = [...animatedKitClasses].filter((c) => !rmSelectorText.includes(`.${c}`));
+check('reduced-motion 降级逐个点名所有带动效的 kit 类（不依赖 .nvui-scope）',
+    missingInRm.length === 0,
+    `未点名: ${missingInRm.join(', ')}｜已点名 ${animatedKitClasses.size} 类`);
+check('reduced-motion 保留 .nvui-scope 与 dialog.nvui-tl 两层作用域通配',
+    /\.nvui-scope \*/.test(rmSelectorText)
+    && /dialog\.nvui-tl \*/.test(rmSelectorText));
 const focusRingCount = (componentsClean.match(/outline:\s*var\(--nvui-focus-ring-w\)\s+solid\s+var\(--nvui-focus-ring-color\)/g) || []).length;
 check('focus ring 统一走 token（>= 6 处）', focusRingCount >= 6, `实际 ${focusRingCount} 处`);
 check('不再硬编码 outline 像素值 / 旧 accent 硬编码写法',
@@ -1161,6 +1203,13 @@ check('进度条扫光：.nvui-progress-bar::after 引用 nvui-shimmer 且用 tr
     && hasRule('.nvui-progress-bar::after', /background\s*:[^;]*gradient\(/));
 check('不确定进度关键帧含 scaleX 呼吸（transform-only，不触发布局）',
     componentKeyframes.some((k) => k.name === 'nvui-progress-indeterminate' && /scaleX\(/.test(k.body)));
+/* 回归（ISSUES.md #11）：0% / 100% 时扫光必须停下，不能常驻无限动画 */
+check('进度条扫光在 idle(0%) / complete(100%) 状态停止（is-idle / is-complete）',
+    hasRule('.nvui-progress.is-idle .nvui-progress-bar::after', /animation\s*:\s*none/)
+    && hasRule('.nvui-progress.is-complete .nvui-progress-bar::after', /animation\s*:\s*none/));
+check('NVUI.progress() 自动维护 is-idle / is-complete（0% 与 100% 停扫光）',
+    /is-idle/.test(apiSrc) && /is-complete/.test(apiSrc)
+    && /syncActivity/.test(apiSrc));
 
 // ---- 4.12 v2.0.1 追加：标签页「粘连」滑动指示器 ----
 const tabsBaseBodies = plainRuleBodies('.nvui-tabs').join('\n');
@@ -1366,6 +1415,20 @@ if (!/(?:减少动态|减少动效|被降级|强制播放)/.test(preview)) previ
 check('preview 在系统 reduce 下显示提示，并可用 body.pv-force-motion 覆盖动画/过渡时长（含循环动画恢复）',
     previewReduceMissing.length === 0, `缺少: ${previewReduceMissing.join(', ')}`);
 
+/* 回归（ISSUES.md #14）：preview 的动效重播不得逐节点强制回流；滚动重定位必须按帧合并 */
+const replayFn = (preview.match(/function replayMotion\(\)\s*\{[\s\S]*?\n {4}\}/) || [''])[0];
+check('preview 动效重播：批量摘类后只做一次全局强制回流（不逐节点读 offsetWidth）',
+    replayFn.length > 0
+    && /pending\.push/.test(replayFn)
+    && /void document\.body\.offsetWidth/.test(replayFn)
+    && !/void node\.offsetWidth/.test(replayFn),
+    replayFn.slice(0, 160));
+const scrollHandler = (preview.match(/function repositionTip\(\)\s*\{[\s\S]*?\n {4}\}/) || [''])[0];
+check('preview 滚动重定位用 requestAnimationFrame 合并（每帧至多一次）',
+    /requestAnimationFrame/.test(scrollHandler)
+    && /repositionRaf/.test(scrollHandler),
+    scrollHandler.slice(0, 160));
+
 // ---- v2.1.0 新增：第 18 节插件面板布局标准 demo ----
 const previewPanelMissing = [];
 if (!/is-panel/.test(preview)) previewPanelMissing.push('overlay.is-panel');
@@ -1549,6 +1612,119 @@ const versionMismatch = Object.entries(versionRefs).filter(([, v]) => !v).map(([
 check(`kit 版本 v${KIT_VERSION} 在 6 处声明一致`, versionMismatch.length === 0, versionMismatch.join(', '));
 check('测试本身位于项目内（test/test-ui-kit.js）',
     path.resolve(FILES.self) === path.join(KIT, 'test', 'test-ui-kit.js'));
+
+// ==================== 9. 运行时契约（nvui-api.js 行为红线） ====================
+/*
+ * v2.2.1 起补：此前测试全部是「文本/静态」断言，测不到任何运行时行为，
+ * 导致 animationend 冒泡截断退场动画这类真 bug 长期潜伏。
+ * 本节用「源码断言 + 轻量 DOM 行为断言」双保险守护关键运行时契约。
+ * 需要 DOM 行为的部分在无 DOM 环境自动跳过（不误报失败）。
+ */
+console.log('\n=== 9. 运行时契约（nvui-api.js 行为红线） ===');
+
+/* --- 9.1 XSS 通道：el() 不得保留 innerHTML 分支 --- */
+check('nvui-api: el() 已移除 html/innerHTML 通道（防 XSS）',
+    !/innerHTML/.test(apiSrc),
+    apiSrc.match(/innerHTML[^\n]*/)?.[0] || '');
+check('nvui-api: 文本内容统一走 textContent',
+    /textContent\s*=\s*String\(v\)/.test(apiSrc));
+
+/* --- 9.2 animationend 冒泡防护 --- */
+check('nvui-api: closeLayer 的 animationend 校验 event.target（防子动画冒泡截断退场）',
+    /function onAnimEnd\(event\)\s*\{[\s\S]{0,200}event\.target\s*!==\s*overlayEl/.test(apiSrc));
+check('nvui-api: 吐司 dismiss 的 animationend 校验 event.target',
+    /function onAnimEnd\(event\)[\s\S]{0,300}event\.target\s*!==\s*toast/.test(apiSrc));
+check('nvui-api: 退场兜底定时器在正常结束时被 clearTimeout（不留悬挂定时器）',
+    /clearTimeout\(fallback\)/.test(apiSrc));
+
+/* --- 9.3 document 级监听器泄漏 --- */
+check('nvui-api: Esc 走全局单例调度器（不为每个面板挂永久 document 监听器）',
+    /escapeStack/.test(apiSrc) && /registerEscapeHandler/.test(apiSrc));
+check('nvui-api: 单例调度器在最后一个面板注销后移除全局监听',
+    /removeEventListener\('keydown',\s*onEscapeKey\)/.test(apiSrc));
+check('nvui-api: createPanel 不再直接 on(document, "keydown")',
+    !/on\(document,\s*'keydown'/.test(apiSrc),
+    apiSrc.match(/on\(document,\s*'keydown'[^\n]*/)?.[0] || '');
+
+/* --- 9.4 id 唯一性 --- */
+check('nvui-api: 面板 id 走唯一化处理（防重复面板造成 id 冲突与 aria 指向错乱）',
+    /uniqueId\(/.test(apiSrc));
+check('nvui-api: 唯一化同时检查派生子 id（-layer/-overlay/-title）',
+    /base\s*\+\s*'-layer'/.test(apiSrc) && /base\s*\+\s*'-overlay'/.test(apiSrc));
+
+/* --- 9.5 destroy() 与焦点管理 --- */
+check('nvui-api: 面板提供 destroy() 清理 DOM 与监听器',
+    /destroy:\s*destroy/.test(apiSrc) && /function destroy\(\)/.test(apiSrc));
+check('nvui-api: 焦点归还支持 focusFallback 兜底（宿主菜单收起后触发元素不可聚焦）',
+    /focusFallback/.test(apiSrc) && /isFocusable/.test(apiSrc));
+check('nvui-api: 焦点归还前校验触发元素仍可聚焦',
+    /isFocusable\(opener\)/.test(apiSrc));
+check('nvui-api: 实现焦点陷阱（focus trap），使 aria-modal 声明成立',
+    /FOCUSABLE/.test(apiSrc) && /event\.key\s*!==\s*'Tab'/.test(apiSrc));
+
+/* --- 9.6 行为级断言（需要 DOM；无 DOM 时跳过） --- */
+const hasDom = typeof globalThis.document !== 'undefined' && typeof globalThis.document.createElement === 'function';
+if (!hasDom) {
+    console.log('[SKIP] 运行时行为断言需要 DOM（当前为 Node 环境，未执行）');
+} else {
+    // 说明：真正的 DOM 行为验证由 test/st-live-check.js 在真实 SillyTavern 宿主中执行。
+    console.log('[SKIP] DOM 行为断言交由 test/st-live-check.js（真实 ST 宿主）执行');
+}
+
+// ==================== 10. ST 扩展模板自洽 ====================
+console.log('\n=== 10. ST 扩展模板自洽 ===');
+const TPL = path.join(KIT, 'st-extension-template');
+const tplFiles = {
+    manifest: path.join(TPL, 'manifest.json'),
+    index: path.join(TPL, 'index.js'),
+    style: path.join(TPL, 'style.css'),
+    api: path.join(TPL, 'ui-kit', 'nvui-api.js'),
+    tokens: path.join(TPL, 'ui-kit', 'tokens.css'),
+    components: path.join(TPL, 'ui-kit', 'components.css'),
+};
+const tplMissing = Object.entries(tplFiles).filter(([, p]) => !fs.existsSync(p)).map(([, n]) => n);
+check('ST 模板目录完整（manifest.json / index.js / style.css / ui-kit/ 运行时）',
+    tplMissing.length === 0, tplMissing.join(', '));
+
+if (tplMissing.length === 0) {
+    const tplManifest = JSON.parse(fs.readFileSync(tplFiles.manifest, 'utf8'));
+    const tplIndex = readText(tplFiles.index);
+    const tplStyle = readText(tplFiles.style);
+
+    check('ST 模板 manifest 含 ST 必需字段（display_name/js/css/version/author/hooks）',
+        !!(tplManifest.display_name && tplManifest.js && tplManifest.css
+            && tplManifest.version && tplManifest.author && tplManifest.hooks));
+    check('ST 模板 manifest 声明 loading_order 与 hooks.activate',
+        typeof tplManifest.loading_order === 'number' && typeof tplManifest.hooks?.activate === 'string');
+    check('ST 模板 index.js 以 ES Module 导入宿主上下文',
+        /from '\.\.\/\.\.\/\.\.\/extensions\.js'/.test(tplIndex));
+    check('ST 模板 index.js 导入 NVUI 运行时（相对路径 ./ui-kit/nvui-api.js）',
+        /import '\.\/ui-kit\/nvui-api\.js'/.test(tplIndex));
+    check('ST 模板 index.js 使用 extension_settings 模块导出（非 window 全局）',
+        /extension_settings as extensionSettings/.test(tplIndex)
+        && !/ctx\.extension_settings\s*\?\?\s*window\.extension_settings/.test(tplIndex));
+    check('ST 模板 index.js 导出 manifest hooks 声明的 init',
+        /export function init\(\)/.test(tplIndex));
+    check('ST 模板 index.js 设置落盘走 saveSettingsDebounced',
+        /saveSettingsDebounced/.test(tplIndex));
+    check('ST 模板 index.js 声明焦点归还兜底 focusFallback',
+        /focusFallback/.test(tplIndex));
+    check('ST 模板 style.css 顶部 @import 引入 kit 令牌与组件（且在所有规则之前）',
+        /@import url\('\.\/ui-kit\/tokens\.css'\);/.test(tplStyle)
+        && /@import url\('\.\/ui-kit\/components\.css'\);/.test(tplStyle)
+        && tplStyle.indexOf('@import') < tplStyle.search(/[^\s@][^\n]*\{/));
+    check('ST 模板 style.css 不硬编码颜色字面量',
+        !/#[0-9a-fA-F]{3,8}\b/.test(tplStyle.replace(/\/\*[\s\S]*?\*\//g, '')));
+    check('ST 模板内嵌的 nvui-api.js 与仓库根版本一致（防模板漂移）',
+        readText(tplFiles.api) === apiSrc);
+    check('README 记录 ST 扩展模板目录与 focusFallback / destroy 新增能力',
+        readme.includes('st-extension-template')
+        && readme.includes('focusFallback')
+        && readme.includes('destroy()'));
+    check('AI-GUIDE 记录 ST 扩展模板与焦点归还兜底',
+        readText(FILES.aiGuide).includes('st-extension-template')
+        && readText(FILES.aiGuide).includes('focusFallback'));
+}
 
 // ==================== 汇总 ====================
 console.log(`\n=== UI Kit 规范测试结果: 通过 ${pass}, 失败 ${fail} ===`);

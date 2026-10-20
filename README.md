@@ -12,6 +12,7 @@
 | [`nvui-api.js`](nvui-api.js) | **可选**的零依赖运行时 JS API（v2.2.0 新增）：`createPanel` / `showToast` / `switchRow` / `inputRow` / `accordion` / `progress` 等，生成符合面板布局标准与无障碍契约的 DOM；Node 下 require 不访问 DOM |
 | [`tokens.json`](tokens.json) | `tokens.css` 的机器可读镜像（v2.2.0 新增）：`dark` 109 个 / `light` 47 个覆盖，供其它软件、构建工具与 AI 读取 |
 | [`AI-GUIDE.md`](AI-GUIDE.md) | 给 AI 的协作指南（v2.2.0 新增）：硬约束、读文件顺序、SillyTavern 插件面板标准流程、其它软件移植规范、提示词模板、API 速查、验收清单 |
+| [`st-extension-template/`](st-extension-template/) | **可直接复制使用的 SillyTavern 扩展模板骨架**（v2.2.0 修订新增）：`manifest.json` / `index.js` / `style.css` + `ui-kit/` 内嵌运行时，复制到 `public/scripts/extensions/third-party/<name>/` 即可加载 |
 | [`preview.html`](preview.html) | 离线组件预览页（双击即可打开；可切换深/浅主题与实心/玻璃模式，支持 URL 参数 `?theme=light`、`?solid=1`；在线版见上方演示） |
 | [`test/test-ui-kit.js`](test/test-ui-kit.js) | 规范守护测试（token 完整性 / 三方覆盖 / 无硬编码颜色 / WCAG AA 与玻璃合成对比度 / 宿主兼容红线 / 金标准取值 / 动效与降级红线）；`npm test` 或 `node test/test-ui-kit.js` |
 | [`AUDIT.md`](AUDIT.md) | 架构审核报告：v1.1.0 界面架构评估、问题清单（P0/P1/P2/P3）、v2.0.0 升级方案映射与独立复核结论、v2.0.1 修订复核 |
@@ -217,7 +218,7 @@ async function ensureNVUI() {
 | `.nvui-theme-light` | 切换浅色令牌覆盖（定义在 `tokens.css` 末尾） |
 | `.nvui-solid` | 实心扁平模式：全部玻璃表面回退为不透明 `--nvui-bg` / `--nvui-bg-2`，`backdrop-filter: none` |
 
-### 2.3 弹窗骨架（含 top-layer 载体）
+### 2.3 弹窗骨架（含浮层载体）
 
 ```html
 <dialog class="nvui-tl" id="your_modal_layer">
@@ -265,6 +266,13 @@ function closeModal() {
 overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !overlay.hidden) closeModal(); });
 ```
+
+> **层级提醒（v2.2.0 修订补丁实测结论）**：非模态 `dialog.show()` **不会**把元素送进浏览器 top layer
+> （只有 `showModal()` 会，而它会给整个文档加 `inert`，导致宿主不可交互）。
+> 载体是 `position:fixed`，会创建层叠上下文，**内部子元素的 z-index 再大也只在载体内部生效**。
+> 所以载体本身必须显式带 z-index（kit 的 `dialog.nvui-tl` 已内置 `z-index: var(--nvui-z-overlay)`）；
+> 否则浮层整体只相当于 z-index 0，会被酒馆 `#sheld`（z-index:30）等宿主区域压住。
+> 详见 [8. 宿主兼容红线](#8-sillytavern-宿主兼容红线) 第 1 条。
 
 弹窗的「焦点管理」是 `aria-modal="true"` 的必要配套（否则键盘用户仍能 Tab 到背景内容，读屏会失去上下文）：
 
@@ -722,10 +730,12 @@ v2.0.0 起，阴影只允许出现在浮层（弹窗 / 悬浮面板 / 工具提�
 | Token | 值 | 用途 |
 | :--- | :--- | :--- |
 | `--nvui-z-floating` | `1000010` | 悬浮入口 / 悬浮面板 |
-| `--nvui-z-overlay` | `1000020` | 弹窗遮罩 |
-| `--nvui-z-tooltip` | `1000030` | 工具提示、吐司堆栈（最上层） |
+| `--nvui-z-overlay` | `1000020` | 弹窗遮罩；**同时用作 `dialog.nvui-tl` 载体的 z-index**（载体必须显式带 z-index，否则会被宿主高 z-index 区域压住） |
+| `--nvui-z-tooltip` | `1000030` | 工具提示；**吐司载体 `.nvui-tl-toast`**（吐司需始终盖过面板，故比面板载体高一级） |
 
-> top-layer 载体内的实际层级由浏览器 top layer 决定；这些 z-index 是给"未走 dialog 载体"或旧内核的兜底。吐司堆栈使用 `--nvui-z-tooltip`，但仍建议放进 `dialog.nvui-tl` 顶层载体（见 [7.14](#714-吐司)）。
+> 载体（`dialog.nvui-tl`）与宿主内容的层级关系**由载体自身的 z-index 决定** —— 非模态 `dialog.show()`
+> 不进入浏览器 top layer（详见 [8. 宿主兼容红线](#8-sillytavern-宿主兼容红线) 第 1 条）。
+> 载体内部（`.nvui-overlay` / `.nvui-floating` / `.nvui-toast-stack`）的 z-index 只在该载体的层叠上下文内比较。
 
 ---
 
@@ -771,6 +781,16 @@ v2.0.0 起，阴影只允许出现在浮层（弹窗 / 悬浮面板 / 工具提�
 | 强制颜色模式 | `@media (forced-colors: active)`：玻璃表面加 `border: 1px solid CanvasText`，去阴影、去模糊 |
 | 窄屏（`max-width: 600px`） | 弹窗模糊降档为 `--nvui-glass-blur-sm`，保留 `92dvh` 安全区规则 |
 | 用户主动关闭玻璃 | 根节点加 `.nvui-solid` |
+| **宿主全局禁用了 `backdrop-filter`** | **v2.2.0 修订补丁自动处理**：`NVUI.syncGlassFallback()` 探测**渲染后的实际计算值**（而非浏览器能力），发现模糊已被宿主禁用时自动给根节点加 `.nvui-solid`。`createPanel()` / `showToast()` 已内置该调用，业务无需处理 |
+
+> **为什么 `@supports` 探测不到宿主禁用**：部分宿主（如 SillyTavern 的 FastUI）用
+> `body.no-blur * { backdrop-filter: unset !important }` 全局关掉模糊。浏览器**仍然支持**
+> `backdrop-filter`，所以 `@supports not (...)` 的降级分支根本不触发 —— 结果是玻璃只剩
+> 半透明底色，下层文字直接透出来形成重影。kit 的解法是**读实际计算值**：
+> 造一个带 `.nvui-glass` 的隐藏探针挂到 body，读它的 computed `backdropFilter`，
+> 为 `none` 即说明被外部禁用。详见 `NVUI.detectGlassSupport()` / `NVUI.syncGlassFallback()`。
+>
+> 纯手写 DOM（不走 `nvui-api.js`）的用户，在宿主要求关闭模糊时，需自行给根节点加 `.nvui-solid`。
 
 > 使用 `.nvui-glass` 时，若容器直接叠在任意宿主背景上，**必须**用默认 strong 档；只有确认底下已有遮罩/深色画布时才能用 `.is-subtle`，否则无法保证正文 AA。无论哪种档位，popover 玻璃上的次要说明都用 `--nvui-text`（见 [4.4](#44-aa-安全玻璃与合成对比度验算)）。
 
@@ -780,7 +800,7 @@ v2.0.0 起，阴影只允许出现在浮层（弹窗 / 悬浮面板 / 工具提�
 
 | 类名 | 说明 |
 | :--- | :--- |
-| `dialog.nvui-tl` | top-layer 载体：fixed 铺满视口（`100dvh`）、`pointer-events: none`、未 `show()` 时 `display:none`；子浮层恢复 `pointer-events: auto` |
+| `dialog.nvui-tl` | 浮层载体：fixed 铺满视口（`100dvh`）、`pointer-events: none`、未 `show()` 时 `display:none`；子浮层恢复 `pointer-events: auto`；**自带 `z-index: var(--nvui-z-overlay)`**（非模态 `show()` 不进 top layer，载体必须显式带 z-index 才不会被宿主高 z-index 区域压住） |
 | `.nvui-overlay` | 全屏遮罩：flex 居中、`--nvui-overlay-bg` 底 + 磨砂模糊（`--nvui-glass-blur-sm`）；`hidden` 属性即可隐藏 |
 | `.nvui-modal` | 弹窗本体：`--nvui-glass-bg` 玻璃、`--nvui-radius-xl` 圆角、`--nvui-shadow-modal`；**v2.2.0 起移除圆角外框 1px 描边**（改用柔和顶部受光 + 阴影成形，避免锯齿） |
 | `.nvui-modal-header` | 头部：标题 + 右侧操作区，底部**直线分隔**（`--nvui-glass-line`，1px 直线不生锯齿），不可被压缩 |
@@ -801,7 +821,7 @@ v2.0.0 起，阴影只允许出现在浮层（弹窗 / 悬浮面板 / 工具提�
 - 关闭规则必须同时支持 Esc 与点遮罩（点遮罩判定 `e.target === overlay`）。
 - 不要用 `showModal()`：会给文档加 `inert`，悬浮入口/其它弹窗全部点不到（见第 8 节第 1 条）。
 - 业务 JS 不要自己写 `display:none` 收尾，否则退场动画会被跳过。
-- **焦点管理（v2 可访问性配套）**：打开时记录 `document.activeElement` 作为归还目标，把焦点移入弹窗（优先 `[data-autofocus]`，其次主按钮，再次 `.nvui-modal-title`，后者临时 `tabindex="-1"`）；Tab / Shift+Tab 在弹窗内可见控件之间循环（焦点陷阱）；关闭后把焦点归还触发元素。最小实现见 [2.3 弹窗骨架](#23-弹窗骨架含-top-layer-载体)。
+- **焦点管理（v2 可访问性配套）**：打开时记录 `document.activeElement` 作为归还目标，把焦点移入弹窗（优先 `[data-autofocus]`，其次主按钮，再次 `.nvui-modal-title`，后者临时 `tabindex="-1"`）；Tab / Shift+Tab 在弹窗内可见控件之间循环（焦点陷阱）；关闭后把焦点归还触发元素。最小实现见 [2.3 弹窗骨架](#23-弹窗骨架含浮层载体)。
 
 无障碍：`.nvui-modal` 上 `role="dialog"` + `aria-modal="true"` + `aria-labelledby` 指向标题；关闭按钮必须有 `aria-label`；`aria-modal="true"` 必须配合焦点陷阱与焦点归还（见上条），否则标记与实际键盘行为不一致；不要在打开瞬间自动聚焦到破坏性按钮。
 
@@ -1066,6 +1086,7 @@ function setupTabsIndicator(nav) {
 | `.nvui-progress-bar` | 条本体：`display:block; height:100%; width:0`；宽度由业务 JS 用内联 `style` 或 CSS 变量设置；`width` 过渡用 `--nvui-duration-slow` + `--nvui-ease-emphasized`；**v2.0.1 新增** `::after` 渐变扫光（`nvui-shimmer` 循环），让进度变化更有流动感 |
 | `.nvui-progress.is-indeterminate` | 不确定进度：条宽 40%，循环播放 `nvui-progress-indeterminate`（平移 + `scaleX` 呼吸：0.6 → 1 → 0.8） |
 | `.nvui-progress.is-ok` / `.is-warn` / `.is-danger` | 语义变体：改条色为 ok / warn / danger |
+| `.nvui-progress.is-idle` / `.is-complete` | **v2.2.0 修订补丁新增（可选）**：进度 0% / 100% 时停掉扫光动画（扫光是「进行中」的装饰，空闲与完成时继续跑纯浪费合成层资源）。`NVUI.progress().setValue()` 会自动维护这两个类；手写 DOM 时按需手动加。**不确定进度（`is-indeterminate`）永远保持扫光**，它本身就表示进行中 |
 
 规则：确定进度必须带 `role="progressbar"` + `aria-valuemin` / `aria-valuemax` / `aria-valuenow`；不确定进度至少给 `aria-label`；进度条**不放在玻璃上**（它是静态信息容器的一部分，保持扁平）；数值更新频率高于 10Hz 时不要做宽度过渡（会抖动）；扫光与呼吸是循环装饰动画，`prefers-reduced-motion: reduce` 下自动停止，不要用扫光表达真实进度值。
 
@@ -1088,7 +1109,10 @@ function setupTabsIndicator(nav) {
 | `.nvui-toast.is-success` / `.is-warn` / `.is-danger` | 改图标颜色（语义） |
 | `.nvui-toast-stack` | 堆栈容器：`position:fixed` 右下、`z-index: var(--nvui-z-tooltip)`、`pointer-events:none`（子吐司恢复 `auto`）、`bottom: calc(var(--nvui-space-4) + env(safe-area-inset-bottom))` |
 
-**放 top-layer 载体的要求**：`nvui-toast-stack` 必须是 `position:fixed`，而酒馆 `html` 上存在 `transform`，直接挂 body 会被包含块推到错误位置。因此**必须把 `.nvui-toast-stack` 放进 `dialog.nvui-tl` 顶层载体里**（与弹窗共用一个载体或单独一个常驻载体均可，但同一时刻只提升必要的载体）。窄屏时堆栈贴右下更近（space-2 + 安全区）。
+**放载体的要求**：`nvui-toast-stack` 必须是 `position:fixed`，而酒馆 `html` 上存在 `transform`，直接挂 body 会被包含块推到错误位置。因此**必须把 `.nvui-toast-stack` 放进 `dialog.nvui-tl` 载体里**（与弹窗共用一个载体或单独一个常驻载体均可，但同一时刻只显示必要的）。窄屏时堆栈贴右下更近（space-2 + 安全区）。
+
+> 吐司载体请加 `.nvui-tl-toast` 类（kit 的 `NVUI.showToast` 已内置）：该类把载体 z-index 提到
+> `--nvui-z-tooltip`，确保吐司始终盖过面板载体（面板载体用 `--nvui-z-overlay`）。
 
 业务 JS 建议配方：
 
@@ -1174,18 +1198,19 @@ function replay(el, cls) {
 
 以下每条都来自 novel-stream 在真实酒馆（桌面 / 手机 / Docker / 浅色主题）上踩过的坑，**下个插件请直接照做**：
 
-1. **body 级浮层必须进 `<dialog class="nvui-tl">` top-layer 载体，并用非模态 `show()`。**
+1. **body 级浮层必须进 `<dialog class="nvui-tl">` 载体，并用非模态 `show()`。**
    - 酒馆 `html` 上有 `transform`，`position:fixed` 的包含块会变成文档盒子，手机端浮层被顶出屏幕；
    - `showModal()` 会给文档加 `inert`，悬浮入口/其它弹窗全部点不到；
    - 载体 `pointer-events:none`，子浮层（`.nvui-overlay` / `.nvui-floating` / `.nvui-toast-stack`）恢复 `auto`；
    - 未 `show()` 的 dialog 是 `display:none`，关闭时用 `close()` 或切 `hidden`。
+   - **载体必须自带 z-index**（kit 已内置 `z-index: var(--nvui-z-overlay)`）。实测结论：**非模态 `dialog.show()` 并不会让元素进入浏览器 top layer**（只有 `showModal()` 会，而它会加 `inert`）。载体是 `position:fixed`，会创建层叠上下文，内部子元素的 z-index 再大也只在载体内部生效 —— 若载体自身 z-index 为 `auto`，浮层整体只相当于 z-index 0，**会被酒馆 `#sheld`（z-index:30）之类的宿主区域压住**，表现为「面板被酒馆窗口压在后面」。这条是 v2.2.0 修订补丁修掉的 P0，见 §13.5。
 2. **所有 checkbox 必须隔离宿主样式。** 酒馆给每个 `input[type=checkbox]` 挂了 `appearance:none; display:grid` + `::before` 对勾（clip-path + inset box-shadow）。自定义开关必须 `appearance:none` + 显式宽高 + 压掉 `::before`（`content:none !important; display:none !important`），否则会出现"蓝色尖角/勾选态不可见"。kit 的 `.nvui-switch-row` 已内置。
 3. **不要用裸元素选择器写样式。** 一律 `.nvui-*` / `dialog.nvui-tl` 前缀；ID 级作用域仅用于对抗宿主既有全局样式（例如 `#your_panel input[type=checkbox]`）。
 4. **颜色只用 token。** 浮层自带深色主题（或 `.nvui-theme-light`），不要引用酒馆 `--SmartTheme*` 变量——否则浅色主题下观感不可控；聊天区内联组件除外。
 5. **移动端三件事**：`100dvh` / `safe-area-inset-bottom`；弹窗正文 `-webkit-overflow-scrolling: touch`；打开弹窗时若键盘弹起，位置/滚动要复算（监听 `visualViewport`）。
 6. **不要用 emoji 当图标。** 用 Font Awesome（`<i class="fa-solid fa-...">`）或纯 CSS 图形；仓库历史上统一清理过 emoji。
 7. **动效可降级。** 必须尊重 `prefers-reduced-motion`（kit 已内置全局降级，且会清掉 `animation-delay`，避免 stagger 子项延迟残留）；不要把关键信息只放在动画里。**若本机/系统开启了「减少动态效果」，你会看到所有动效都被降级为 0.01ms（这是无障碍红线，不是 bug）**；`preview.html` 顶部的「强制播放动效」开关（`body.pv-force-motion` / URL 参数 `?motion=1`）只用于演示，生产环境请尊重系统偏好（见 [2.6](#26-动效降级与强制播放动效演示开关)）。
-8. **一次只提升一个 top-layer 载体。** 多个 dialog 载体可共存，但同一时刻只显示必要的；浮层之间用 `hidden` 切换而不是重复创建 DOM。
+8. **一次只显示必要的浮层。** 多个 dialog 载体可共存，但同一时刻只显示必要的；浮层之间用 `hidden` 切换而不是重复创建 DOM。（注意：这里管的是「显示」而非「提升层级」——见第 1 条，载体是常规层叠元素，不是 top layer 成员。）
 9. **`backdrop-filter` 玻璃的兼容、性能与降级（v2 新增红线）。**
    - **前缀**：每个 `backdrop-filter` 声明必须同时写 `-webkit-backdrop-filter`（Safari / 旧 WebKit 内核），两者顺序不能反；
    - **性能**：`backdrop-filter` 是合成阶段的高开销效果，只用于小面积浮层；不要给全屏静态区块用；弹窗/遮罩同时叠玻璃时窄屏自动降档到 `--nvui-glass-blur-sm`；避免在动画中改变 `blur` 半径（会导致每帧重采样），改透明度/位移即可；
@@ -1195,6 +1220,7 @@ function replay(el, cls) {
    - **手动回退**：提供 `.nvui-solid` 实心模式（根节点开关），并保证回退后 `pointer-events` 行为不变（浮层仍可点、遮罩仍拦截）；
    - **降级后对比度**：回退表面的文字对比度必须继续满足 AA（`--nvui-bg` / `--nvui-bg-2` 已验算，见 4.1）；
    - **不要用玻璃表达状态**：状态色必须是实色文字/图标/圆点，不能只靠"玻璃色调"。
+   - **宿主全局禁用玻璃时**：酒馆有 `body.no-blur`（用户关闭背景模糊）会用 `body.no-blur * { backdrop-filter: unset !important }` 把模糊全局关掉。此时浏览器**仍然支持** `backdrop-filter`，所以 `@supports not` 降级块不会触发，玻璃只剩半透明底色、下层文字会透出重影。**v2.2.0 修订补丁已自动处理**：`nvui-api.js` 的 `NVUI.syncGlassFallback()` 造一个隐藏 `.nvui-glass` 探针读**渲染后的实际计算值**（不猜宿主类名，避免与宿主实现耦合），发现模糊被禁用时自动给根节点挂 `.nvui-solid`；`createPanel()` / `showToast()` 已内置该调用。纯手写 DOM（不走 API）的用户，需自行在 `no-blur` 时给根节点挂 `.nvui-solid`。
 
 ---
 
@@ -1267,7 +1293,7 @@ function replay(el, cls) {
 | `.novel-tag-chip` | `.nvui-chip` | 标签块 |
 | `.novel-floating-window` | `.nvui-floating` | 悬浮面板（拖拽逻辑各插件自实现） |
 | `.novel-chip-tooltip` | `.nvui-tooltip` | 工具提示 |
-| `.novel-modal-overlay` 外层 `<dialog class="novel-tl">` | `<dialog class="nvui-tl">` | top-layer 载体 |
+| `.novel-modal-overlay` 外层 `<dialog class="novel-tl">` | `<dialog class="nvui-tl">` | 浮层载体 |
 | `.novel-tag-badge` 等业务徽标 | `.nvui-badge` + `is-accent` / `is-success` / `is-warn` / `is-danger` / `is-info` | 语义变体取代业务命名 |
 | （无） | `.nvui-glass` / `.nvui-solid` / `.nvui-toast` / `.nvui-toast-stack` / `.nvui-progress` / `.nvui-progress-bar` / `.nvui-skeleton` / `.nvui-status-dot` / `.nvui-acc-inner` / `.nvui-fade-in` / `.nvui-slide-up` / `.nvui-pop-in` / `.nvui-stagger` / `.nvui-pulse` | v2 新增 14 类；v2.0.1 追加第 68 类可选 `.nvui-tabs-indicator`（标签粘连指示器，见 §7.7）；v2.1.0 追加 10 类面板布局（`.nvui-panel` 等，见第 12 章）；旧实现需按需接入 |
 
@@ -1434,7 +1460,7 @@ v2.2.0 是**小版本**：调整描边 token 与描边实现方式，并新增�
 2. **固定尺寸、不跳变（v2.1.1）**：面板外框尺寸固定——宽 `min(var(--nvui-panel-width), 100%)`（默认 880px 上限）、桌面高 `var(--nvui-panel-max-h)`（88vh）、手机高 `92dvh`；折叠/展开内容只改变 `.nvui-panel-body` 内部滚动内容，**不改变面板外框**。
 3. **单一滚动层、隐藏滚动条（v2.1.1）**：只有 `.nvui-panel-body` 滚动（`overflow-y:auto`），且滚动条隐藏（`scrollbar-width: none` + `::-webkit-scrollbar { display: none }`），**滚动能力保留**；避免嵌套滚动与滚动穿透。
 4. **玻璃 + 扁平**：面板本体用玻璃（`--nvui-glass-bg` + 模糊 + 最低对比受光边 + 圆角），内部列表/折叠/开关保持扁平色阶（不描边、不投影）。
-5. **可访问性内建**：`role="dialog"` + `aria-modal="true"` + `aria-labelledby`；焦点管理沿用 [2.3 弹窗骨架](#23-弹窗骨架含-top-layer-载体) 配方；底部导航用 `aria-current="page"`。
+5. **可访问性内建**：`role="dialog"` + `aria-modal="true"` + `aria-labelledby`；焦点管理沿用 [2.3 弹窗骨架](#23-弹窗骨架含浮层载体) 配方；底部导航用 `aria-current="page"`。
 6. **可组合**：分区内容直接复用第 7 章组件（tabs/tabpane、switch-row、acc、badge、alert、progress、toast 等），不新增内容组件。
 
 ### 12.2 桌面装配图（>600px）
@@ -1598,7 +1624,7 @@ v2.2.0 是**小版本**：调整描边 token 与描边实现方式，并新增�
 </dialog>
 ```
 
-打开 / 关闭面板直接复用 [2.3 弹窗骨架](#23-弹窗骨架含-top-layer-载体) 的 `show()`/`hidden`/`is-closing`/焦点管理配方；`role="dialog"` 放在 `.nvui-panel` 上（不是遮罩上）。
+打开 / 关闭面板直接复用 [2.3 弹窗骨架](#23-弹窗骨架含浮层载体) 的 `show()`/`hidden`/`is-closing`/焦点管理配方；`role="dialog"` 放在 `.nvui-panel` 上（不是遮罩上）。
 
 ### 12.6 响应式规则（断点统一为 600px）
 
@@ -1693,7 +1719,7 @@ function setupPanelNav(panel) {
 - 关闭按钮必须是 `.nvui-icon-btn` 且带 `aria-label`（如「关闭」）；「更多操作」等图标按钮同样要有 `aria-label`。
 - 桌面 tabs：`role="tablist"` / `role="tab"` / `role="tabpanel"` + `aria-selected` + `aria-controls` + `tabIndex=0/-1`（沿用 §7.7）。
 - 手机底部导航：`<nav aria-label="面板分区（手机）">` + `<button>`；当前项 `aria-current="page"`，切换时同步增删。
-- 焦点管理沿用 [2.3 弹窗骨架](#23-弹窗骨架含-top-layer-载体)：打开移入面板（优先主按钮/标题 `tabindex="-1"`）、Tab/Shift+Tab 焦点陷阱、关闭归还触发元素。
+- 焦点管理沿用 [2.3 弹窗骨架](#23-弹窗骨架含浮层载体)：打开移入面板（优先主按钮/标题 `tabindex="-1"`）、Tab/Shift+Tab 焦点陷阱、关闭归还触发元素。
 - 拖拽把手 `.nvui-sheet-handle` 是纯视觉元素：`aria-hidden="true"`，不要给它 tabindex；若实现下滑关闭，必须同时提供按钮/Esc 等价关闭方式。
 - 所有交互元素都要有 `:focus-visible` 焦点环（kit 已通过 `--nvui-focus-ring-*` token 统一；v2.1.1 起为**单圈 1.5px**，不再叠加内圈描边）。
 - 手机底部导航的点击区域 ≥ 44px 高（kit 默认 `padding: space-15 0` + 图标 + 文字，已满足）；不要在图标上再加 `title` 代替可见文字。
@@ -1766,7 +1792,9 @@ console.log(typeof NVUI.createPanel); // 'function'
 | `NVUI.classes` | 常用类名映射（`panel` / `overlayPanel` / `tabs` / `tab` / `tabpane` / `bottomNav` / `bottomNavItem` / `accordion` / `switchRow` / `inputRow` / `toast`） | `object` |
 | `NVUI.getToken(name, scope?)` | 读取当前作用域的 CSS 变量值（如 `getToken('--nvui-accent')`） | `string` |
 | `NVUI.setTheme(theme, options?)` | 切换主题 / 实心模式（`theme: 'light'`、`options.solid: true`；只切类名，不写颜色） | `void` |
-| `NVUI.openLayer(dialogEl, overlayEl)` | 打开 top-layer 载体（非模态 `dialog.show()`，避免 `inert`） | `void` |
+| `NVUI.detectGlassSupport(options?)` | 探测宿主是否**实际**禁用了 `backdrop-filter`（读渲染后的计算值，不猜宿主类名）；`options.force` 强制重探 | `boolean` |
+| `NVUI.syncGlassFallback(options?)` | 探测并在模糊不可用时自动给根节点加 `.nvui-solid`（实心回退）。`createPanel()` / `showToast()` 已内置调用 | `boolean` |
+| `NVUI.openLayer(dialogEl, overlayEl)` | 打开浮层载体（非模态 `dialog.show()`，避免 `inert`） | `void` |
 | `NVUI.closeLayer(dialogEl, overlayEl, done?)` | 关闭载体（`is-closing` 退场 → `animationend` 或 260ms 兜底 → `hidden` + `close()`） | `void` |
 | `NVUI.switchRow(options)` | 生成胶囊开关行（`label`/`value`/`disabled`/`feature`/`onChange`） | `HTMLElement` |
 | `NVUI.inputRow(options)` | 生成输入行（`label`/`type`/`value`/`placeholder`/`min`/`max`/`step`/`disabled`/`onChange`） | `HTMLElement`（`row.input` 指向 input） |
@@ -1788,10 +1816,15 @@ console.log(typeof NVUI.createPanel); // 'function'
 | `footer` | 底部按钮 `[{ label, variant, onClick, close }]` |
 | `mount` | 挂载节点（默认 `document.body`） |
 | `onClose` | 关闭后回调 |
+| `focusFallback` | 焦点归还兜底：`CSS 选择器` 或元素。当触发元素已不可聚焦（如 ST 的 wand 菜单点击后自动收起）时，焦点落到它；都不行则落到面板本身 |
+| `destroy` | `destroy()` 时执行的清理回调（解绑自有监听、清理定时器等） |
 
 控制器提供：`id` / `dialog` / `overlay` / `panel` / `body` / `tabs` / `bottomNav` 节点，以及
-`open()` / `close()` / `setTab(key)` / `syncIndicator()` / `addNode(key, node)` /
+`open()` / `close()` / `destroy()` / `setTab(key)` / `syncIndicator()` / `addNode(key, node)` /
 `addSwitch(key, opts)` / `addInput(key, opts)` / `addAccordion(key, opts)` / `addProgress(key, opts)` / `addSectionTitle(key, text)`。
+
+> **`destroy()`**：销毁面板并从 DOM 移除其 dialog/overlay、注销全局 Esc 监听、触发 `destroy` 回调。
+> 长生命周期的插件（如可反复打开的设置页）建议在插件卸载 / 重复初始化前调用，避免重复 DOM 与监听器累积。
 
 **最小示例**
 
@@ -1823,7 +1856,8 @@ panel.open();
 
 - 结构：`dialog.nvui-tl > .nvui-overlay.is-panel > .nvui-panel`，`role="dialog"` + `aria-modal="true"` + `aria-labelledby`；
 - 导航：桌面顶部 `role="tablist"` + 手机底部 `<nav>` 同一份状态（`aria-selected` / `aria-current` / `tabindex` / tabpane 切换）；
-- 关闭：关闭按钮 `aria-label`、Esc、点遮罩；关闭后焦点归还触发元素；
+- 关闭：关闭按钮 `aria-label`、Esc、点遮罩；关闭后焦点归还触发元素（触发元素不可聚焦时按 `focusFallback` 三级兜底）；
+- 无障碍：Tab / Shift+Tab 焦点陷阱（focus trap），使 `aria-modal="true"` 的声明真正成立；
 - 动效与降级：进出场动画、`prefers-reduced-motion` / `prefers-reduced-transparency` / `forced-colors` / `.nvui-solid` 全部由 CSS 处理。
 
 > API 只负责 DOM 与状态，不写样式；品牌化仍然只改 `tokens.css`（或整体替换同名 token）。不要在 API 之上再叠一层 `!important` 或第二套组件样式。
@@ -1911,12 +1945,115 @@ const tokens = await res.json();
 
 **需要按宿主替换**
 
-- SillyTavern 专属的 `<dialog class="nvui-tl">` top-layer 载体与「宿主 `html` 有 transform」规避：其它框架可映射到自己的 modal / portal 根节点，但必须保持等价的层级语义、`role="dialog"`、焦点移入/归还，且不要让浮层被宿主 transform 裁剪；
+- SillyTavern 专属的 `<dialog class="nvui-tl">` 浮层载体与「宿主 `html` 有 transform」规避：其它框架可映射到自己的 modal / portal 根节点，但必须保持等价的层级语义（**载体自身带足够高的 z-index，不依赖浏览器 top layer**）、`role="dialog"`、焦点移入/归还，且不要让浮层被宿主 transform 裁剪；
 - 图标字库：Font Awesome 可换成你项目使用的图标方案（保持 `<i>` / SVG 的可访问写法）；
 - 宿主主题变量：不要混用目标软件的全局 CSS 变量，Kit 浮层继续用 `--nvui-*` 自包含配色；
 - 构建体系：`nvui-api.js` 是 UMD 零依赖文件，可直接 `<script>` 或打包引用；`tokens.json` 可在构建期生成为你框架的变量文件。
 
 **不要做**：重命名 `nvui-` 类与 `--nvui-*` token；删除降级块；把组件塞进目标软件的全局重置里；给组件加第二套皮肤。
+
+### 13.5 SillyTavern 扩展模板（`st-extension-template/`）
+
+`st-extension-template/` 是一份**可直接使用的 ST 扩展骨架**，已在本机真实 SillyTavern（v1.19.0）宿主中完成实机验证。
+
+```
+st-extension-template/
+├── manifest.json      # ST 扩展清单：display_name / loading_order / js / css / hooks.activate
+├── index.js           # ES Module 入口：导入宿主上下文 + 内嵌 Kit 运行时
+├── style.css          # 业务样式（顶部 @import 内嵌 ui-kit/tokens.css 与 components.css）
+└── ui-kit/            # 内嵌 Kit 运行时（tokens.css / components.css / nvui-api.js / tokens.json）
+```
+
+**用法**：整个目录复制到 `public/scripts/extensions/third-party/<你的插件名>/`，改 `manifest.json` 的
+`display_name` / `author` / `version` 与 `index.js` 里的 `EXTENSION_NAME`，即可在扩展列表里加载。
+
+**模板已经踩平的 ST 宿主陷阱**（这些是初写扩展最容易踩的坑）：
+
+| 陷阱 | 正确做法 |
+| :--- | :--- |
+| `extension_settings` 不是 `window` 全局 | `import { extension_settings as extensionSettings } from '../../../extensions.js'`，且**每次实时读取**，不要缓存 `getContext()` 的快照引用 |
+| `getContext()` 拿到的 `ctx.extension_settings` 是**初始化时刻的快照** | 同上，用模块级导出对象 |
+| ST 的扩展菜单是 Popper 浮层，点击菜单项后**自动收起** | 触发按钮随之不可聚焦，焦点归还要用 `focusFallback: '#extensionsMenuButton'` 兜底 |
+| 扩展菜单 DOM 由 `addExtensionsButtonAndMenu()` **动态创建**，不在 `index.html` | 挂载点用 `#extensionsMenu` / `#extensionsMenuButton` |
+| `manifest.json` 的 `hooks.activate` 指向入口模块**导出的函数名** | 入口必须 `export function init()` |
+
+**模板入口骨架要点**：
+
+```js
+import { getContext, extension_settings as extensionSettings } from '../../../extensions.js';
+import { eventSource, event_types, saveSettingsDebounced } from '../../../../script.js';
+import './ui-kit/nvui-api.js';
+
+const EXTENSION_NAME = 'my_plugin';
+
+function getSettings() {
+    const all = extensionSettings || {};   // 实时读模块导出，不要走 window 兜底
+    if (!all[EXTENSION_NAME]) all[EXTENSION_NAME] = { enabled: true };
+    return all[EXTENSION_NAME];
+}
+
+export function init() { /* 注册菜单按钮、事件监听 */ }
+```
+
+> 面板本体直接用 `NVUI.createPanel({ id: 'my_plugin_panel', focusFallback: '#extensionsMenuButton', ... })`，
+> 不要再自写一套 DOM。完整可运行样例见 `st-extension-template/index.js`。
+
+#### 13.5.1 层级 P0 修复（浮层被酒馆内容压住）
+
+这是 v2.2.0 修订补丁修掉的最严重问题，也是实机测试中由用户截图直接报障的一条。
+
+**现象**：在真实 ST 宿主里打开面板，NVUI 面板整体**被酒馆聊天区压在后面** —— 面板可见但点不到。
+
+**实机证据**（`test/st-layer-check.js` 的 `elementsFromPoint` 命中栈，修复前）：
+
+| 采样点 | 命中栈顶层 | kit 元素排名 | 宿主元素排名 |
+| :--- | :--- | :--- | :--- |
+| 面板中心 | `fa-solid fa-address-card`（ST 消息区按钮） | 第 5 位 | 第 1 位 |
+
+**根因**（两条，缺一不可）：
+
+1. **非模态 `dialog.show()` 并不会进入浏览器 top layer**。只有 `showModal()` 会，但 `showModal()` 会给整个文档加 `inert`，导致酒馆宿主完全不可交互 —— 这条路被排除。
+2. 因此载体必须靠**自身的 z-index**参与常规层叠。而 `position: fixed` **总是**创建层叠上下文：载体内部子元素的 z-index 再大，也只在载体内部生效，无法越过载体自身的层级。修复前载体是 `z-index: auto`，整体只相当于 z-index 0，而 ST 的 `#sheld`（聊天列）是 `z-index: 30` 的 absolute 元素 —— **宿主内容稳赢**。
+
+**修复**（复用既有 token，未新增、不破坏「109 深色 / 47 浅色」契约）：
+
+```css
+/* 载体层级：必须高于宿主常规层叠（酒馆最高约 30000） */
+dialog.nvui-tl {
+    position: fixed;
+    inset: 0;
+    z-index: var(--nvui-z-overlay);
+}
+
+/* 吐司载体：常驻存在且需始终盖过面板，故比面板载体再高一级 */
+dialog.nvui-tl.nvui-tl-toast {
+    z-index: var(--nvui-z-tooltip);
+}
+```
+
+`NVUI.showToast()` 内部创建的吐司载体已带 `.nvui-tl-toast` 类；自建吐司载体时**必须手动加这个类**，否则吐司会被面板压住。
+
+**修复方案对照实验**（5 组，真实 ST 宿主内 `test/st-layer-probe.js` 实测）：
+
+| 方案 | 载体实现 | 3 个采样点胜出 | 结论 |
+| :--- | :--- | :--- | :--- |
+| D | `dialog` + `z-index: auto` | 1 / 3 | 不通过：修复前的状态，会被宿主压住 |
+| E | `dialog` + `z-index: 2147483647` | 3 / 3 | 通过，但属硬编码魔法值 |
+| F | `popover="manual"` | 3 / 3 | 通过：真正进 top layer，能压过一切，但宿主兼容性面更窄 |
+| G | `dialog` vs 宿主最高 z-index | — | 宿主最高约 30000（`#sd_dropdown` 30000、`#options` 29999） |
+| H | `popover="manual"` vs 宿主最高 z-index | — | 同 G |
+
+最终选 **E 的思路但用 token 表达**（`--nvui-z-overlay` = 1000020 / `--nvui-z-tooltip` = 1000030），
+因为它同时满足：不加 `inert`、不改宿主、层级可被 token 统一调参、与 kit 现有层级体系一致。
+
+**回归**：
+
+- 规范测试 249 → **253 全绿**（新增 2 条层级断言，防回归）；
+- 实机 `test/st-layer-check.js`：修复后 5 个采样点（中心 + 四角内侧）**全部 `oursOnTop: true`**，关闭面板后层级正确还原，控制台零错误；
+- 结论已回写 §2.3 / §6.6 / §7.14 / §8 / §10 / §13 与 `AI-GUIDE.md`（原「由 dialog 提升渲染层级」的表述是错的，已统一改为准确说明）。
+
+> **移植提醒**：把 kit 用到别的宿主时，请把 `--nvui-z-overlay` / `--nvui-z-tooltip` 调到**高于宿主最高 z-index**，
+> 不要假设浏览器 top layer 会兜底。`components.css` 里那段「实测结论，勿改」的注释保留了推导过程。
 
 ---
 

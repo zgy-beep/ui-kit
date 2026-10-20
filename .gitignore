@@ -7,3 +7,8 @@ node_modules/
 Thumbs.db
 .vscode/
 .idea/
+
+# 实机测试产物（截图 / 探针输出），不入库
+st-lab-out/
+test/out/
+.workbuddy/

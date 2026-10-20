@@ -3005,6 +3005,9 @@ NVUI.showToast({ message: '由 NVUI API 生成的吐司', type: 'success' });</p
 
     /* ============================================================
      * 1. 动效重播：移除工具类 → 强制回流 → 重新添加，重启 CSS 动画
+     *    性能修复（ISSUES.md #14）：旧实现对**每个**节点各读一次 offsetWidth，
+     *    N 个节点 = N 次同步强制回流；stagger 场景下子项动画还没被真正重启。
+     *    现在改为「批量摘类 → 全局只回流一次 → 批量挂回」。
      * ============================================================ */
     var MOTION_CLASSES = ['nvui-fade-in', 'nvui-slide-up', 'nvui-pop-in', 'nvui-pulse', 'nvui-stagger'];
 
@@ -3012,17 +3015,31 @@ NVUI.showToast({ message: '由 NVUI API 生成的吐司', type: 'success' });</p
         var nodes = document.querySelectorAll(
             '.nvui-fade-in, .nvui-slide-up, .nvui-pop-in, .nvui-pulse, .nvui-stagger'
         );
+        var pending = [];
         Array.prototype.forEach.call(nodes, function (node) {
             var applied = MOTION_CLASSES.filter(function (name) {
                 return node.classList.contains(name);
             });
+            if (applied.length === 0) return;
             applied.forEach(function (name) {
                 node.classList.remove(name);
             });
-            void node.offsetWidth; /* 强制回流，让动画从头开始 */
-            applied.forEach(function (name) {
-                node.classList.add(name);
+            pending.push({ node: node, applied: applied });
+        });
+        if (pending.length === 0) return;
+        /* 整批只回流一次：读取一个元素的布局即可让本轮所有摘类生效 */
+        void document.body.offsetWidth;
+        pending.forEach(function (item) {
+            item.applied.forEach(function (name) {
+                item.node.classList.add(name);
             });
+            /* stagger 的动画挂在直接子项上，容器回流不代表子项动画被重启，
+               需要再对子项各触发一次回流（子项数量远小于被摘类节点数）。 */
+            if (item.applied.indexOf('nvui-stagger') !== -1) {
+                Array.prototype.forEach.call(item.node.children, function (child) {
+                    void child.offsetWidth;
+                });
+            }
         });
     }
 
@@ -3650,9 +3667,18 @@ NVUI.showToast({ message: '由 NVUI API 生成的吐司', type: 'success' });</p
     });
 
     /* 滚动 / 缩放时跟随锚点重新定位，而不是直接隐藏：
-       键盘 focus 引发的滚动不会把提示闪没，提示也不会停在旧位置。 */
+       键盘 focus 引发的滚动不会把提示闪没，提示也不会停在旧位置。
+       性能修复（ISSUES.md #14）：滚动事件用 capture=true 监听全局，
+       一次滚动可能触发数十次回调；这里用 requestAnimationFrame 合并成
+       每帧至多一次重定位。 */
+    var repositionRaf = 0;
+
     function repositionTip() {
-        if (tipTarget && tipEl && !tipEl.hidden) showTip(tipTarget);
+        if (repositionRaf) return;
+        repositionRaf = window.requestAnimationFrame(function () {
+            repositionRaf = 0;
+            if (tipTarget && tipEl && !tipEl.hidden) showTip(tipTarget);
+        });
     }
 
     window.addEventListener('scroll', repositionTip, true);
