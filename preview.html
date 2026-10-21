@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SillyTavern UI Kit v2.5.0 · Flat Glass 组件预览</title>
+<title>SillyTavern UI Kit v2.6.0 · Flat Glass 组件预览</title>
 <!--
-  SillyTavern 插件通用 UI Kit v2.5.0「Flat Glass」组件预览页
+  SillyTavern 插件通用 UI Kit v2.6.0「Flat Glass」组件预览页
   ------------------------------------------------------------------
   v2.5.0 新增（2026-10-21）：
   ① 表现层布局状态持久化（R1 · Issue #5）：createPanel 支持 persist: true，自动记忆
@@ -276,6 +276,17 @@
 
     .pv-row-wrap {
         flex-wrap: wrap;
+    }
+
+    /* 独立复选框 demo 的行内标签：只负责可点区域，不改 kit 组件外观 */
+    .pv-check-row {
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .pv-check-row > span {
+        color: var(--nvui-text-2);
+        font-size: var(--nvui-fs-md);
     }
 
     .pv-text-label {
@@ -1116,7 +1127,7 @@
         <div class="pv-hero-main">
             <h1>
                 <span>SillyTavern UI Kit</span>
-                <span class="nvui-badge is-accent">v2.5.0</span>
+                <span class="nvui-badge is-accent">v2.6.0</span>
                 <span class="nvui-badge">Flat Glass</span>
             </h1>
             <p class="nvui-hint pv-hero-sub">
@@ -1126,7 +1137,7 @@
             </p>
             <div class="pv-hero-meta">
                 <span class="nvui-badge">110 个设计令牌</span>
-                <span class="nvui-badge">78 个组件类</span>
+                <span class="nvui-badge">79 个组件类</span>
                 <span class="nvui-badge">16 个关键帧</span>
                 <span class="nvui-badge is-accent">AA 安全玻璃</span>
             </div>
@@ -1653,18 +1664,19 @@
         </section>
 
         <!-- ========================================================
-             06 胶囊开关
+             06 胶囊开关与独立复选框
              ======================================================== -->
         <section class="pv-section" aria-labelledby="pv-sec-06-title">
             <div class="pv-section-head">
                 <span class="pv-sec-num">06</span>
                 <div class="pv-section-heading">
-                    <h2 class="nvui-section-title" id="pv-sec-06-title">胶囊开关</h2>
+                    <h2 class="nvui-section-title" id="pv-sec-06-title">胶囊开关与独立复选框</h2>
                     <p class="nvui-hint">
                         整行 label 可点；勾选态轨道变主色、滑钮右移；含酒馆宿主 checkbox 样式隔离
                         （appearance 与宿主 ::before 对勾都被压掉）。
                         v2.0.1 新增：勾选时轨道播放 nvui-switch-on 回弹（scale 0.92→1.04→1），
                         按住滑钮沿运动方向 scaleX(1.12) 拉伸，松手由弹簧缓动回位。
+                        批量选择场景使用独立的 16px <code class="nvui-code">.nvui-checkbox</code>（见下方示例）。
                     </p>
                 </div>
             </div>
@@ -1686,6 +1698,55 @@
                     <p class="nvui-hint">
                         弹簧回弹：滑钮位移与拉伸都使用 --nvui-ease-spring / --nvui-duration-base；
                         :active 时整行缩放 0.96；开关关闭态轨道使用 --nvui-switch-off-bg，滑钮使用 --nvui-knob-off。
+                    </p>
+                </div>
+
+                <div class="nvui-divider"></div>
+                <h3 class="nvui-section-title">独立复选框 .nvui-checkbox</h3>
+                <p class="nvui-hint">
+                    16px 小方块，保留原生 input 语义：Tab 聚焦、Space 切换、:checked / :indeterminate / :disabled 都由浏览器维护。
+                    宿主给 input[type=checkbox] 的 display:grid、宽高、底色、描边与 ::before 对勾由
+                    <code class="nvui-code">.nvui-checkbox</code> 自身隔离，不依赖外层载体，也不影响宿主其它 checkbox。
+                </p>
+                <div class="pv-demo nvui-stack" role="group" aria-label="独立复选框状态示例">
+                    <div class="nvui-row pv-row-wrap">
+                        <label class="nvui-row pv-check-row">
+                            <input type="checkbox" class="nvui-checkbox" id="pv-check-all">
+                            <span>全选（父级）</span>
+                        </label>
+                        <span class="nvui-hint">子项部分选中时，父级自动进入 indeterminate 横杠态。</span>
+                    </div>
+                    <div class="nvui-row pv-row-wrap">
+                        <label class="nvui-row pv-check-row">
+                            <input type="checkbox" class="nvui-checkbox pv-check-child" checked>
+                            <span>条目 A</span>
+                        </label>
+                        <label class="nvui-row pv-check-row">
+                            <input type="checkbox" class="nvui-checkbox pv-check-child" checked>
+                            <span>条目 B</span>
+                        </label>
+                        <label class="nvui-row pv-check-row">
+                            <input type="checkbox" class="nvui-checkbox pv-check-child">
+                            <span>条目 C</span>
+                        </label>
+                    </div>
+                    <div class="nvui-row pv-row-wrap">
+                        <label class="nvui-row pv-check-row">
+                            <input type="checkbox" class="nvui-checkbox" checked disabled>
+                            <span>选中禁用</span>
+                        </label>
+                        <label class="nvui-row pv-check-row">
+                            <input type="checkbox" class="nvui-checkbox" disabled>
+                            <span>未选中禁用</span>
+                        </label>
+                        <label class="nvui-row pv-check-row">
+                            <input type="checkbox" class="nvui-checkbox" id="pv-check-indeterminate">
+                            <span>部分选中（独立）</span>
+                        </label>
+                    </div>
+                    <p class="nvui-hint">
+                        选中态：--nvui-accent 底 + --nvui-on-accent 对勾；未选中：--nvui-input-bg 底 + --nvui-line-2 描边；
+                        部分选中：主色底 + 横杠；焦点环走 --nvui-focus-ring-*。禁用态只降透明度，不改变选中语义。
                     </p>
                 </div>
             </div>
@@ -2684,8 +2745,8 @@ panel.showUpdate({ version: 'v2.5.0', label: '新版本 v2.5.0 可用', url: 'ht
     </main>
 
     <footer class="pv-footer">
-        <div>SillyTavern UI Kit v2.2.0 · Flat Glass · 单文件离线预览（无外链 / 无 CDN / 无 emoji）</div>
-        <div>文件：tokens.css + components.css · 规范：README.md · 令牌：110 个 · 组件类：78 个 · 关键帧：16 个</div>
+        <div>SillyTavern UI Kit v2.6.0 · Flat Glass · 单文件离线预览（无外链 / 无 CDN / 无 emoji）</div>
+        <div>文件：tokens.css + components.css · 规范：README.md · 令牌：110 个 · 组件类：79 个 · 关键帧：16 个</div>
     </footer>
 </div>
 
@@ -3232,6 +3293,27 @@ panel.showUpdate({ version: 'v2.5.0', label: '新版本 v2.5.0 可用', url: 'ht
                 : '开关已关闭：导出纯文字 EPUB。（业务里同步保存设置并刷新摘要）';
         });
     }
+
+    /* 独立复选框示例：父级全选 / 子项联动 + indeterminate 横杠 */
+    var checkAll = document.getElementById('pv-check-all');
+    var checkChildren = Array.prototype.slice.call(document.querySelectorAll('.pv-check-child'));
+    if (checkAll && checkChildren.length) {
+        var syncCheckAll = function () {
+            var checkedCount = checkChildren.filter(function (item) { return item.checked; }).length;
+            checkAll.checked = checkedCount === checkChildren.length;
+            checkAll.indeterminate = checkedCount > 0 && checkedCount < checkChildren.length;
+        };
+        checkChildren.forEach(function (item) {
+            item.addEventListener('change', syncCheckAll);
+        });
+        checkAll.addEventListener('change', function () {
+            checkChildren.forEach(function (item) { item.checked = checkAll.checked; });
+            checkAll.indeterminate = false;
+        });
+        syncCheckAll();
+    }
+    var standaloneIndeterminate = document.getElementById('pv-check-indeterminate');
+    if (standaloneIndeterminate) standaloneIndeterminate.indeterminate = true;
 
     /* 输入行「聚焦示例」：按钮触发，页面载入不自动聚焦（避免抢初始焦点） */
     var focusDemoBtn = document.getElementById('pv-focus-demo');

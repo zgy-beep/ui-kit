@@ -6,6 +6,42 @@
 - 新增组件 / 新增 token（不破坏既有 DOM 与取值）：小版本（2.x.0）
 - 重命名类 / token、删除 token、修改 DOM 契约：大版本（x.0.0）
 
+## v2.6.0（2026-10-21）· [2.6.0] - 2026-10-21 独立复选框、宿主表单隔离与折叠条接管入口
+
+> 本版本为 SemVer 小版本（MINOR），新增组件与可选实例方法，**保留既有公开 API 与状态格式**，零外部 npm 运行时依赖。
+> 对应 GitHub Issues：#9（宿主表单控件 `!important` 夺色）、#10（缺少独立 checkbox 组件）、#11（`innerHTML` 注入的 accordion 无法持久化）。三条 issue 由本次发布提交通过 `Fixes #9` / `Fixes #10` / `Fixes #11` 关闭，并分别补充维护评论。
+
+### 新增：独立复选框 `.nvui-checkbox`（GitHub #10）
+- 16×16 小方块，保留原生 `input[type=checkbox]` 语义（Tab / Space / `:checked` / `:indeterminate`）；
+- 底色 / 描边 / 对勾分别走 `--nvui-input-bg` / `--nvui-line-2` / `--nvui-accent` / `--nvui-on-accent`，焦点环走 `--nvui-focus-ring-*`；
+- 元素级宿主隔离：选择器 `.nvui-checkbox[type="checkbox"]`（0,2,0），压掉宿主 `display: grid` 与 `::before` 对勾，**不接管宿主其它 checkbox，也不新增 `!important`**（与 `.nvui-switch-row` 共用既有压制规则）；
+- 组件类总数 78 → 79；`preview.html` 增加全选 / 半选 / 禁用示例；
+- 浏览器回归 `test/test-issues-9-10-forms.js` 覆盖 16px 几何、`::before` 对勾抑制、`:indeterminate` 半选、焦点环与 Space 切换、disabled 与载体外隔离。
+
+### 修复：宿主表单控件隔离层（GitHub #9）
+- 第三方主题以「元素选择器 + `!important`」重写全局 `input` / `select` / `textarea` 时，`.nvui-input`（0,1,0）失去 token 皮肤，浅色主题出现「深底深字」；
+- 新增 `dialog.nvui-tl` + `.nvui-panel` **双载体**隔离层：只对 `background` / `color` / `border`（基础态）、`select` 的 `margin`、`:hover` 的 `background`、`select option` 的 `background` / `color` 使用 `!important`（7 条），值全部来自 token，`border: none` / `margin: 0` 为明确 reset；
+- `!important` 预算由 8 调整为 **14**（原有 checkbox `::before` 2 条 + reduced-motion 5 条 + 本次 7 条），静态门禁同步收紧为「分类计数 + 双载体选择器 + 精确属性值」；
+- 浏览器回归 `test/test-issues-9-10-forms.js` 覆盖载体 × 主题的 `input` / `textarea` / `select` / `option` 隔离与 `:hover` 还原。
+
+### 新增：折叠条接管入口（GitHub #11）
+- `panel.trackAccordion(node, id?, options?)`：接管单个 `.nvui-acc`；`panel.adoptAccordions(root, options?)`：批量接管并返回本次新增数量；
+- 支持 `innerHTML` 注入的折叠条进入既有 `persist.accordion` 状态格式（`{version:1,...,accordion:{id:boolean}}`），恢复 / 保存 / `clearLayoutState()` 全链路复用；
+- **默认不接管点击**（避免与调用方自有 / 委托监听形成双重 toggle），`{ bind: true }` 显式开启；节点无 `setOpen` 时由 kit 补齐，已有 `setOpen` 时保留原开合逻辑、仅包装持久化调度，清理时恢复原方法；
+- 稳定键优先级：显式 id > `node.id` > `data-nvui-acc-key` > 面板内 DOM 顺序（`acc_auto_<n>`，缺键时仅告警一次）；**键按原始字符串保存** —— 中文 / 非 ASCII 键不再被折叠成同一个键，`__proto__` 等特殊键也能安全存取；**显式 / DOM / data 键被活动节点占用时告警并返回 `null`**，只有自动生成的键与工厂标题兜底键才唯一化追加序号；同键旧节点已脱离面板时由新节点替换；注册幂等；跨面板与 `document` / `body` 扫描一律拒绝；`destroy()` 解绑监听并停止落盘；
+- 新增浏览器回归 `test/test-issue-11-accordion.js`（真实 Chromium）：覆盖同面板多次重渲染、立即 `close()` 后重建、`persist.accordion:false` 的 factory / `addNode` 路径、全 false 不写空值、中文 / 非 ASCII 键与 `__proto__`、混合登记、外部与销毁边界，以及调用方自行切换 class 的场景。
+
+### 规范与门禁
+- README §7.5.1（复选框）、§7.6.1（表单隔离）、§7.8（接管入口）、§8 红线第 11 条、§9 `!important` 预算同步；
+- AI-GUIDE 硬约束第 2 条与 API 速查同步；
+- `test/test-ui-kit.js`：组件类 79、`!important` 预算 14 + 有界选择器 / 精确值断言、`#11` 控制器 API 表面断言，顶层 factory API 仍为 11 个。
+
+### 兼容性
+- 未删除 / 重命名任何 token、类名或公开 API；持久化状态格式（`{version:1,...,accordion:{id:boolean}}`）不变；
+- 未改变 `addAccordion` / `addNode` 的对外契约；工厂折叠条的 ASCII 标题键保留 v2.5 的派生结果（旧存储无需迁移），含中文的标题各自独立成键；
+- v2.5 中被折叠为同一键的中文标题旧状态无法可靠区分，本版不做歧义迁移；建议为折叠条使用稳定显式 id；
+- 既有插件覆盖 `tokens.css` / `components.css` / `nvui-api.js` 即完成升级，新能力全部 Opt-in。
+
 ## v2.5.0（2026-10-21）· [2.5.0] - 2026-10-21 布局状态持久化与面板头部标准化
 
 > 本版本为 SemVer 小版本（MINOR），保持 **100% 向后兼容与 0 破坏性变更**，零外部 npm 运行时依赖。

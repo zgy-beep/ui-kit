@@ -1,7 +1,7 @@
 /**
  * SillyTavern NVUI Kit · 可选运行时 API（零依赖）
  * ------------------------------------------------------------------
- * 版本：ui-kit v2.5.0（与 package.json / tokens.css / components.css 版本号保持一致）
+ * 版本：ui-kit v2.6.0（与 package.json / tokens.css / components.css 版本号保持一致）
  * 用途：给插件/其它软件一个「可调用的设计接口」——用函数创建符合本 Kit 规范的面板、
  *       标签页、折叠分组、开关行、输入行、进度条、吐司，自动带上布局标准、无障碍属性、
  *       动效降级与焦点管理，避免每个插件各写一套 DOM。
@@ -52,7 +52,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this), function () {
     'use strict';
 
-    var VERSION = '2.5.0';
+    var VERSION = '2.6.0';
     var PANEL_CLASS = 'nvui-panel';
     var TOAST_LAYER_ID = 'nvui-api-toast-layer';
 
@@ -1218,6 +1218,9 @@
         var accList = [];
         var resizeRaf = null;
         var resizeObserver = null;
+        var accBindings = [];
+        var disposed = false;
+        var autoKeyWarned = false;
 
         /* NEW-36：显式设置 closing="" 与 role="presentation"，杜绝 SillyTavern fixToastrForDialogs 劫持注入 */
         var dialogTitleStr = (typeof opts.title === 'symbol') ? '面板' : (opts.title || '面板');
@@ -1563,8 +1566,12 @@
         }
 
         /* 持久化调度与视口钳制方法 */
+        function anyPersistEnabled() {
+            return !!(persistConfig && (persistConfig.size || persistConfig.tab || persistConfig.accordion));
+        }
+
         function schedulePersistSave() {
-            if (!persistConfig || isRestoring) return;
+            if (!persistConfig || isRestoring || disposed || !anyPersistEnabled()) return;
             if (persistTimer) clearTimeout(persistTimer);
             persistTimer = setTimeout(function () {
                 persistTimer = null;
@@ -1573,7 +1580,9 @@
         }
 
         function flushPersistSave(force) {
-            if (!persistConfig) return;
+            if (!persistConfig || disposed || !anyPersistEnabled()) {
+                return;
+            }
             var hadTimer = !!persistTimer;
             if (persistTimer) {
                 clearTimeout(persistTimer);
@@ -1619,13 +1628,19 @@
                     }
                 }
 
-                var currentAccState = {};
+                /* 原始键可能是 "__proto__" / "constructor" 等，必须用无原型对象承接，
+                   否则普通对象赋值会走原型 setter 而不是写入持久键。 */
+                var currentAccState = Object.create(null);
                 for (var a = 0; a < accList.length; a++) {
                     var item = accList[a];
+                    /* 已脱离本面板的旧节点不参与保存；否则重渲染后旧状态会反写新节点。 */
+                    if (!isAccordionItemLive(item)) continue;
                     currentAccState[item.id] = item.node.classList.contains('is-open');
                 }
                 if (loadedState && loadedState.accordion) {
-                    for (var k in loadedState.accordion) {
+                    var savedAccKeys = Object.keys(loadedState.accordion);
+                    for (var ki = 0; ki < savedAccKeys.length; ki++) {
+                        var k = savedAccKeys[ki];
                         if (currentAccState[k] === undefined && Object.prototype.hasOwnProperty.call(loadedState.accordion, k)) {
                             currentAccState[k] = loadedState.accordion[k];
                         }
@@ -1715,7 +1730,8 @@
                 if (persistConfig && persistConfig.accordion && saved.accordion) {
                     for (var a = 0; a < accList.length; a++) {
                         var item = accList[a];
-                        if (typeof saved.accordion[item.id] === 'boolean') {
+                        if (Object.prototype.hasOwnProperty.call(saved.accordion, item.id)
+                            && typeof saved.accordion[item.id] === 'boolean') {
                             item.node.setOpen(saved.accordion[item.id]);
                         }
                     }
@@ -1764,37 +1780,318 @@
             }
         }
 
-        function trackAccordion(accNode, accId) {
-            var item = { id: accId, node: accNode };
-            accList.push(item);
-            if (loadedState && loadedState.accordion && typeof loadedState.accordion[accId] === 'boolean') {
-                accNode.setOpen(loadedState.accordion[accId]);
+        /* ------------------------------------------------------------------
+         * Issue #11：折叠条接管（公开注册入口 panel.trackAccordion / adoptAccordions）
+         *
+         * 原实现只认两条注册路径：panel.addAccordion()，以及 panel.addNode() 且
+         * 节点自带 setOpen —— 而 setOpen 只有 accordion() 工厂产物才有。插件用
+         * HTML 字符串注入 .nvui-acc（最常见写法）因此永远进不了 accList，
+         * 存下来的 accordion 是空对象。这里把「注册」改成调用方可显式声明：
+         *   1) 幂等：同一节点重复 track / adopt 只登记一次，返回既有 id；
+         *   2) 键优先级：显式 id > node.id > data-nvui-acc-key > 面板内 DOM 顺序；
+         *      三者都缺失时生成 acc_auto_<n> 并只警告一次（顺序变化会错位）；
+         *   3) 与已有行为共存：节点已自带 setOpen（工厂产物或调用方自管）时**不**
+         *      接管点击，只包一层保存钩子，避免双重 toggle；
+         *   4) 纯 DOM 折叠条（没有 setOpen）：补齐 setOpen（恢复 / 清除需要），
+         *      **默认不绑定点击** —— 调用方常已有委托监听，kit 不猜测，避免双重
+         *      toggle；确实需要 kit 提供默认开合时显式传 { bind: true }；
+         *   5) persist.accordion 关闭时：只补行为，不登记、不写存储；
+         *   6) destroy() 后统一解绑，避免脱离 DOM 的节点继续触发落盘。
+         * ------------------------------------------------------------------ */
+
+        function accordionHeadOf(accNode) {
+            if (accNode.head) return accNode.head;
+            return (accNode.querySelector ? accNode.querySelector('.nvui-acc-head') : null);
+        }
+
+        function bindAccordionEvent(target, type, handler, owner) {
+            if (!target || typeof target.addEventListener !== 'function') return null;
+            target.addEventListener(type, handler, false);
+            var binding = { target: target, type: type, handler: handler };
+            if (owner) {
+                if (!owner.bindings) owner.bindings = [];
+                owner.bindings.push(binding);
+            } else {
+                accBindings.push(binding);
             }
-            if (accNode.head) {
-                on(accNode.head, 'click', function () {
-                    if (persistConfig && persistConfig.accordion && !isRestoring) {
+            return binding;
+        }
+
+        function unbindAccordionBinding(binding) {
+            if (!binding) return;
+            try { binding.target.removeEventListener(binding.type, binding.handler, false); } catch (e) {}
+        }
+
+        function unbindAccordionItem(item) {
+            if (!item) return;
+            if (item.bindings) {
+                for (var i = 0; i < item.bindings.length; i++) {
+                    unbindAccordionBinding(item.bindings[i]);
+                }
+                item.bindings = [];
+            }
+            var node = item.node;
+            if (node && item.wrappedSetOpen && node.setOpen === item.wrappedSetOpen) {
+                try {
+                    if (item.hadSetOpenProp) node.setOpen = item.origSetOpen;
+                    else delete node.setOpen;
+                } catch (e) {}
+            }
+        }
+
+        function unbindAccordionEvents() {
+            for (var i = 0; i < accBindings.length; i++) {
+                unbindAccordionBinding(accBindings[i]);
+            }
+            accBindings = [];
+            for (var j = 0; j < accList.length; j++) {
+                unbindAccordionItem(accList[j]);
+            }
+            accList = [];
+        }
+
+        /* 纯 DOM 折叠条的行为补齐：只切 .is-open 与 aria-expanded，不重建 DOM。
+         * 注意：setOpen 一定要补（恢复 / clearLayoutState 要调用它），但**点击**只在
+         * 调用方显式要求（bind: true）时才接管 —— 否则极易与插件自己的委托监听叠加成
+         * 双重 toggle。节点已有 setOpen 时一律不接管点击，只包保存钩子。 */
+        function ensureAccordionBehavior(accNode, bindClick, owner) {
+            if (typeof accNode.setOpen === 'function') return false;
+            accNode.setOpen = function (v) {
+                var open = !!v;
+                accNode.classList.toggle('is-open', open);
+                var h = accordionHeadOf(accNode);
+                if (h && typeof h.setAttribute === 'function') {
+                    h.setAttribute('aria-expanded', open ? 'true' : 'false');
+                }
+            };
+            if (bindClick === true) {
+                bindAccordionEvent(accordionHeadOf(accNode), 'click', function () {
+                    accNode.setOpen(!accNode.classList.contains('is-open'));
+                }, owner);
+            }
+            return true;
+        }
+
+        function findAccordionItem(accNode) {
+            for (var i = 0; i < accList.length; i++) {
+                if (accList[i].node === accNode) return accList[i];
+            }
+            return null;
+        }
+
+        function findAccordionItemById(accId) {
+            for (var i = 0; i < accList.length; i++) {
+                if (accList[i].id === accId) return accList[i];
+            }
+            return null;
+        }
+
+        function accordionIdTaken(candidate) {
+            return !!findAccordionItemById(candidate);
+        }
+
+        function isAccordionItemLive(item) {
+            return !!(item && item.node && panel.contains && panel.contains(item.node));
+        }
+
+        /** 稳定键推导：显式 id > DOM id > data-nvui-acc-key；都没有返回 null。
+         *  持久化键只是普通对象键，不需要满足 DOM id 语法；这里保留原始键，
+         *  否则不同中文/非 ASCII 键会被 sanitizeIdPart 折叠成同一个键。 */
+        function deriveAccordionId(accNode, explicitId) {
+            if (explicitId !== undefined && explicitId !== null && String(explicitId) !== '') {
+                return String(explicitId);
+            }
+            if (accNode.id) return String(accNode.id);
+            if (typeof accNode.getAttribute === 'function') {
+                var dataKey = accNode.getAttribute('data-nvui-acc-key');
+                if (dataKey) return String(dataKey);
+            }
+            return null;
+        }
+
+        /** 兜底键：面板内 .nvui-acc 的 DOM 顺序，比 accList.length+1 更可复现 */
+        function autoAccordionId(accNode) {
+            var all = panel.querySelectorAll ? panel.querySelectorAll('.nvui-acc') : null;
+            var idx = all ? Array.prototype.indexOf.call(all, accNode) : -1;
+            if (idx < 0) idx = accList.length;
+            return 'acc_auto_' + (idx + 1);
+        }
+
+        /** 生成键的唯一化：已被活动节点占用时追加序号；只被脱离节点占用时
+         *  返回原键，由 panelTrackAccordion 走「替换旧条目」路径。 */
+        function uniqueAccordionId(base) {
+            var rootId = String(base || 'acc');
+            var candidate = rootId;
+            var suffix = 2;
+            while (true) {
+                var item = findAccordionItemById(candidate);
+                if (!item || !isAccordionItemLive(item)) return candidate;
+                candidate = rootId + '-' + suffix;
+                suffix += 1;
+            }
+        }
+
+        /** 工厂标题兜底键：ASCII 标题保留 v2.5 的 sanitize 结果（避免无谓迁移），
+         *  含非 ASCII 的标题保留原始标题（中文标题不再全部折叠成 "__"）。 */
+        function titleAccordionId(title, fallback) {
+            var raw = (title === null || title === undefined) ? '' : String(title);
+            if (!raw) return uniqueAccordionId(fallback);
+            if (/[^\x00-\x7F]/.test(raw)) return uniqueAccordionId(raw);
+            return uniqueAccordionId(sanitizeIdPart(raw, fallback));
+        }
+
+        function removeAccordionItem(item) {
+            var idx = accList.indexOf(item);
+            if (idx >= 0) accList.splice(idx, 1);
+            unbindAccordionItem(item);
+        }
+
+        function registerAccordionItem(item) {
+            var accNode = item.node;
+            accList.push(item);
+            if (persistConfig && persistConfig.accordion && loadedState && loadedState.accordion
+                && Object.prototype.hasOwnProperty.call(loadedState.accordion, item.id)
+                && typeof loadedState.accordion[item.id] === 'boolean') {
+                accNode.setOpen(loadedState.accordion[item.id]);
+            }
+            var head = accordionHeadOf(accNode);
+            if (head) {
+                /* 只负责「点击后落盘」；开合行为由工厂或 ensureAccordionBehavior 提供 */
+                bindAccordionEvent(head, 'click', function () {
+                    if (persistConfig && persistConfig.accordion && !isRestoring && !disposed) {
                         schedulePersistSave();
                     }
-                });
+                }, item);
             }
-            var origSetOpen = accNode.setOpen;
-            accNode.setOpen = function (v) {
-                origSetOpen.call(accNode, v);
-                if (persistConfig && persistConfig.accordion && !isRestoring) {
+            var baseSetOpen = accNode.setOpen;
+            var wrappedSetOpen = function (v) {
+                baseSetOpen.call(accNode, v);
+                if (persistConfig && persistConfig.accordion && !isRestoring && !disposed) {
                     schedulePersistSave();
                 }
             };
+            accNode.setOpen = wrappedSetOpen;
+            item.wrappedSetOpen = wrappedSetOpen;
+        }
+
+        function panelTrackAccordion(accNode, explicitId, options) {
+            if (!accNode || accNode.nodeType !== 1 || !accNode.classList || !accNode.classList.contains('nvui-acc')) {
+                warn('trackAccordion(): 传入节点不是 .nvui-acc 元素，已忽略');
+                return null;
+            }
+            /* 已挂在别的 kit 面板里的折叠条不越界接管（尚未插入 DOM 的节点不受影响） */
+            if (typeof accNode.closest === 'function') {
+                var ownerPanel = accNode.closest('.nvui-panel');
+                if (ownerPanel && ownerPanel !== panel) {
+                    warn('trackAccordion(): 该折叠条属于另一个面板，已忽略（每个面板只接管自己的内容）');
+                    return null;
+                }
+            }
+            /* 已连接却不在本面板：外部容器 / 其它文档，拒绝；
+               detached 节点保持既有契约（允许插入前预注册）。 */
+            if (accNode.isConnected && !panel.contains(accNode)) {
+                warn('trackAccordion(): 该折叠条不在本面板内，已忽略（每个面板只接管自己的内容）');
+                return null;
+            }
+            /* 已销毁的面板不再接受新接管，也不再挂任何监听 */
+            if (disposed) return null;
+            /* 允许省略 id：trackAccordion(node, { bind: false }) */
+            if (explicitId && typeof explicitId === 'object') {
+                options = options || explicitId;
+                explicitId = undefined;
+            }
+            var existing = findAccordionItem(accNode);
+            if (existing) {
+                var wanted = deriveAccordionId(accNode, explicitId);
+                if (wanted && wanted !== existing.id) {
+                    warn('trackAccordion(): 节点已注册为 "' + existing.id + '"，忽略新 id "' + wanted + '"（首次注册优先）');
+                }
+                return existing.id;
+            }
+            var opt = (options && typeof options === 'object') ? options : {};
+            /* 行为补齐与持久化分离：即使不持久化，注入的折叠条也应该点得动 */
+            if (!persistConfig || !persistConfig.accordion) {
+                ensureAccordionBehavior(accNode, opt.bind, null);
+                return null;
+            }
+
+            var accId = deriveAccordionId(accNode, explicitId);
+            if (!accId) {
+                accId = uniqueAccordionId(autoAccordionId(accNode));
+                if (!autoKeyWarned) {
+                    autoKeyWarned = true;
+                    warn('trackAccordion(): 折叠条缺少稳定键（id / data-nvui-acc-key），已按面板内顺序生成 "' + accId + '"；DOM 顺序变化会导致状态错位，建议注入时给出 id');
+                }
+            }
+            var idItem = findAccordionItemById(accId);
+            if (idItem) {
+                if (isAccordionItemLive(idItem)) {
+                    warn('trackAccordion(): id "' + accId + '" 已被另一折叠条占用，本条不注册（避免状态互相覆盖）');
+                    return null;
+                }
+                /* 同稳定键的新节点替换已经脱离本面板的旧条目：
+                   先解绑旧节点的 kit 监听并恢复它的 setOpen，再登记新节点。 */
+                removeAccordionItem(idItem);
+            }
+
+            var item = {
+                id: accId,
+                node: accNode,
+                bindings: [],
+                hadSetOpenProp: Object.prototype.hasOwnProperty.call(accNode, 'setOpen'),
+                origSetOpen: accNode.setOpen,
+                wrappedSetOpen: null,
+            };
+            ensureAccordionBehavior(accNode, opt.bind, item);
+            registerAccordionItem(item);
+            return accId;
+        }
+
+        function panelAdoptAccordions(root, options) {
+            if (!root || typeof root.querySelectorAll !== 'function') {
+                warn('adoptAccordions(): 需要传入元素 / DocumentFragment 容器，已忽略');
+                return 0;
+            }
+            var doc = panel.ownerDocument;
+            if (root === doc || (doc && (root === doc.documentElement || root === doc.body))) {
+                warn('adoptAccordions(): 拒绝扫描 document / body，请传入本面板的容器（如 panel.body）');
+                return 0;
+            }
+            /* 已连接的外部容器拒绝；detached 元素 / DocumentFragment 允许预注册。 */
+            if (root.isConnected && root !== panel && !panel.contains(root)) {
+                warn('adoptAccordions(): 容器不在本面板内，已忽略（每个面板只接管自己的内容）');
+                return 0;
+            }
+            var count = 0;
+            function adoptNode(node) {
+                var known = !!findAccordionItem(node);
+                var id = panelTrackAccordion(node, undefined, options);
+                if (id && !known) count += 1;
+            }
+            /* root 自身就是折叠条时也要接管（不能只扫后代） */
+            if (root.nodeType === 1 && root.classList && root.classList.contains('nvui-acc')) {
+                adoptNode(root);
+            }
+            var nodes = root.querySelectorAll('.nvui-acc');
+            for (var i = 0; i < nodes.length; i++) {
+                adoptNode(nodes[i]);
+            }
+            return count;
         }
 
         function cleanupPersist() {
-            if (!persistConfig) return;
-            try { window.removeEventListener('resize', onWindowResize); } catch (e) {}
-            if (resizeRaf) { cancelAnimationFrame(resizeRaf); resizeRaf = null; }
-            flushPersistSave();
-            if (resizeObserver) {
-                try { resizeObserver.disconnect(); } catch (e) {}
-                resizeObserver = null;
+            if (persistConfig) {
+                try { window.removeEventListener('resize', onWindowResize); } catch (e) {}
+                if (resizeRaf) { cancelAnimationFrame(resizeRaf); resizeRaf = null; }
+                /* 先冲刷最后一次状态，再置 disposed —— 顺序不能反，否则 flush 会被拦掉 */
+                flushPersistSave();
+                if (resizeObserver) {
+                    try { resizeObserver.disconnect(); } catch (e) {}
+                    resizeObserver = null;
+                }
             }
+            disposed = true;
+            unbindAccordionEvents();
         }
 
         function panelClearLayoutState() {
@@ -1812,7 +2109,7 @@
                 setTabByDom(tabs[0].domKey);
             }
             for (var a = 0; a < accList.length; a++) {
-                accList[a].node.setOpen(false);
+                if (isAccordionItemLive(accList[a])) accList[a].node.setOpen(false);
             }
             if (tabsNav) syncTabsIndicator(tabsNav, false);
         }
@@ -2075,7 +2372,7 @@
          * key 用调用方给的原始 key（契约不变）；找不到时回退到当前激活面板，
          * 再回退到第一个面板，最后才落到 body（无标签的单页面板）。
          */
-        function addNode(key, node) {
+        function appendToPane(key, node) {
             var domKey = null;
             if (key !== null && key !== undefined) {
                 var raw = String(key);
@@ -2100,15 +2397,16 @@
             else if (tabs.length && panes.get(tabs[0].domKey)) pane = panes.get(tabs[0].domKey);
             if (!pane) pane = body;
             append(pane, node);
-            if (persistConfig && node && node.classList && node.classList.contains('nvui-acc') && typeof node.setOpen === 'function') {
-                var found = false;
-                for (var ai = 0; ai < accList.length; ai++) {
-                    if (accList[ai].node === node) { found = true; break; }
-                }
-                if (!found) {
-                    var accId = node.id ? String(node.id) : ('acc-' + (accList.length + 1));
-                    trackAccordion(node, accId);
-                }
+            return node;
+        }
+
+        function addNode(key, node) {
+            appendToPane(key, node);
+            if (!disposed && persistConfig && persistConfig.accordion
+                && node && node.classList && node.classList.contains('nvui-acc')
+                && typeof node.setOpen === 'function' && !findAccordionItem(node)) {
+                var accId = node.id ? String(node.id) : uniqueAccordionId('acc-' + (accList.length + 1));
+                panelTrackAccordion(node, accId, { bind: false });
             }
             return node;
         }
@@ -2180,12 +2478,22 @@
             addInput: function (key, o) { return addNode(key, inputRow(o)); },
             addAccordion: function (key, o) {
                 var acc = accordion(o);
-                if (persistConfig) {
-                    var accId = (o && o.id) ? String(o.id) : sanitizeIdPart((o && o.title) || ('acc-' + (accList.length + 1)), 'acc-' + (accList.length + 1));
-                    trackAccordion(acc, accId);
+                appendToPane(key, acc);
+                if (!disposed && persistConfig && persistConfig.accordion) {
+                    var accId;
+                    if (o && o.id) {
+                        accId = String(o.id);
+                    } else if (o && o.title) {
+                        accId = titleAccordionId(o.title, 'acc-' + (accList.length + 1));
+                    } else {
+                        accId = uniqueAccordionId('acc-' + (accList.length + 1));
+                    }
+                    panelTrackAccordion(acc, accId, { bind: false });
                 }
-                return addNode(key, acc);
+                return acc;
             },
+            trackAccordion: panelTrackAccordion,
+            adoptAccordions: panelAdoptAccordions,
             addProgress: function (key, o) { return addNode(key, progress(o)); },
             addSectionTitle: function (key, text) { return addNode(key, el('div', 'nvui-section-title', { text: text })); },
             clearLayoutState: panelClearLayoutState,

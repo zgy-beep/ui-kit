@@ -1,6 +1,6 @@
 # AI 协作设计指南 · 用 SillyTavern NVUI Kit 规范设计面板
 
-> 版本：**v2.5.0** · 适用对象：SillyTavern 插件开发者、其它软件项目、以及被要求「按规范生成/修改界面」的 AI 编码助手。
+> 版本：**v2.6.0** · 适用对象：SillyTavern 插件开发者、其它软件项目、以及被要求「按规范生成/修改界面」的 AI 编码助手。
 > 配套文件：[tokens.css](tokens.css)（设计令牌）、[components.css](components.css)（组件样式）、[README.md](README.md)（完整规范）、[nvui-api.js](nvui-api.js)（零依赖运行时 API）、[tokens.json](tokens.json)（令牌机器可读镜像）、[test/test-ui-kit.js](test/test-ui-kit.js)（规范守护测试）。
 
 本文档回答两个问题：
@@ -13,7 +13,7 @@
 ## 0. 给 AI 的硬约束（先读，违反即不合格）
 
 1. **只用 Kit 的类名与令牌**：所有类名 `nvui-` 前缀、状态类 `is-` 前缀；颜色/圆角/间距/动效一律用 `var(--nvui-*)`，禁止 `#hex`、`rgb()`、`hsl()` 字面量。
-2. **不污染宿主**：禁止裸元素选择器（`button {}`、`input {}`）、禁止全局重置、禁止 `!important`（Kit 只在宿主 checkbox 隔离与 reduced-motion 降级里使用）。
+2. **不污染宿主**：禁止裸元素选择器（`button {}`、`input {}`）、禁止全局重置、禁止 `!important`。Kit 只在三类**有界**规则里使用（合计 14 条）：① 宿主 checkbox `::before` 压制（2 条，`.nvui-checkbox` / `.nvui-switch-row` 共用）；② `prefers-reduced-motion` 降级（5 条）；③ 宿主表单控件隔离（7 条，仅 `dialog.nvui-tl` + `.nvui-panel` 双载体，值只能是指定 token 或 `border: none` / `margin: 0` 这类明确 reset）。**不要**把 `background` / `color` / `margin` 当通用放行证。
 3. **SillyTavern 浮层必须进 `<dialog class="nvui-tl">` 载体**：非模态 `dialog.show()`（禁止 `showModal()`——会给文档加 `inert`；也**不要**以为非模态能靠浏览器 top layer 提层——实测它不进 top layer）、禁止裸 `position: fixed` 挂 body（宿主 `html` 有 transform，手机端会被顶出屏幕）。
    - **载体必须自带 z-index**（Kit 已内置 `z-index: var(--nvui-z-layer)`）。实测：非模态 `dialog.show()` 不会进入浏览器 top layer（只有 `showModal()` 会，而它会加 `inert`）。载体是 `position:fixed`，会创建层叠上下文，内部子元素的 z-index 只在载体内部生效 —— 载体自身若为 `z-index:auto`，浮层整体只相当于 z-index 0，会被酒馆 `#sheld`（z-index:30）压住，表现为「面板被酒馆窗口压在后面」。
    - 吐司载体请加 `.nvui-tl-toast`（`NVUI.showToast` 已内置），使其层级（`--nvui-z-tooltip`）高于面板载体（`--nvui-z-layer`）。
@@ -487,7 +487,7 @@ async function checkGitHubRelease() {
 
 | API | 说明 |
 | :--- | :--- |
-| `NVUI.version` | Kit/API 版本（2.5.0） |
+| `NVUI.version` | Kit/API 版本（2.6.0） |
 | `NVUI.getToken(name)` | 读取当前作用域的设计令牌值 |
 | `NVUI.setTheme('light'|'dark', { solid })` | 切换浅色 / 实心扁平模式（只切类名） |
 | `NVUI.clearLayoutState(id, storageAdapter)` | 清理指定面板在持久化存储中的尺寸/位置/状态记忆 |
@@ -501,7 +501,9 @@ async function checkGitHubRelease() {
 | `NVUI.inputRow({ label, type, value, min, max, step, onChange })` | 输入行（number 默认隐藏原生步进按钮） |
 | `NVUI.accordion({ title, summary, open, content })` | 折叠分组 |
 | `NVUI.progress({ value, variant, indeterminate })` | 进度条（返回元素带 `setValue`） |
-| `NVUI.createPanel(options)` | 完整面板（见 §2.2），支持 persist/themeToggle/onThemeChange/update/width 等，返回 `{ open, close, destroy, setTab, syncIndicator, addSwitch, addInput, addAccordion, addProgress, addNode, addSectionTitle, showUpdate, clearLayoutState, setSize, setMaximized }` |
+| `NVUI.createPanel(options)` | 完整面板（见 §2.2），支持 persist/themeToggle/onThemeChange/update/width 等，返回 `{ open, close, destroy, setTab, syncIndicator, addSwitch, addInput, addAccordion, addProgress, addNode, addSectionTitle, showUpdate, trackAccordion, adoptAccordions, clearLayoutState, setSize, setMaximized }` |
+| `panel.trackAccordion(node, id?, options?)` | 接管 `innerHTML` 注入的**单个** `.nvui-acc`（v2.6.0，GitHub #11）。默认**不**绑点击，`{ bind: true }` 才由 kit 提供开合；返回实际 id，幂等；键按**原始字符串**保存（中文 / 非 ASCII 不折叠，`__proto__` 等特殊键安全）；显式 / DOM / data 键被活动节点占用时告警并返回 `null`（自动键才追加序号）；非 `.nvui-acc` / 跨面板返回 `null` |
+| `panel.adoptAccordions(root, options?)` | 批量接管容器内 `.nvui-acc`（含 root 自身），返回本次新增数量；重复调用返回 `0`；拒绝 `document` / `body` |
 | `NVUI.showToast({ message, type, duration, icon })` | 吐司通知（自动建独立载体、自动清理） |
 
 > API 是**可选**的：不用 JS 时，手写 DOM + CSS 同样有效；API 只是把布局标准与无障碍细节固化成可复用函数。
@@ -513,13 +515,14 @@ async function checkGitHubRelease() {
 ### 6.1 SemVer 语义化版本分级准则（面向 AI 助手）
 
 - **PATCH（补丁版本 · 2.4.X）**：仅用于向下兼容的缺陷修复（内存泄漏、未捕获异常、防御性代码加固、checkVisibility 硬件加速性能优化、高对比度微调）。**严禁**修改任何公开 API 签名或增删 Token。
-- **MINOR（小版本 · 2.X.0）**：用于向下兼容的新能力（新增 Token 如 `--nvui-z-layer`、新增可选 API 如 `countHostModals`、在 `createPanel` 中新增可选参数如 `persist`/`themeToggle`、新增实例方法如 `showUpdate`）。**必须保持 100% 向后兼容**，既有插件直接覆盖无感升级。
+- **MINOR（小版本 · 2.X.0）**：用于向下兼容的新能力（新增 Token 如 `--nvui-z-layer`、新增组件类如 `.nvui-checkbox`、新增可选 API 如 `countHostModals`、在 `createPanel` 中新增可选参数如 `persist`/`themeToggle`、新增实例方法如 `showUpdate`/`trackAccordion`）。**必须保持 100% 向后兼容**，既有插件直接覆盖无感升级。
 - **MAJOR（大版本 · X.0.0）**：仅用于破坏性变更（重命名/删除 Token、修改核心 CSS 类名、改变公开 API 必需参数签名、破坏 DOM 必需层级）。必须向用户明确告知破坏性影响并提供迁移指南。
 - **发版检查红线（六处对齐）**：版本变更时必须同时原子更新 6 处声明（package.json / tokens.json / tokens.css / components.css / nvui-api.js / README），且 4 资产文件与 `st-extension-template/ui-kit/` 保持 MD5 逐字节一致，`npm test` 必须全绿。
 
 ### 6.2 历史版本与兼容基准
 
-- 当前：**v2.5.0**（表现层布局持久化 + 面板头部标准化 + 720px 黄金尺寸；0 破坏性变更，100% 向后兼容）。
+- 当前：**v2.6.0**（独立复选框 `.nvui-checkbox` + 宿主表单控件隔离层 + 折叠条接管入口；组件类 79；0 破坏性变更，100% 向后兼容）。
+- 上一版：**v2.5.0**（表现层布局持久化 + 面板头部标准化 + 720px 黄金尺寸；0 破坏性变更，100% 向后兼容）。
 - 上一版：**v2.4.0**（浮层载体完善：宿主模态让位机制 `.is-host-modal` + 3 个宿主模态 API；110 令牌不变，无破坏性变更）。
 - 历史版本：**v2.3.0**（浮层载体层级修复：新增 `--nvui-z-layer: 1000000` 载体档位）。
 - Kit 变更遵循语义化版本；升级前先跑 `node test/test-ui-kit.js`，并对照 README §10.3–§10.9 的迁移说明。

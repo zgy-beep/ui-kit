@@ -35,6 +35,10 @@
 
 | 17 | 宿主 `showModal()` 模态期间，kit 浮层被压住且**完全无法交互**（用户点了没反应，无任何视觉提示）；且 v2.3.0 README §13.5.1 对照表 F 行「`popover=manual` 能压过一切」为**错误论断** | P1 交互 / P1 文档 | 已修复 | 实机探针（`/tmp/probe-carrier*.js`，真实 ST 宿主）：① `popover="manual"` 无论 show 先后**都压不过** `showModal()` 模态；② 普通 div + `z-index:2147483647` 同样不行；③ 根因**不是 z-index**，而是 `showModal()` 给**整页**加 `inert`，`inert` 元素不参与命中测试（`elementsFromPoint` 不返回），也无法获得焦点 | **改为「主动让位」而非硬压**：① `components.css` 新增降级态 `dialog.nvui-tl.is-host-modal`（`pointer-events:none` + `opacity:0.35` + `grayscale(0.6)`，子浮层一并让位）；② `nvui-api.js` 新增 `countHostModals()` / `syncHostModalState()` / `getCarrierState()`；③ 装幂等 watcher（`MutationObserver` 监听 `dialog[open]` + 捕获 `close`），宿主模态**动态开关**时自动降级/还原；④ README §13.5.1 F 行更正 + 新增 §13.7。实机 `test/st-carrier-host-modal-check.js` **18/18 全绿**。GitHub Issue #4 |
 
+| 18 | 宿主主题以「元素选择器 + `!important`」重写全局表单控件，浅色主题下 `.nvui-input` 呈「深底深字」不可读 | P1 宿主兼容 | 已修复（v2.6.0） | GitHub Issue #9 附 Chromium 实测：`input.nvui-input` 背景 `rgb(46,46,52)`（宿主深色）/ 文字 `rgb(31,36,48)`（kit 深色），同刻 `--nvui-input-bg` 本身正确。本地静态核对：`.nvui-input` 为裸类（0,1,0）、无隔离层、`select option` 无皮肤，`nvui-api.js` 中 `nvui-scope` 出现 0 次 | `components.css` 新增 §7.1 宿主表单隔离：仅 `dialog.nvui-tl` + `.nvui-panel` 双载体、7 条 `!important`（基础 `background`/`color`/`border` 3、`select margin` 1、`:hover background` 1、`option background`/`color` 2），值全走 token 或明确 reset；`:hover` 同作用域还原。`test/test-ui-kit.js` 预算 8 → 14，并新增分类计数 / 双载体选择器 / 精确属性值断言。验证入口：`node test/test-issues-9-10-forms.js`。**GitHub：随 v2.6.0 发布提交关闭（`Fixes #9`）** |
+| 19 | 缺少独立 checkbox 组件：批量选择场景每个下游插件都要自绘宿主隔离 | P2 组件缺失 | 已修复（v2.6.0） | GitHub Issue #10 附下游插件自绘 CSS（`appearance:none` + 显式宽高 + 压 `::before`）。本地核对：`components.css` 无 `.nvui-checkbox`，宿主隔离只覆盖 `.nvui-switch-row` | 新增 `.nvui-checkbox[type="checkbox"]`：16×16、`:checked` / `:indeterminate`、焦点环走 token、`::after` 纯 CSS 对勾；**复用既有 `::before` 压制、不新增 `!important`**；组件类 78 → 79；`preview.html` 补全选 / 半选 / 禁用示例；README §7.5.1 补文档。验证入口：`node test/test-issues-9-10-forms.js`（16px 几何 / `::before` 抑制 / 半选 / 焦点与 Space / disabled）。**GitHub：随 v2.6.0 发布提交关闭（`Fixes #10`）** |
+| 20 | `innerHTML` 注入的 `.nvui-acc` 无法进入 `accList`，`persist.accordion` 静默存成 `{}`（重开面板状态丢失） | P1 持久化 | 已修复（v2.6.0） | GitHub Issue #11 附浏览器实测 storage 内容（`accordion: {}` 而同份 `size`/`tab` 正常）。本地复核：原 `addNode` 注册门槛要求节点自带 `setOpen`（仅工厂产物满足），`trackAccordion` 为闭包私有、控制器无公开入口 | 新增 `panel.trackAccordion(node, id?, options?)` 与 `panel.adoptAccordions(root, options?)`：键按**原始字符串**保存（中文 / 非 ASCII 键不再折叠，`__proto__` 等特殊键安全存取）；**显式 / DOM / data 键被活动节点占用时告警并返回 `null`**，自动键与工厂标题兜底键才追加序号；同键旧节点已脱离面板时由新节点替换；注册幂等；**默认不接管点击**（`{ bind: true }` opt-in）；跨面板 / `document` / `body` 边界拒绝；`destroy()` 解绑并停止落盘；沿用既有 `nvui_state_*` 状态格式。验证入口：`node test/test-issue-11-accordion.js`（真实 Chromium）。**GitHub：随 v2.6.0 发布提交关闭（`Fixes #11`）** |
+
 ---
 
 ## 待办
@@ -162,6 +166,7 @@
 | :--- | :--- | :--- | :--- | :--- |
 | [Issue #5](https://github.com/zgy-beep/ui-kit/issues/5) | 表现层持久化 | 面板与核心组件状态记忆（`persist: true`）：支持自动记忆面板宽高尺寸、分栏比例、激活 Tab 索引；支持自定义 Storage Adapter（适配酒馆 `settings.json`）；内置 250ms 防抖与视口多分辨率边界越界钳制保护 | v2.5.0 | **Closed (v2.5.0)**：全量实现并实机验证。支持声明式 `persist: true` 或精细化对象配置 `{ size, tab, accordion, storage }`；内置可插拔 `StorageAdapter`（默认 localStorage 沙箱键 `nvui_state_${id}`，支持适配宿主 `extension_settings` 与 `saveSettingsDebounced`，内置 Quota 异常防护）；内置 250ms 写入防抖调度器与关闭/销毁安全冲刷（Flush）；实现多分辨率跨屏 Viewport Clamping 视口越界钳制（PC 默认 720px 黄金尺寸，移动端 <=600px 强制回退 100% 抽屉，坐标防溢出自愈）；导出全局 `NVUI.clearLayoutState(id)` 与实例级 `panel.clearLayoutState()` 清理接口。 |
 | [Issue #6](https://github.com/zgy-beep/ui-kit/issues/6) | 面板头部交互 | 预置主题切换按钮（`themeToggle`）与版本更新提示按钮（`update` / `panel.showUpdate`）：规范右上角标准操作流（Actions → 主题切换 → 关闭）及左上角版本更新动态点亮入口 | v2.5.0 | **Closed (v2.5.0)**：全量实现并实机验证。规范操作流标准次序（`.nvui-panel-actions` 严格保证 `[自定义 actions...]` -> `[themeToggle]` -> `[closeBtn]`）；预置主题切换按钮（日/月图标平滑过渡动效、直连 `NVUI.setTheme` 切换 `.nvui-theme-light` 并失效 Token 缓存、联动 `onThemeChange` 回调）；标题区预置版本更新提示胶囊（`opts.update` 静态配置与 `panel.showUpdate` 动态点亮/隐藏/更新接口）；严格遵守 WAI-ARIA APG 无障碍规范（`role="button"`, `tabindex="0"`, 键盘 Enter/Space 触发）、纯文本注入（杜绝 XSS）与 Flat Glass 无实体外描边红线。 |
+| [Issue #10](https://github.com/zgy-beep/ui-kit/issues/10) | 组件层 | 独立复选框 `.nvui-checkbox`：批量选择场景的 16px 小方块，自带宿主隔离，支持 `:checked` / `:indeterminate`，避免每个下游插件自绘 | v2.6.0 | **Implemented (v2.6.0)**：组件、示例与文档已落地并在 Chromium 回归中验证；GitHub issue 由本次发布提交关闭（`Fixes #10`）；同批的 #9 / #11 见「已修复」表第 18 / 20 行。 |
 
 ### v2.5.0 特性结项与关闭明细 (Feature Resolution Details)
 
@@ -207,6 +212,21 @@
   - `test/test-ui-kit.js`: Section 9.2 (头部操作流次序静态断言、`showUpdate` 导出断言、无 innerHTML 断言)。
   - `test/test-e2e-v250.js`: T1-R2-01 ~ T1-R2-18 (功能契约)、T2-BC-07 ~ T2-BC-12 (边界用例)、T3-CB-01 ~ T3-CB-05 (生命周期协同)、T4-SC-01 ~ T4-SC-04 (实机场景)。
   - SillyTavern 宿主实机测试: `http://127.0.0.1:8000` 100% PASS，0 pageerror。
+
+---
+
+### v2.6.0 修复与验证记录（GitHub #9 / #10 / #11）
+
+三条 issue 的代码与文档已在 v2.6.0 落地；本次发布提交通过 `Fixes #9` / `Fixes #10` / `Fixes #11` 关闭 issue，并分别补充维护评论（若未自动关闭，由维护者手动标 `completed`）。
+
+| 验证入口 | 覆盖 | 本轮实测 |
+| :--- | :--- | :--- |
+| `node test/test-issues-9-10-forms.js` | #9 表单隔离（载体 × 主题的 `input` / `textarea` / `select` / `option` 与 `:hover` 还原）、#10 复选框（16px 几何、`::before` 抑制、半选、焦点 / Space、disabled、载体外隔离） | 273/273 PASS，pageerror 0 |
+| `node test/test-issue-11-accordion.js` | #11 注入折叠条接管：同面板多次重渲染、立即 close 后重建、`persist.accordion:false` 的 factory / `addNode` 路径、全 false 不写空值、中文 / 非 ASCII 键与 `__proto__`、混合登记、外部 / 销毁边界、调用方自管 class 切换 | 18/18 PASS，pageerror 0 |
+| `node test/stress-m1-persistence.js` | v2.5 持久化引擎回归（防抖 / 钳制 / 存储异常 / 陈旧状态） | 19/19 PASS，pageerror 0 |
+| `node test/test-ui-kit.js`（`npm test`） | 静态规范门禁：token、组件类、`!important` 预算与有界选择器、版本与模板资产一致性 | 361/361 PASS |
+
+> 发布后如发现回归：重开对应 issue 并在本条记录；真实 SillyTavern 宿主浅色 / 第三方主题冒烟仍是后续建议项。
 
 ---
 

@@ -1,7 +1,7 @@
 /**
  * SillyTavern 插件通用 UI Kit · 组件样式
  * ------------------------------------------------------------------
- * 版本：ui-kit v2.5.0；依赖：tokens.css（必须先引入或先拼进来）
+ * 版本：ui-kit v2.6.0；依赖：tokens.css（必须先引入或先拼进来）
  *
  * 本目录是独立项目（自带 package.json / LICENSE / CHANGELOG / test/），
  * 可整目录复制/移动到任意文件夹或仓库，不依赖任何外部文件。
@@ -17,12 +17,12 @@
  *   1. 所有选择器都必须以 .nvui- / dialog.nvui-tl 开头，禁止裸元素选择器，
  *      避免污染酒馆宿主与同页其它扩展；
  *   2. 颜色一律走 token（禁止硬编码 #hex / rgb()），换主题只改 tokens.css；
- *   3. !important 只允许出现在「对抗宿主全局 checkbox 样式」的隔离规则与
- *      prefers-reduced-motion 降级块里。
+ *   3. !important 只允许出现在「对抗宿主全局 checkbox / 表单控件样式」的隔离规则与
+ *      prefers-reduced-motion 降级块里；全文件合计 14 条（原有 7 + 宿主表单隔离 7）。
  *
  * 组件清单（预览：ui-kit/preview.html；规范：ui-kit/README.md）：
  *   作用域 / top-layer 载体 / 浮层与弹窗（玻璃 + 进出场）/ 图标按钮 / 按钮与按钮组 /
- *   胶囊开关行 / 输入行 / 标签页（可选粘连指示器）/ 折叠面板（高度动画）/ 区块标题 / 提示与告警 /
+ *   胶囊开关行 / 独立复选框 / 输入行 / 标签页（可选粘连指示器）/ 折叠面板（高度动画）/ 区块标题 / 提示与告警 /
  *   状态行与状态点 / 徽标与标签块 / 空态与加载 / 骨架屏与进度条 / 悬浮面板 / 工具提示 /
  *   吐司 / 玻璃工具类与实心模式 / 布局工具 / 动效工具类 /
  *   SillyTavern 插件面板布局标准（桌面居中面板 / 手机底部抽屉 + 底部导航）。
@@ -514,7 +514,12 @@ dialog.nvui-tl > .nvui-toast-stack {
     transition: background-color var(--nvui-transition), transform var(--nvui-duration-fast) var(--nvui-ease-standard);
 }
 
-/* 压掉宿主的 ::before 对勾（元素级隔离见组件说明；这是唯一允许 !important 的地方） */
+/* 压掉宿主的 ::before 对勾（.nvui-switch-row 与独立 .nvui-checkbox 共用；
+ * 宿主 checkbox 隔离是 !important 白名单里的既有类别，不扩张到其它属性） */
+.nvui-checkbox[type="checkbox"]::before,
+.nvui-checkbox[type="checkbox"]:checked::before,
+.nvui-checkbox[type="checkbox"]:indeterminate::before,
+.nvui-checkbox[type="checkbox"]:focus-visible::before,
 .nvui-switch-row input[type="checkbox"]::before,
 .nvui-switch-row input[type="checkbox"]:checked::before,
 .nvui-switch-row input[type="checkbox"]:focus-visible::before {
@@ -568,6 +573,96 @@ dialog.nvui-tl > .nvui-toast-stack {
 }
 
 .nvui-switch-row input[type="checkbox"]:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ==========================================================================
+ * 6.1 独立复选框（批量选择；与 .nvui-switch-row 胶囊开关互补）
+ * --------------------------------------------------------------------------
+ * DOM：<input type="checkbox" class="nvui-checkbox">
+ * 16px 小方块，保留原生 input 语义（Tab / Space / :checked / :indeterminate）。
+ *
+ * 宿主兼容：酒馆给所有 input[type=checkbox] 挂了 appearance:none +
+ * display:grid + 显式宽高/描边/底色/阴影/transform/filter + ::before 对勾。
+ * 这些元素选择器（0,1,1）会压过裸类（0,1,0）。组件选择器统一写成
+ * .nvui-checkbox[type="checkbox"]（0,2,0），只命中 kit 自己的 class，
+ * 既压过宿主元素规则，又不接管宿主其它 checkbox，且不新增 !important。
+ * ========================================================================== */
+.nvui-checkbox[type="checkbox"] {
+    position: relative;
+    display: inline-block;
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--nvui-line-2);
+    border-radius: var(--nvui-radius-sm);
+    background: var(--nvui-input-bg);
+    box-shadow: none;
+    outline: none;
+    overflow: visible;
+    filter: none;
+    transform: none;
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
+    vertical-align: middle;
+    box-sizing: border-box;
+    transition: background-color var(--nvui-transition),
+        border-color var(--nvui-transition);
+}
+
+/* 对勾：::after + border 旋转（与开关滑钮同一套纯 CSS 思路） */
+.nvui-checkbox[type="checkbox"]::after {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 1px;
+    width: 4px;
+    height: 8px;
+    border: solid var(--nvui-on-accent);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg) scale(0.8);
+    opacity: 0;
+    transition: opacity var(--nvui-transition), transform var(--nvui-transition);
+}
+
+/* hover 只改描边；选中/部分选中保持主色，故状态规则放在 hover 之后 */
+.nvui-checkbox[type="checkbox"]:hover {
+    border-color: var(--nvui-dash);
+}
+
+.nvui-checkbox[type="checkbox"]:checked,
+.nvui-checkbox[type="checkbox"]:indeterminate {
+    background: var(--nvui-accent);
+    border-color: var(--nvui-accent);
+}
+
+.nvui-checkbox[type="checkbox"]:checked::after {
+    opacity: 1;
+    transform: rotate(45deg) scale(1);
+}
+
+/* 部分选中：横杠。原生 :indeterminate 由 JS 属性设置 */
+.nvui-checkbox[type="checkbox"]:indeterminate::after {
+    left: 3px;
+    top: 6px;
+    width: 8px;
+    height: 2px;
+    border: 0;
+    background: var(--nvui-on-accent);
+    opacity: 1;
+    transform: none;
+}
+
+.nvui-checkbox[type="checkbox"]:focus-visible {
+    outline: var(--nvui-focus-ring-w) solid var(--nvui-focus-ring-color);
+    outline-offset: var(--nvui-focus-ring-offset);
+}
+
+.nvui-checkbox[type="checkbox"]:disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }
@@ -662,6 +757,55 @@ dialog.nvui-tl > .nvui-toast-stack {
 .nvui-input.is-path {
     width: 200px;
     max-width: 60%;
+}
+
+/* --------------------------------------------------------------------------
+ * 7.1 宿主表单隔离（ISSUES #9）
+ * --------------------------------------------------------------------------
+ * 宿主主题常用「元素选择器 + !important」重写 input / select / textarea，
+ * 裸类 .nvui-input（0,1,0）即使作用域再深也赢不过 !important 声明。
+ * 这里只在 kit 的真实载体 dialog.nvui-tl / .nvui-panel 内夺回 token 皮肤；
+ * 载体外不接管宿主控件，保持隔离有界。
+ *
+ * !important 只给被宿主 !important 夺走的 4 类属性，共 7 条声明：
+ *   background / color / border（基础态 3）+ margin（select 1）+ hover background（1）
+ *   + option 的 background / color（2）。圆角等用更高特异性恢复，不占 !important 预算。
+ * hover 的 background 必须同作用域 + !important 还原，否则会被基础态压掉。
+ * option 是宿主下拉列表的最终渲染层，必须单独给底色与文字色。
+ * -------------------------------------------------------------------------- */
+dialog.nvui-tl input.nvui-input,
+dialog.nvui-tl select.nvui-input,
+dialog.nvui-tl textarea.nvui-input,
+.nvui-panel input.nvui-input,
+.nvui-panel select.nvui-input,
+.nvui-panel textarea.nvui-input {
+    background: var(--nvui-input-bg) !important;
+    color: var(--nvui-text) !important;
+    border: none !important;
+    border-radius: var(--nvui-radius-sm);
+}
+
+/* 宿主 select 常见 margin: ... 0 !important；只对 select 还原，避免无谓扩大 */
+dialog.nvui-tl select.nvui-input,
+.nvui-panel select.nvui-input {
+    margin: 0 !important;
+}
+
+/* 基础态 background !important 会压掉普通优先级的 :hover，必须同作用域还原 */
+dialog.nvui-tl input.nvui-input:hover,
+dialog.nvui-tl select.nvui-input:hover,
+dialog.nvui-tl textarea.nvui-input:hover,
+.nvui-panel input.nvui-input:hover,
+.nvui-panel select.nvui-input:hover,
+.nvui-panel textarea.nvui-input:hover {
+    background: var(--nvui-block-bg) !important;
+}
+
+/* option 皮肤：宿主 select option 的 !important 底色会直接带进下拉列表 */
+dialog.nvui-tl select.nvui-input option,
+.nvui-panel select.nvui-input option {
+    background: var(--nvui-bg-2) !important;
+    color: var(--nvui-text) !important;
 }
 
 /* ==========================================================================
@@ -2237,7 +2381,8 @@ dialog.nvui-tl > .nvui-toast-stack {
  *       原来只有层 1 生效 → 组件动画不会降级（无障碍红线被绕过）。
  *       点名而非通配，是为了**不波及宿主元素**（宿主 DOM 树庞大，通配会误伤）。
  *
- * 两层共用同一组 !important 声明（合计 5 个，预算 ≤ 8）。
+ * 两层共用同一组 !important 声明（本块 5 个）；§7.1 宿主表单隔离 7 个。
+ * 全文件合计 14 个（原有 7 + 宿主表单隔离 7）。
  */
 @media (prefers-reduced-motion: reduce) {
     .nvui-scope *,
@@ -2253,6 +2398,7 @@ dialog.nvui-tl > .nvui-toast-stack {
         .nvui-icon-btn,
         .nvui-btn,
         .nvui-switch-row,
+        .nvui-checkbox,
         .nvui-input,
         .nvui-tabs-indicator,
         .nvui-tab,
@@ -2283,6 +2429,7 @@ dialog.nvui-tl > .nvui-toast-stack {
         .nvui-icon-btn,
         .nvui-btn,
         .nvui-switch-row,
+        .nvui-checkbox,
         .nvui-input,
         .nvui-tabs-indicator,
         .nvui-tab,
@@ -2313,6 +2460,7 @@ dialog.nvui-tl > .nvui-toast-stack {
         .nvui-icon-btn,
         .nvui-btn,
         .nvui-switch-row,
+        .nvui-checkbox,
         .nvui-input,
         .nvui-tabs-indicator,
         .nvui-tab,

@@ -1,8 +1,8 @@
-# Test Infrastructure Specification: SillyTavern UI Kit v2.5.0
+# Test Infrastructure Specification: SillyTavern UI Kit v2.6.0
 
 ## 1. Test Philosophy
 
-The testing infrastructure for SillyTavern UI Kit v2.5.0 adheres to the following principles:
+The testing infrastructure for SillyTavern UI Kit v2.6.0 adheres to the following principles:
 
 1. **Opaque-Box Verification**: Tests interact strictly with public API surfaces (`NVUI.createPanel`, `NVUI.setTheme`, `NVUI.clearLayoutState`, `panel.open`, `panel.close`, `panel.destroy`, `panel.showUpdate`, `panel.clearLayoutState`), observable DOM elements (`.nvui-panel`, `.nvui-theme-toggle`, `.nvui-update-pill`), storage artifacts (`localStorage` keys `nvui_state_${id}`), and HTTP/browser runtime events. Internal implementation details are never asserted directly unless mandated by static security and structural contracts.
 2. **Requirement-Driven Derivation**: Every test case directly derives from `ORIGINAL_REQUEST.md`, `PROJECT.md`, and `ISSUES.md` (#5 and #6).
@@ -31,6 +31,17 @@ Options supported:
 - **Network Isolation**: Proxy environment variables (`http_proxy`, `https_proxy`, `all_proxy`) stripped; `NO_PROXY=*` enforced to prevent loopback proxy issues.
 - **Diagnostics**: Real-time tracking of `pageerror`, `console.error`, uncaught exceptions, and assertion tables with formatted summary reporting.
 
+### 2.3 Issue-specific Browser Regressions (local)
+
+```bash
+node test/test-issues-9-10-forms.js
+node test/test-issue-11-accordion.js
+```
+
+- Both scripts run against local pages (static DOM / ephemeral HTTP server); no active SillyTavern service is required.
+- `test-issues-9-10-forms.js` (#9 / #10) reads `tokens.css` / `components.css` directly. Optional env: `CHROME_PATH` (Chrome/Edge executable), `PLAYWRIGHT_MODULE_PATH` (`playwright-core` directory).
+- `test-issue-11-accordion.js` (#11) starts its own ephemeral server. Optional env: `ST_CHROME` (Chrome executable); `playwright-core` resolves via `NODE_PATH` or the built-in fallback.
+
 ---
 
 ## 3. Feature Inventory Coverage Matrix
@@ -52,6 +63,9 @@ Options supported:
 | F-13 | Safe migration & FAQ compliance | R3 | M3 | T1-R3-07 ~ 09 | T2-BC-15 | T3-CB-05 | T4-SC-01, 02 |
 | F-14 | 6-place version alignment to 2.5.0 | R3 | M3 | T1-R3-10 ~ 13 | T2-BC-16 | N/A | T4-SC-05 |
 | F-15 | Live SillyTavern Host & Zero Pageerror | R4 | M4 | T1-R4-01 ~ 05 | T2-BC-17 | T3-CB-06 | T4-SC-05 |
+| F-16 | Host form-control isolation (`dialog.nvui-tl` / `.nvui-panel`, 7 bounded `!important`) | Issue #9 | v2.6.0 | local `test/test-issues-9-10-forms.js` | — | — | browser context matrix (carrier × theme) |
+| F-17 | Independent `.nvui-checkbox` (16px, `:checked` / `:indeterminate`, host `::before` suppression) | Issue #10 | v2.6.0 | local `test/test-issues-9-10-forms.js` | — | — | browser context matrix |
+| F-18 | Injected accordion adoption (`trackAccordion` / `adoptAccordions`, raw keys, idempotent re-render) | Issue #11 | v2.6.0 | local `test/test-issue-11-accordion.js` | — | — | re-render / close-rebuild / CJK keys / destroy |
 
 ---
 

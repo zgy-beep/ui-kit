@@ -12,7 +12,7 @@
  *  2) 配色规范：组件禁用硬编码颜色、颜色声明走 token、深/浅主题 WCAG AA、
  *     核心 token 金标准逐值锁定，以及 v2 新增的「玻璃 AA 合成对比度」验算
  *     （sRGB 逐通道 blend：宿主最坏情况 -> overlay-bg -> glass-bg / glass-bg-strong）；
- *  3) 组件清单：components.css / preview.html / README.md 三方覆盖（78 个类名）；
+ *  3) 组件清单：components.css / preview.html / README.md 三方覆盖（79 个类名）；
  *  4) 关键实现红线：top-layer、宿主 checkbox 隔离、玻璃（backdrop-filter + -webkit- 前缀）、
  *     能力降级（@supports / .nvui-solid / prefers-reduced-transparency / forced-colors / 窄屏）、
  *     动效体系（16 个关键帧全部被引用且只改合成友好属性）、reduced-motion（含 animation-delay）、
@@ -361,8 +361,8 @@ for (const [name, p] of Object.entries(REQUIRED_FILES)) {
     check(`独立项目文件存在：${name}`, fs.existsSync(p) && fs.statSync(p).size > 10, p);
 }
 const KIT_VERSION = pkg.version;
-check('package.json 版本为合法 semver（2.5.0）',
-    /^2\.5\.0$/.test(String(KIT_VERSION)), String(KIT_VERSION));
+check('package.json 版本为合法 semver（2.6.0）',
+    /^2\.6\.0$/.test(String(KIT_VERSION)), String(KIT_VERSION));
 check('package.json 声明 MIT 许可且与 LICENSE 文件一致',
     pkg.license === 'MIT' && /^MIT License/.test(license));
 check('package.json scripts.test 指向项目内测试（可 npm test）',
@@ -756,7 +756,7 @@ console.log('\n=== 3. 组件清单（样式/预览/文档三方覆盖） ===');
 const COMPONENT_CLASSES = [
     'nvui-scope', 'nvui-sr-only', 'nvui-overlay', 'nvui-modal', 'nvui-modal-header',
     'nvui-modal-title', 'nvui-modal-ver', 'nvui-modal-actions', 'nvui-modal-body', 'nvui-modal-footer',
-    'nvui-icon-btn', 'nvui-btn', 'nvui-btn-row', 'nvui-switch-row', 'nvui-input-row', 'nvui-input',
+    'nvui-icon-btn', 'nvui-btn', 'nvui-btn-row', 'nvui-switch-row', 'nvui-checkbox', 'nvui-input-row', 'nvui-input',
     'nvui-tabs', 'nvui-tab', 'nvui-tabpane', 'nvui-tabs-indicator', 'nvui-acc', 'nvui-acc-head', 'nvui-acc-title',
     'nvui-acc-summary', 'nvui-acc-chev', 'nvui-acc-body', 'nvui-section-title', 'nvui-hint',
     'nvui-alert', 'nvui-status-line', 'nvui-status-time', 'nvui-status-file', 'nvui-badge',
@@ -773,8 +773,8 @@ const COMPONENT_CLASSES = [
     'nvui-panel', 'nvui-panel-header', 'nvui-panel-title', 'nvui-panel-actions', 'nvui-panel-body',
     'nvui-panel-footer', 'nvui-panel-heading', 'nvui-sheet-handle', 'nvui-bottom-nav', 'nvui-bottom-nav-item',
 ];
-check('COMPONENT_CLASSES 清单为 v2.2.0 的 78 个类名（53 保留 + 14 v2 新增 + 1 粘连指示器 + 10 面板布局）',
-    COMPONENT_CLASSES.length === 78 && new Set(COMPONENT_CLASSES).size === 78,
+check('COMPONENT_CLASSES 清单为 v2.6.0 的 79 个类名（53 保留 + 14 v2 新增 + 1 粘连指示器 + 10 面板布局 + 1 独立复选框）',
+    COMPONENT_CLASSES.length === 79 && new Set(COMPONENT_CLASSES).size === 79,
     `实际 ${COMPONENT_CLASSES.length} 个 / 去重 ${new Set(COMPONENT_CLASSES).size} 个`);
 const kitAllSources = [tokensClean, componentsClean, previewClean].join('\n');
 const missingInCss = COMPONENT_CLASSES.filter((c) => !containsExact(kitAllSources, '.' + c));
@@ -1380,14 +1380,70 @@ const badClassTokens = [...classTokens].filter((c) => !c.startsWith('nvui-') && 
 check('组件选择器中的类名只允许 nvui-* 与 is-* 状态类', badClassTokens.length === 0,
     badClassTokens.join(', '));
 
-const importantCount = (componentsClean.match(/!important/g) || []).length;
-check('!important 数量受控（<= 8，仅宿主隔离 + 动效降级）', importantCount <= 8,
-    `实际 ${importantCount}`);
-const importantLines = componentsClean.split(/\r?\n/).filter((l) => l.includes('!important'));
-const badImportantLines = importantLines.filter((l) =>
-    !/(::before|content:|display:|animation-|animation-delay|transition-|scroll-behavior)/.test(l));
-check('!important 只出现在宿主 ::before 隔离与 reduced-motion 降级声明上',
-    badImportantLines.length === 0, badImportantLines.slice(0, 3).join(' | '));
+/* v2.6.0：!important 预算 8 → 14，并收紧为「三类有界规则 + 精确属性值」。
+ * 14 = ① checkbox 宿主 ::before 压制 2（.nvui-checkbox 与 .nvui-switch-row 共用）
+ *      + ② reduced-motion 降级 5
+ *      + ③ 宿主表单控件隔离 7（GitHub #9；只在 dialog.nvui-tl / .nvui-panel 双载体里）
+ * 只放行下面这张清单里的「属性: 值」，不接受任意 background/color/margin，
+ * 防止预算被当成通用放行证而后门式增长。 */
+const IMPORTANT_BUDGET = 14;
+const impCount = (componentsClean.match(/!important/g) || []).length;
+check(`!important 预算 = ${IMPORTANT_BUDGET}（三类有界规则）`, impCount === IMPORTANT_BUDGET,
+    `实际 ${impCount}`);
+
+const impDeclsOf = (body) => body
+    .split(';')
+    .map((s) => s.replace(/\s+/g, ' ').trim())
+    .filter((s) => s.includes('!important'))
+    .map((s) => s.replace(/\s*!important$/, '').trim());
+const impRules = componentRules.filter((r) => /!important/.test(r.body));
+const impDeclTotal = impRules.reduce((n, r) => n + impDeclsOf(r.body).length, 0);
+
+const impRmRules = impRules.filter((r) => r.context.some((c) => /prefers-reduced-motion/.test(c)));
+/* 先摘出 reduced-motion（它的选择器也含 ::before/::after），再在剩余规则里分 ::before 与表单隔离 */
+const impNonRmRules = impRules.filter((r) => !impRmRules.includes(r));
+const impBeforeRules = impNonRmRules.filter((r) => /::before/.test(r.selector));
+const impFormRules = impNonRmRules.filter((r) => !impBeforeRules.includes(r));
+
+const impBeforeDecls = impBeforeRules.flatMap((r) => impDeclsOf(r.body));
+const impRmDecls = impRmRules.flatMap((r) => impDeclsOf(r.body));
+const impFormDecls = impFormRules.flatMap((r) => impDeclsOf(r.body));
+
+check('!important 声明总数与规则解析一致，且三类之外没有遗漏规则',
+    impDeclTotal === impCount
+    && impBeforeRules.length + impRmRules.length + impFormRules.length === impRules.length,
+    `decl=${impDeclTotal} / rules=${impRules.length}`);
+
+check('checkbox 宿主隔离只复用既有 ::before 压制（2 条，独立复选框不新增 !important）',
+    impBeforeDecls.length === 2
+    && impBeforeDecls.every((d) => ['content: none', 'display: none'].includes(d))
+    && impBeforeRules.every((r) => /\.nvui-checkbox/.test(r.selector) && /\.nvui-switch-row/.test(r.selector)),
+    impBeforeDecls.join(' | '));
+
+check('reduced-motion 降级块保持 5 条 !important',
+    impRmDecls.length === 5
+    && ['animation-duration: 0.01ms', 'animation-iteration-count: 1', 'animation-delay: 0.01ms',
+        'transition-duration: 0.01ms', 'scroll-behavior: auto'].every((d) => impRmDecls.includes(d)),
+    impRmDecls.join(' | '));
+
+const FORM_IMPORTANT_ALLOW = {
+    'background: var(--nvui-input-bg)': 1,
+    'color: var(--nvui-text)': 2,
+    'border: none': 1,
+    'margin: 0': 1,
+    'background: var(--nvui-block-bg)': 1,
+    'background: var(--nvui-bg-2)': 1,
+};
+const impFormDeclCounts = impFormDecls.reduce((acc, d) => { acc[d] = (acc[d] || 0) + 1; return acc; }, {});
+check('宿主表单隔离的 7 条 !important 只允许清单内的 token / 明确 reset 值',
+    impFormDecls.length === 7
+    && Object.keys(impFormDeclCounts).length === Object.keys(FORM_IMPORTANT_ALLOW).length
+    && Object.keys(FORM_IMPORTANT_ALLOW).every((k) => impFormDeclCounts[k] === FORM_IMPORTANT_ALLOW[k]),
+    JSON.stringify(impFormDeclCounts));
+check('宿主表单隔离只落在 dialog.nvui-tl + .nvui-panel 双载体选择器内（不外溢到全局）',
+    impFormRules.length > 0
+    && impFormRules.every((r) => /dialog\.nvui-tl/.test(r.selector) && /\.nvui-panel/.test(r.selector)),
+    impFormRules.map((r) => r.selector.replace(/\s+/g, ' ')).join(' | '));
 
 check('kit CSS/预览页不残留旧 --nv- / novel- 命名（仅 README 迁移表允许）',
     !/--nv-(?!ui)/.test(tokensClean + componentsClean + previewClean)
@@ -1628,11 +1684,11 @@ check('nvui-api 在 createPanel / showToast / openLayer 中同步宿主模态降
 check('宿主模态降级态不依赖 :modal 之外的选择器，且排除 kit 自身载体（不自我降级）',
     /dialog:modal/.test(apiSrc)
     && /classList\.contains\('nvui-tl'\)\)\s*continue/.test(apiSrc));
-check('版本号全量对齐 v2.5.0（package.json / tokens.json / tokens.css / components.css）',
-    pkg.version === '2.5.0'
-    && tokensJson.version === '2.5.0'
-    && /ui-kit v2\.5\.0/.test(tokensCss)
-    && /ui-kit v2\.5\.0/.test(componentsCss));
+check('版本号全量对齐 v2.6.0（package.json / tokens.json / tokens.css / components.css）',
+    pkg.version === '2.6.0'
+    && tokensJson.version === '2.6.0'
+    && /ui-kit v2\.6\.0/.test(tokensCss)
+    && /ui-kit v2\.6\.0/.test(componentsCss));
 // ---- 防模板漂移：st-extension-template/ui-kit/ 下每个资产文件都必须与根目录**逐文件**一致 ----
 // 历史教训：早期只校验了 nvui-api.js / components.css / tokens.css 三个文件，
 // 漏掉 tokens.json（机器可读镜像），导致副本版本号落后两版、且缺失 --nvui-z-layer
@@ -2127,6 +2183,20 @@ check('nvui-api: clearLayoutState 遇到 storage 抛错时安全吸收不穿透'
 
 check('nvui-api: createPanel 控制器导出 clearLayoutState 实例清理方法',
     /clearLayoutState:\s*panelClearLayoutState/.test(apiSrc));
+
+/* --- v2.6.0：折叠条接管入口（GitHub #11） --- */
+check('nvui-api: createPanel 控制器导出 trackAccordion / adoptAccordions（#11 公开入口）',
+    /trackAccordion:\s*[A-Za-z_$][\w$]*,/.test(apiSrc)
+    && /adoptAccordions:\s*[A-Za-z_$][\w$]*,/.test(apiSrc));
+check('nvui-api: 接管入口只挂在面板实例上（顶层 factory API 仍为 11 个，不扩张全局导出面）',
+    API_FUNCTIONS.length === 11
+    && typeof nvuiApi.trackAccordion === 'undefined'
+    && typeof nvuiApi.adoptAccordions === 'undefined');
+/* 行为契约（默认不绑点击 / 稳定键 / 幂等 / 跨面板边界 / destroy 解绑）由
+ * test/test-issue-11-accordion.js 的真实 Chromium 回归覆盖；
+ * 这里不做源码字符串镜像断言，避免阻碍内部实现重构。 */
+check('#11 浏览器回归脚本存在（test/test-issue-11-accordion.js，真实 DOM 注入场景）',
+    fs.existsSync(path.join(KIT, 'test', 'test-issue-11-accordion.js')));
 
 /* 9.7b opts.width 与 720px 黄金尺寸 & Viewport Clamping & 防抖 */
 check('nvui-api: 导出 clampPanelLayout 且默认采用 720px 黄金尺寸与 opts.width 自定义支持',
