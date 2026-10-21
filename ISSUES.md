@@ -160,8 +160,53 @@
 
 | Issue # | 模块 | 提议内容 | 目标版本 | 状态 / 评审结论 |
 | :--- | :--- | :--- | :--- | :--- |
-| [Issue #5](https://github.com/zgy-beep/ui-kit/issues/5) | 表现层持久化 | 面板与核心组件状态记忆（`persist: true`）：支持自动记忆面板宽高尺寸、分栏比例、激活 Tab 索引；支持自定义 Storage Adapter（适配酒馆 `settings.json`）；内置 250ms 防抖与视口多分辨率边界越界钳制保护 | v2.5.0 | **已排期**：设计合理，杜绝第三方插件重复编写 30~50 行胶水代码；存储 Key 严格采用 `nvui_state_${id}` 隔离 |
-| [Issue #6](https://github.com/zgy-beep/ui-kit/issues/6) | 面板头部交互 | 预置主题切换按钮（`themeToggle`）与版本更新提示按钮（`update` / `panel.showUpdate`）：规范右上角标准操作流（Actions → 主题切换 → 关闭）及左上角版本更新动态点亮入口 | v2.5.0 | **已排期**：契约对齐，统一样式与 A11y 规范，杜绝各插件在面板标题栏自行拼凑非标按钮 |
+| [Issue #5](https://github.com/zgy-beep/ui-kit/issues/5) | 表现层持久化 | 面板与核心组件状态记忆（`persist: true`）：支持自动记忆面板宽高尺寸、分栏比例、激活 Tab 索引；支持自定义 Storage Adapter（适配酒馆 `settings.json`）；内置 250ms 防抖与视口多分辨率边界越界钳制保护 | v2.5.0 | **Closed (v2.5.0)**：全量实现并实机验证。支持声明式 `persist: true` 或精细化对象配置 `{ size, tab, accordion, storage }`；内置可插拔 `StorageAdapter`（默认 localStorage 沙箱键 `nvui_state_${id}`，支持适配宿主 `extension_settings` 与 `saveSettingsDebounced`，内置 Quota 异常防护）；内置 250ms 写入防抖调度器与关闭/销毁安全冲刷（Flush）；实现多分辨率跨屏 Viewport Clamping 视口越界钳制（PC 默认 720px 黄金尺寸，移动端 <=600px 强制回退 100% 抽屉，坐标防溢出自愈）；导出全局 `NVUI.clearLayoutState(id)` 与实例级 `panel.clearLayoutState()` 清理接口。 |
+| [Issue #6](https://github.com/zgy-beep/ui-kit/issues/6) | 面板头部交互 | 预置主题切换按钮（`themeToggle`）与版本更新提示按钮（`update` / `panel.showUpdate`）：规范右上角标准操作流（Actions → 主题切换 → 关闭）及左上角版本更新动态点亮入口 | v2.5.0 | **Closed (v2.5.0)**：全量实现并实机验证。规范操作流标准次序（`.nvui-panel-actions` 严格保证 `[自定义 actions...]` -> `[themeToggle]` -> `[closeBtn]`）；预置主题切换按钮（日/月图标平滑过渡动效、直连 `NVUI.setTheme` 切换 `.nvui-theme-light` 并失效 Token 缓存、联动 `onThemeChange` 回调）；标题区预置版本更新提示胶囊（`opts.update` 静态配置与 `panel.showUpdate` 动态点亮/隐藏/更新接口）；严格遵守 WAI-ARIA APG 无障碍规范（`role="button"`, `tabindex="0"`, 键盘 Enter/Space 触发）、纯文本注入（杜绝 XSS）与 Flat Glass 无实体外描边红线。 |
+
+### v2.5.0 特性结项与关闭明细 (Feature Resolution Details)
+
+#### Issue #5: UI 表现层布局状态持久化引擎 (Layout State Persistence)
+
+- **关闭状态**: `Closed (v2.5.0)` · SemVer MINOR，100% 向后兼容，零外部 npm 依赖。
+- **关联 GitHub Issue**: https://github.com/zgy-beep/ui-kit/issues/5
+- **核心能力交付**:
+  1. **声明式状态配置**: `createPanel(opts)` 扩展支持 `persist: true`（一键全开）或对象配置 `{ size: boolean, tab: boolean, accordion: boolean, storage: StorageAdapter }`；未声明时完全向下兼容历史默认行为。
+  2. **可插拔 StorageAdapter 架构**: 抽象标准化 `get(key)` / `set(key, val)` / `delete(key)` 契约。默认使用 `window.localStorage`，键名沙箱前缀 `nvui_state_${id}`（`sanitizeIdPart` 规范化过滤）；全面包裹 try/catch，静默吸收 `QuotaExceededError` 与无痕模式受阻异常；无缝支持外部宿主适配器桥接 SillyTavern 的 `extension_settings` 与 `saveSettingsDebounced`，支持 Promise 异步回写。
+  3. **250ms 防抖写入引擎**: 高频尺寸拖拽调整、Tab 连续切换与折叠面板开合操作经 `PERSIST_DEBOUNCE_MS = 250` 防抖合并写入，面板关闭或 `destroy()` 时立即执行同步安全冲刷（Flush），消除 I/O 阻塞并彻底杜绝游离定时器泄漏。
+  4. **多分辨率跨屏 Viewport Clamping 钳制**: 实现 `clampPanelLayout` 数学模型。桌面端钳制宽在 `[min(320, vw-32), vw-32]`、高在 `[min(240, vh-32), vh-32]`，坐标防溢出自愈（安全边距 16px）；移动端（<=600px）强制清空内联固定像素，平滑回退为 100% 底部抽屉规范；窗口 `resize` 时自愈重算。
+  5. **PC 端 720px 黄金尺寸调优**: 将 `--nvui-panel-width` 默认值由 880px 调优为 720px 黄金尺寸，支持可选的 `opts.width` 自定义，经 Viewport Clamping 边界保护。
+  6. **辅助重置与清理接口**: 全局导出 `NVUI.clearLayoutState(id, storageAdapter?)` 与实例方法 `panel.clearLayoutState()`，支持一键复位存储与 DOM 表现层。
+- **核心代码落地点**:
+  - `nvui-api.js`: L983-1165 (常量、defaultStorageAdapter、clearLayoutState、getViewport、clampPanelLayout), L1195-1235 (persist 解析), L1440-1530 (防抖写入调度与事件挂载), L1582-1595 (控制器 clearLayoutState 方法), L2355 (全局 API 导出)。
+  - `tokens.css`: L45 (`--nvui-panel-width: 720px;`)。
+  - `tokens.json`: L41 (`"--nvui-panel-width": "720px"`).
+  - `components.css`: L1880-1925 (桌面与移动端抽屉规则)。
+- **测试与验证覆盖**:
+  - `test/test-ui-kit.js`: Section 9.1 (`NVUI.clearLayoutState` 导出守卫)、Section 1 (`GOLDEN_DARK` 720px 校验)。
+  - `test/test-e2e-v250.js`: T1-R1-01 ~ T1-R1-15 (功能契约)、T2-BC-01 ~ T2-BC-06 (视口钳制与防抖边缘用例)、T3-CB-01 ~ T3-CB-05 (生命周期协同)、T4-SC-01 ~ T4-SC-04 (双模式场景与 0 pageerror)。
+  - SillyTavern 宿主实机测试: `http://127.0.0.1:8000` 100% PASS，0 pageerror。
+
+#### Issue #6: 面板头部标准化增强 (Standardized Panel Header)
+
+- **关闭状态**: `Closed (v2.5.0)` · SemVer MINOR，100% 向后兼容，零规范破坏。
+- **关联 GitHub Issue**: https://github.com/zgy-beep/ui-kit/issues/6
+- **核心能力交付**:
+  1. **标准操作流次序保证**: 面板头部 `.nvui-panel-actions` 严格强制 DOM 排列次序：`[自定义 actions...]` -> `[主题切换 themeToggle]` -> `[关闭按钮 closeBtn]`。
+  2. **预置标准化主题切换按钮**: `createPanel` 支持 `themeToggle: true` 或 `{ onThemeChange, initial }`；预置太阳/月亮图标平滑过渡（180°旋转缩放淡入淡出）；直连 `NVUI.setTheme` 切换 `.nvui-theme-light` 并触发 `NVUI.invalidateTokenCache()`；动态同步 `aria-label` 与全局指示器；派发 `opts.onThemeChange` 回调。
+  3. **标题区版本更新提示胶囊**: 
+     - 静态配置: 支持 `opts.update: { version, label, onClick, url }` 在标题栏右侧展示更新胶囊。
+     - 动态点亮接口: 控制器暴露 `panel.showUpdate(updateConfig)`，支持扩展在异步检查 GitHub Releases 或后端版本后动态点亮、更新文案或隐藏（传 null）。
+  4. **WAI-ARIA APG 无障碍与 Flat Glass 红线守卫**:
+     - 更新胶囊结构为 `<span class="nvui-badge is-accent nvui-update-pill" role="button" tabindex="0">`，键盘 Tab 可聚焦，支持 Enter 与 Space 键激活。
+     - 注入内容严格采用 `textContent` 与标准 URL 协议白名单校验，彻底阻断 XSS 注入通道。
+     - 严格遵循 Flat Glass 扁平优先原则：仅采用 `var(--nvui-accent-bg)` 与 `var(--nvui-accent-2)`，**严禁添加 1px 实体外描边**；聚焦态使用统一 `--nvui-focus-ring-*` 焦点环。
+- **核心代码落地点**:
+  - `nvui-api.js`: L1244-1331 (`showUpdate` 接口与更新胶囊渲染), L1333-1342 (头部操作流标准排序), L1343-1385 (`themeToggle` 按钮创建、动效与事件联动)。
+  - `components.css`: L1927-1950 (`.nvui-theme-toggle` 按钮动效与悬浮态), L1951-2005 (`.nvui-update-pill` 扁平无边框样式与 focus-visible 焦点环), L2278/2308/2338 (reduced-motion 降级适配)。
+- **测试与验证覆盖**:
+  - `test/test-ui-kit.js`: Section 9.2 (头部操作流次序静态断言、`showUpdate` 导出断言、无 innerHTML 断言)。
+  - `test/test-e2e-v250.js`: T1-R2-01 ~ T1-R2-18 (功能契约)、T2-BC-07 ~ T2-BC-12 (边界用例)、T3-CB-01 ~ T3-CB-05 (生命周期协同)、T4-SC-01 ~ T4-SC-04 (实机场景)。
+  - SillyTavern 宿主实机测试: `http://127.0.0.1:8000` 100% PASS，0 pageerror。
 
 ---
 

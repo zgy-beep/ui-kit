@@ -6,6 +6,43 @@
 - 新增组件 / 新增 token（不破坏既有 DOM 与取值）：小版本（2.x.0）
 - 重命名类 / token、删除 token、修改 DOM 契约：大版本（x.0.0）
 
+## v2.5.0（2026-10-21）· [2.5.0] - 2026-10-21 布局状态持久化与面板头部标准化
+
+> 本版本为 SemVer 小版本（MINOR），保持 **100% 向后兼容与 0 破坏性变更**，零外部 npm 运行时依赖。
+> 交付 UI 表现层布局状态持久化引擎（Issue #5）、面板头部标准化增强（Issue #6）、电脑端 720px 黄金尺寸调优，并提供双载体调用范式与平滑升级指南。
+
+### R1. UI 表现层布局状态持久化引擎（Layout State Persistence · Issue #5）
+- **声明式持久化配置**：`createPanel(options)` 支持 `persist: true` 或精细化对象 `{ size, tab, accordion, storage }`，自动记忆面板宽高尺寸、最大化状态、当前激活 Tab Key 与折叠面板（Accordion）开合；
+- **可插拔 StorageAdapter**：默认采用浏览器 `window.localStorage`（沙箱键名前缀 `nvui_state_${id}`），支持传入自定义 `get/set/delete` 适配宿主 `extension_settings` 与 `saveSettingsDebounced`；内置 QuotaExceededError 与无痕模式静默降级；
+- **250ms 写入防抖引擎**：高频尺寸调整、连续切 Tab 与折叠变动自动合并，面板关闭或 `destroy()` 时安全冲刷（Flush），消除 I/O 震荡与游离定时器；
+- **跨分辨率多屏视口越界钳制 (Viewport Clamping)**：4K 切换至笔记本/移动端时自动安全钳制尺寸与坐标，移动端（<=600px）强制回退为 100% 底部抽屉，确保标题栏与关闭按钮绝对可达；
+- **清理与重置接口**：全局导出 `NVUI.clearLayoutState(id, storageAdapter?)` 与实例级 `panel.clearLayoutState()`，支持一键复位。
+
+### R2. 面板头部标准化增强（Standardized Panel Header · Issue #6）
+- **标准操作流次序**：标题栏右上角严格保证 `[自定义 actions...]` -> `[主题切换 themeToggle]` -> `[关闭按钮 closeBtn]` 的标准次序；
+- **预置主题切换按钮 (`themeToggle`)**：支持 `themeToggle: true` 或 `{ onThemeChange, initial }`，提供太阳/月亮平滑动效过渡，直连 `NVUI.setTheme`，联动全局指示器与 `onThemeChange` 回调；
+- **版本更新提示胶囊 (`update` / `showUpdate`)**：
+  - `createPanel` 支持静态 `opts.update: { version, label, url, onClick }`；
+  - 控制器实例暴露 `panel.showUpdate(updateConfig)`，供插件在异步检查 GitHub Releases 或后端版本后动态点亮、更新或隐藏（传 null）更新胶囊；
+- **A11y 与 Flat Glass 红线守卫**：更新胶囊具备 `role="button"`, `tabindex="0"`, 键盘 Enter/Space 激活支持；纯文本注入杜绝 XSS；严格遵守扁平优先无描边红线。
+
+### 720px 黄金比例面板宽度（Desktop Golden Ratio Width）
+- **设计令牌调优**：`tokens.css` 与 `tokens.json` 中的 `--nvui-panel-width` 默认值由 `880px` 调整为 `720px` 黄金尺寸，消除 PC 宽屏留白，视野更紧凑；
+- **运行时支持**：`createPanel(opts)` 补充支持可选的 `opts.width` 自定义宽度参数（默认继承 720px），并经由 Viewport Clamping 钳制。
+
+### R3. 全套用户调用与平滑升级指南（Docs & Calling Guide）
+- **双载体调用范式**：
+  - SillyTavern 标准模块化扩展（ESM）：演示结合 `extension_settings`、`saveSettingsDebounced` 的 StorageAdapter 构造、异步检查 GitHub Release 动态点亮与头部协同；
+  - 酒馆助手单文件用户脚本（Tavern Helper / 纯 IIFE 零构建）：演示 CDN 加载运行时、一键开启 `persist: true` 与 `themeToggle: true` 的极简范式；
+- **平滑升级指南与 FAQ**：发布 v2.2~v2.4 -> v2.5.0 安全覆盖清单，解答存储键冲突、视口重置与防抖回写等疑难；
+- **文档与模板对齐**：更新 `README.md`、`AI-GUIDE.md`、`st-extension-template` 与 `preview.html`；
+- **六处版本一致性声明**：`package.json`, `tokens.json`, `tokens.css`, `components.css`, `nvui-api.js`, `README.md`, `AI-GUIDE.md` 原子对齐为 `2.5.0`，模板 4 资产 MD5 逐字节一致。
+
+### R4. 自动化规范守卫与端到端宿主实机验证（Contract Guards & E2E Tests）
+- **规范契约守卫扩充**：`test/test-ui-kit.js` 扩充 v2.5.0 API 导出守卫、防抖与视口钳制数学验证、GOLDEN_DARK 720px 校验，340+ 测试 100% PASS；
+- **真实 SillyTavern 宿主实机验证**：在 `http://127.0.0.1:8000` 自动化实测状态持久化恢复、跨屏钳制、主题切换与动态更新点亮，控制台保持 0 pageerror；
+- **关闭历史议题**：同步关闭 GitHub Issues #5 与 #6。
+
 ## v2.4.0（2026-10-21）· 深度加固与实机渗透修复批次（22 项缺陷）
 
 > 涵盖 2026-10-21 系统性 Review 第一轮（NEW-25 ~ NEW-34）与第二轮专家团队深度加固（NEW-35 ~ NEW-46）。

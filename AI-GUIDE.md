@@ -1,6 +1,6 @@
 # AI 协作设计指南 · 用 SillyTavern NVUI Kit 规范设计面板
 
-> 版本：**v2.4.0** · 适用对象：SillyTavern 插件开发者、其它软件项目、以及被要求「按规范生成/修改界面」的 AI 编码助手。
+> 版本：**v2.5.0** · 适用对象：SillyTavern 插件开发者、其它软件项目、以及被要求「按规范生成/修改界面」的 AI 编码助手。
 > 配套文件：[tokens.css](tokens.css)（设计令牌）、[components.css](components.css)（组件样式）、[README.md](README.md)（完整规范）、[nvui-api.js](nvui-api.js)（零依赖运行时 API）、[tokens.json](tokens.json)（令牌机器可读镜像）、[test/test-ui-kit.js](test/test-ui-kit.js)（规范守护测试）。
 
 本文档回答两个问题：
@@ -43,7 +43,7 @@
 
 | 场景 | 推荐形态 |
 | :--- | :--- |
-| 设置页、图库、请求历史等多分区功能 | **面板布局标准**：`dialog.nvui-tl > .nvui-overlay.is-panel > .nvui-panel`（电脑居中 880×88vh / 手机底部抽屉 100%×92dvh + 底部导航） |
+| 设置页、图库、请求历史等多分区功能 | **面板布局标准**：`dialog.nvui-tl > .nvui-overlay.is-panel > .nvui-panel`（电脑居中 720×88vh / 手机底部抽屉 100%×92dvh + 底部导航） |
 | 轻量确认、单表单 | `.nvui-modal`（弹窗骨架，README §2.3） |
 | 操作反馈 | `NVUI.showToast` / `.nvui-toast`（放在 `dialog.nvui-tl` 载体内） |
 | 常驻入口/小工具窗 | `.nvui-floating`（drag 逻辑业务侧实现） |
@@ -118,7 +118,7 @@ var panel = NVUI.createPanel({
 - `destroy`：面板销毁时的清理回调（解绑业务监听、清理定时器）。
 - 面板需彻底移除时调用 `panel.destroy()`：移除 DOM、注销全局 Esc 监听、触发 `destroy` 回调。
 
-> **单文件 / 酒馆助手脚本提示**：若是单文件用户脚本（不能拷贝本地文件夹），可通过 CDN 动态加载样式与 JS API（`https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.4.0/nvui-api.js`，完整配方见 `README.md` §2.1.3），然后同样使用 `NVUI.createPanel` 生成，全自动满足规范。
+> **单文件 / 酒馆助手脚本提示**：若是单文件用户脚本（不能拷贝本地文件夹），可通过 CDN 动态加载样式与 JS API（`https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.5.0/nvui-api.js`，完整配方见 `README.md` §2.1.3），然后同样使用 `NVUI.createPanel` 生成，全自动满足规范。
 
 > **ST 扩展直接开箱用**：`st-extension-template/` 是一份已在本机真实 ST 宿主验证过的扩展骨架
 > （`manifest.json` / `index.js` / `style.css` + `ui-kit/`）。复制到
@@ -202,6 +202,206 @@ JS 只需三件事：非模态 `show()`/关闭收尾（README §2.3）、tabs �
 - 忘记 `aria-selected`/`aria-current`/`aria-expanded` 同步；
 - 关闭按钮没有 `aria-label`、关闭后不归还焦点。
 
+### 2.6 v2.5.0 核心能力与即抄即用模板
+
+v2.5.0 引入了三大核心生产力能力：
+1. **表现层布局持久化（R1）**：声明式 `persist: true` 或精细化对象，记忆面板尺寸、位置、当前激活 Tab 及折叠状态，内置 250ms 防抖与多屏幕视口越界安全钳制（Viewport Clamping）；
+2. **面板头部标准化（R2）**：右上角预置主题切换按钮（`themeToggle: true`，平滑太阳/月亮图标过渡，直连 `NVUI.setTheme`），标题区预置版本更新胶囊与 `panel.showUpdate()` 动态点亮接口；
+3. **720px 黄金面板宽度**：电脑端面板默认宽度优化为 720px（`--nvui-panel-width: 720px`），大幅改善阅读视野，支持 `opts.width` 自定义。
+
+#### 模板 A：SillyTavern 标准模块化扩展（ESM，即抄即用）
+
+适用于 SillyTavern 官方标准扩展开发（`public/scripts/extensions/third-party/<name>/index.js`），无缝整合宿主 `extension_settings`、防抖写盘与异步更新检测：
+
+```javascript
+/**
+ * SillyTavern 标准扩展规范模板（v2.5.0）
+ */
+import { getContext, extension_settings as extensionSettings } from '../../../extensions.js';
+import { saveSettingsDebounced } from '../../../../script.js';
+import './ui-kit/nvui-api.js';
+
+const EXTENSION_NAME = 'my_awesome_plugin';
+
+// 1. 读取或初始化扩展设置（必须实时读取，严禁缓存快照）
+function getSettings() {
+    const all = extensionSettings || {};
+    if (!all[EXTENSION_NAME]) {
+        all[EXTENSION_NAME] = {
+            version: '2.5.0',
+            theme: 'dark',
+            enabled: true,
+            layoutState: {}
+        };
+    }
+    return all[EXTENSION_NAME];
+}
+
+let panel = null;
+
+export function getPanel() {
+    if (panel) return panel;
+    if (typeof NVUI === 'undefined' || typeof NVUI.createPanel !== 'function') {
+        console.error(`[${EXTENSION_NAME}] NVUI 运行时未就绪`);
+        return null;
+    }
+
+    const settings = getSettings();
+
+    // 2. 构造适配 SillyTavern 宿主的 StorageAdapter
+    const stStorageAdapter = {
+        get: (key) => settings.layoutState?.[key] || null,
+        set: (key, val) => {
+            if (!settings.layoutState) settings.layoutState = {};
+            settings.layoutState[key] = val;
+            saveSettingsDebounced(); // 触发宿主安全防抖写盘
+        },
+        delete: (key) => {
+            if (settings.layoutState && key in settings.layoutState) {
+                delete settings.layoutState[key];
+                saveSettingsDebounced();
+            }
+        }
+    };
+
+    // 3. 声明式装配面板（720px 默认宽度，开启持久化与主题切换）
+    panel = NVUI.createPanel({
+        id: 'my_awesome_panel',
+        title: '高级插件设置',
+        version: 'v2.5.0',
+        focusFallback: '#extensionsMenuButton', // 焦点归还兜底
+
+        // R1: 状态持久化（绑定宿主 StorageAdapter）
+        persist: {
+            size: true,
+            tab: true,
+            accordion: true,
+            storage: stStorageAdapter
+        },
+
+        // R2: 标准化头部控制流（预置日/月平滑主题切换）
+        themeToggle: true,
+        onThemeChange: (theme) => {
+            settings.theme = theme;
+            saveSettingsDebounced();
+        },
+
+        tabs: [
+            { key: 'general', label: '通用设置', icon: 'fa-solid fa-sliders' },
+            { key: 'advanced', label: '核心配置', icon: 'fa-solid fa-gear' }
+        ],
+        footer: [
+            { label: '关闭', variant: 'ghost', close: true }
+        ]
+    });
+
+    // 装配内容分区
+    panel.addSwitch('general', {
+        label: '启用插件主特性',
+        value: !!settings.enabled,
+        feature: true,
+        onChange: (v) => { settings.enabled = v; saveSettingsDebounced(); }
+    });
+
+    panel.addAccordion('advanced', {
+        title: '性能调优',
+        summary: '默认参数',
+        content: [
+            panel.addInput('advanced', { label: '并发任务上限', type: 'number', value: 4 })
+        ]
+    });
+
+    // 4. 异步检查 GitHub Release 并动态点亮更新胶囊
+    checkGitHubRelease().then(releaseInfo => {
+        if (releaseInfo && releaseInfo.hasUpdate) {
+            panel.showUpdate({
+                version: releaseInfo.version,
+                label: `新版本 ${releaseInfo.version} 可用`,
+                url: releaseInfo.url
+            });
+        }
+    });
+
+    return panel;
+}
+
+// 异步探测远端版本
+async function checkGitHubRelease() {
+    try {
+        const res = await fetch('https://api.github.com/repos/my-org/my-plugin/releases/latest');
+        if (!res.ok) return null;
+        const data = await res.json();
+        const latestTag = data.tag_name || '';
+        return {
+            hasUpdate: latestTag !== 'v2.5.0',
+            version: latestTag,
+            url: data.html_url
+        };
+    } catch {
+        return null;
+    }
+}
+```
+
+#### 模板 B：酒馆助手单文件用户脚本（Tavern Helper / 纯 IIFE 零构建，即抄即用）
+
+适用于 Tampermonkey、油猴脚本或单文件免构建场景，通过 CDN 加载 Kit，极简一行开启持久化与主题切换：
+
+```javascript
+// ==UserScript==
+// @name         SillyTavern Helper Tool
+// @match        http://127.0.0.1:8000/*
+// @grant        none
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+    // 1. 动态载入 Flat Glass 样式与运行时（国内高速 CDN）
+    const CDN_BASE = 'https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.5.0';
+    const appendCss = (href) => {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet'; link.href = href;
+        document.head.appendChild(link);
+    };
+    appendCss(`${CDN_BASE}/tokens.css`);
+    appendCss(`${CDN_BASE}/components.css`);
+
+    const script = document.createElement('script');
+    script.src = `${CDN_BASE}/nvui-api.js`;
+    script.onload = () => {
+        // 2. 一键开启 persist: true 与 themeToggle: true
+        const panel = NVUI.createPanel({
+            id: 'tavern_helper_panel',
+            title: '酒馆助手工具箱',
+            version: 'v2.5.0',
+            persist: true,     // 默认使用 localStorage (键名: nvui_state_tavern_helper_panel)
+            themeToggle: true, // 预置主题切换按钮
+            tabs: [
+                { key: 'quick', label: '快捷指令', icon: 'fa-solid fa-bolt' },
+                { key: 'about', label: '关于助手', icon: 'fa-solid fa-circle-info' }
+            ]
+        });
+
+        panel.addSwitch('quick', { label: '启用快捷连吹模式', value: true, feature: true });
+        panel.addSectionTitle('about', 'SillyTavern Helper v2.5.0');
+
+        // 3. 悬浮触发按钮
+        const trigger = document.createElement('button');
+        trigger.className = 'nvui-btn is-primary';
+        trigger.textContent = '工具箱';
+        trigger.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:99999;box-shadow:var(--nvui-shadow-floating);';
+        trigger.onclick = () => panel.open();
+        document.body.appendChild(trigger);
+    };
+    document.head.appendChild(script);
+})();
+```
+
+#### 720px 黄金尺寸令牌与宽度选项说明
+- `--nvui-panel-width: 720px`（定义在 `tokens.css` 与 `tokens.json`）：经过人体工学与真实酒馆界面视线分布测试，720px 比原 880px 更加紧凑舒适，彻底杜绝大屏幕两侧空旷无内容的割裂感。
+- `createPanel(opts)` 支持传入 `opts.width`（如 `width: 640` 或 `width: 760`）：运行时引擎会基于 Viewport Clamping 将自定义宽度钳制在屏幕可用安全区内；手机端（<=600px）强制回退为 100% 抽屉模式。
+
 ---
 
 ## 3. 其它软件如何规范复用
@@ -250,7 +450,7 @@ JS 只需三件事：非模态 `show()`/关闭收尾（README §2.3）、tabs �
 
 要求：
 1. 形态：面板布局标准（dialog.nvui-tl > .nvui-overlay.is-panel > .nvui-panel）；
-   电脑居中（宽 min(880px,100%)、高 88vh），手机（<=600px）自动底部抽屉 + 底部图标导航 + safe-area；
+   电脑居中（宽 min(720px,100%)、高 88vh），手机（<=600px）自动底部抽屉 + 底部图标导航 + safe-area；
 2. 分区：<列出 3~5 个 tab，含每个 tab 的设置项>；
 3. 内容：分区标题+版本徽标、最多 1 条 is-feature 高亮开关、其余用 .nvui-acc 折叠分组（每组带 summary）；
 4. 导航：同一份状态同步顶部 tabs / 手机底部导航 / tabpane 的 is-active、aria-selected、aria-current、tabindex；
@@ -263,7 +463,7 @@ JS 只需三件事：非模态 `show()`/关闭收尾（README §2.3）、tabs �
 ### 4.2 审查/修改现有界面
 
 ```text
-请按「SillyTavern NVUI Kit v2.4.0」规范审查下面的插件界面代码：
+请按「SillyTavern NVUI Kit v2.5.0」规范审查下面的插件界面代码：
 - 列出违反项（类名/token/宿主红线/a11y/动效降级/布局标准），按 README 章节标注依据；
 - 给出最小 diff 修复（不要整体重写），保持既有功能；
 - 特别检查：是否用了 showModal/裸 fixed、是否双导航/双滚动层、是否有硬编码颜色或 emoji、折叠展开是否改变面板外框、标签页是否重建 DOM；
@@ -273,7 +473,7 @@ JS 只需三件事：非模态 `show()`/关闭收尾（README §2.3）、tabs �
 ### 4.3 迁移其它软件
 
 ```text
-把项目 X 的界面迁移到 SillyTavern NVUI Kit v2.4.0：
+把项目 X 的界面迁移到 SillyTavern NVUI Kit v2.5.0：
 - 复制 tokens.css / components.css / nvui-api.js / tokens.json；
 - 将品牌色映射到 --nvui-accent*（只改 token，不改组件规则）；
 - 按「面板布局标准」重组设置页（电脑居中 / 手机底部抽屉）；
@@ -287,9 +487,11 @@ JS 只需三件事：非模态 `show()`/关闭收尾（README §2.3）、tabs �
 
 | API | 说明 |
 | :--- | :--- |
-| `NVUI.version` | Kit/API 版本（2.4.0） |
+| `NVUI.version` | Kit/API 版本（2.5.0） |
 | `NVUI.getToken(name)` | 读取当前作用域的设计令牌值 |
 | `NVUI.setTheme('light'|'dark', { solid })` | 切换浅色 / 实心扁平模式（只切类名） |
+| `NVUI.clearLayoutState(id, storageAdapter)` | 清理指定面板在持久化存储中的尺寸/位置/状态记忆 |
+| `NVUI.clampPanelLayout(savedSize, savedPos, options)` | 跨屏幕多分辨率视口越界钳制计算引擎（保证桌面与移动端安全贴边，避免关闭按钮不可达） |
 | `NVUI.syncGlassFallback()` | 宿主全局禁用 `backdrop-filter` 时自动挂 `.nvui-solid` 实心回退（`createPanel`/`showToast` 已内置） |
 | `NVUI.openLayer(dialog, overlay)` / `closeLayer(dialog, overlay, cb)` | 非模态浮层载体开合（含退场动画收尾） |
 | `NVUI.countHostModals()` | 统计当前文档处于模态状态的**宿主**原生 `<dialog>` 数量（用 `:modal` 伪类，自动排除 kit 自身载体） |
@@ -299,7 +501,7 @@ JS 只需三件事：非模态 `show()`/关闭收尾（README §2.3）、tabs �
 | `NVUI.inputRow({ label, type, value, min, max, step, onChange })` | 输入行（number 默认隐藏原生步进按钮） |
 | `NVUI.accordion({ title, summary, open, content })` | 折叠分组 |
 | `NVUI.progress({ value, variant, indeterminate })` | 进度条（返回元素带 `setValue`） |
-| `NVUI.createPanel(options)` | 完整面板（见 §2.2），返回 `{ open, close, destroy, setTab, syncIndicator, addSwitch, addInput, addAccordion, addProgress, addNode, addSectionTitle }` |
+| `NVUI.createPanel(options)` | 完整面板（见 §2.2），支持 persist/themeToggle/onThemeChange/update/width 等，返回 `{ open, close, destroy, setTab, syncIndicator, addSwitch, addInput, addAccordion, addProgress, addNode, addSectionTitle, showUpdate, clearLayoutState, setSize, setMaximized }` |
 | `NVUI.showToast({ message, type, duration, icon })` | 吐司通知（自动建独立载体、自动清理） |
 
 > API 是**可选**的：不用 JS 时，手写 DOM + CSS 同样有效；API 只是把布局标准与无障碍细节固化成可复用函数。
@@ -317,7 +519,8 @@ JS 只需三件事：非模态 `show()`/关闭收尾（README §2.3）、tabs �
 
 ### 6.2 历史版本与兼容基准
 
-- 当前：**v2.4.0**（浮层载体完善：宿主模态让位机制 `.is-host-modal` + 3 个宿主模态 API；110 令牌不变，无破坏性变更）。
-- 上一版：**v2.3.0**（浮层载体层级修复：新增 `--nvui-z-layer: 1000000` 载体档位）。
+- 当前：**v2.5.0**（表现层布局持久化 + 面板头部标准化 + 720px 黄金尺寸；0 破坏性变更，100% 向后兼容）。
+- 上一版：**v2.4.0**（浮层载体完善：宿主模态让位机制 `.is-host-modal` + 3 个宿主模态 API；110 令牌不变，无破坏性变更）。
+- 历史版本：**v2.3.0**（浮层载体层级修复：新增 `--nvui-z-layer: 1000000` 载体档位）。
 - Kit 变更遵循语义化版本；升级前先跑 `node test/test-ui-kit.js`，并对照 README §10.3–§10.9 的迁移说明。
 - 发现规范缺口：优先补测试与文档，再改 CSS；不要用「看起来能跑」代替规范检查。

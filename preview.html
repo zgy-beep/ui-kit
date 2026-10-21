@@ -3,9 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SillyTavern UI Kit v2.4.0 · Flat Glass 组件预览</title>
+<title>SillyTavern UI Kit v2.5.0 · Flat Glass 组件预览</title>
 <!--
-  SillyTavern 插件通用 UI Kit v2.4.0「Flat Glass」组件预览页
+  SillyTavern 插件通用 UI Kit v2.5.0「Flat Glass」组件预览页
+  ------------------------------------------------------------------
+  v2.5.0 新增（2026-10-21）：
+  ① 表现层布局状态持久化（R1 · Issue #5）：createPanel 支持 persist: true，自动记忆
+  尺寸/位置/tab/折叠，内置 250ms 防抖与多屏幕视口越界安全钳制（Viewport Clamping）；
+  ② 面板头部标准化（R2 · Issue #6）：右上角预置主题切换按钮（themeToggle: true，
+  平滑图标过渡，直连 NVUI.setTheme），标题区预置版本更新胶囊与 panel.showUpdate 动态点亮接口；
+  ③ 电脑端面板宽度优化为 720px 黄金尺寸（--nvui-panel-width: 720px），支持 opts.width。
   ------------------------------------------------------------------
   v2.0.1 修订（2026-10-17，用户反馈迭代）：玻璃更通透（弹窗级 0.64 / popover 级 0.80，
   受光边 0.06 / 内高光 0.04，blur 20px / 12px，saturate 150%）；新增 nvui-tabpane-in 与
@@ -19,13 +26,13 @@
   临时恢复完整动效（生产代码必须继续尊重系统偏好，不要照抄 preview 的覆盖）。
   ------------------------------------------------------------------
   v2.1.0 新增（2026-10-17 23:12）：SillyTavern 插件面板布局标准（桌面居中面板 / 手机底部抽屉），
-  新增 10 个组件类（组件类 68→78）与 2 个尺寸令牌（--nvui-panel-width 880px / --nvui-panel-max-h 88vh，
+  新增 10 个组件类（组件类 68→78）与 2 个尺寸令牌（--nvui-panel-width 720px / --nvui-panel-max-h 88vh，
   令牌 107→109）；第 18 节含可打开的真实面板 demo，支持 ?panel=1 载入即开。只参考参考图的排列结构，
   皮肤一律使用本 Kit 的 Flat Glass（紫色强调），不复刻他插件皮肤。
   ------------------------------------------------------------------
   v2.1.1 修订（2026-10-17 23:26，用户反馈）：全部描边再减弱减细（分隔线 line 0.05 / line-2 0.08 /
   dash 0.14、块边 0.04、玻璃受光边 0.03、内高光 0.03）；输入框聚焦改为「单圈 1.5px 焦点环」
-  （焦点环宽度 token 2px→1.5px，不再叠加内圈描边）；面板改为固定尺寸（桌面 880×88vh / 手机 92dvh），
+  （焦点环宽度 token 2px→1.5px，不再叠加内圈描边）；面板改为固定尺寸（桌面 720×88vh / 手机 92dvh），
   折叠展开与切换 tab 都不改变外框；.nvui-panel-body 与 .nvui-modal-body 隐藏滚动条但保留滚动能力。
   ------------------------------------------------------------------
   v2.2.0 迭代（2026-10-17 23:40，用户反馈「描边锯齿 + 需要设计调用 API」）：
@@ -1109,7 +1116,7 @@
         <div class="pv-hero-main">
             <h1>
                 <span>SillyTavern UI Kit</span>
-                <span class="nvui-badge is-accent">v2.4.0</span>
+                <span class="nvui-badge is-accent">v2.5.0</span>
                 <span class="nvui-badge">Flat Glass</span>
             </h1>
             <p class="nvui-hint pv-hero-sub">
@@ -2300,7 +2307,7 @@
                         <li>分区导航：电脑用顶部 <code class="nvui-code">.nvui-tabs</code>（5 个 role=tab，共享 <code class="nvui-code">.nvui-tabs-indicator</code> 粘连指示器）；手机隐藏顶部 tabs，改用底部 <code class="nvui-code">.nvui-bottom-nav</code> 图标导航。</li>
                         <li>可滚动内容 <code class="nvui-code">.nvui-panel-body</code>：<code class="nvui-code">.nvui-panel-heading</code>（分区标题 + 版本 <code class="nvui-code">.nvui-badge</code>）→ <code class="nvui-code">.nvui-switch-row.is-feature</code> 高亮功能行 → 6 个 <code class="nvui-code">.nvui-acc</code> 折叠分组（基本设置 / 副 API / 自动生成 tag / 排除角色 / 排除世界书内容 / 自定义提示词）。</li>
                         <li>可选底部操作区 <code class="nvui-code">.nvui-panel-footer</code>（取消 / 保存）；手机端底部导航自动叠加 <code class="nvui-code">env(safe-area-inset-bottom)</code>。</li>
-                        <li>固定尺寸防跳变（v2.1.1）：面板桌面宽 <code class="nvui-code">min(880px, 100%)</code>、高 <code class="nvui-code">88vh</code>；手机全宽、高 <code class="nvui-code">92dvh</code> —— 折叠/展开、切换 tab 都不会改变外框。<code class="nvui-code">.nvui-panel-body</code> 是唯一滚动层，滚动条已隐藏（仍可滚动，内容超高时内部滚动）。</li>
+                        <li>固定尺寸防跳变（v2.1.1 / v2.5.0）：面板桌面宽 <code class="nvui-code">min(720px, 100%)</code>、高 <code class="nvui-code">88vh</code>；手机全宽、高 <code class="nvui-code">92dvh</code> —— 折叠/展开、切换 tab 都不会改变外框。<code class="nvui-code">.nvui-panel-body</code> 是唯一滚动层，滚动条已隐藏（仍可滚动，内容超高时内部滚动）。</li>
                         <li>无障碍：panel 用 role="dialog" aria-modal="true" aria-labelledby；顶部 tabs 用 tablist/tab/tabpanel；底部导航用 nav + button，激活项 <code class="nvui-code">aria-current="page"</code>，两套导航共用同一份 JS 同步 active 状态与 tabpane。</li>
                     </ol>
                 </div>
@@ -2308,7 +2315,7 @@
                     <h3 class="pv-sub-title">结构示意（桌面 1440 / 手机 390，同一 DOM）</h3>
                     <div class="pv-layout-grid">
                         <div class="pv-layout-card">
-                            <h4 class="pv-layout-card-title">电脑 &gt;600px：居中面板（880px 宽，最大 88vh）</h4>
+                            <h4 class="pv-layout-card-title">电脑 &gt;600px：居中面板（720px 宽，最大 88vh）</h4>
                             <div class="pv-wire">
                                 <div class="pv-wire-row is-header">
                                     <span>标题栏</span><b>SillyTavern 插件面板</b>
@@ -2368,7 +2375,7 @@
                         顶部 tabs 与手机底部导航共享 active 状态与 tabpane（aria-selected / aria-current 同步）；
                         关闭支持 Esc / 点遮罩 / × 按钮，焦点回到触发按钮；
                         内容区由 .nvui-panel-body 独立滚动，页面本身不锁滚动。
-                        v2.1.1：面板固定尺寸（桌面宽 min(880px,100%) × 高 88vh；手机全宽 × 高 92dvh），
+                        v2.1.1 / v2.5.0：面板固定尺寸（桌面宽 min(720px,100%) × 高 88vh；手机全宽 × 高 92dvh），
                         折叠/展开、切换 tab 都不会改变外框；panel-body 隐藏滚动条但保留滚动能力。
                     </p>
                 </div>
@@ -2426,33 +2433,34 @@
                     </div>
                 </div>
                 <div class="pv-demo">
-                    <h3 class="pv-sub-title">真实 API 演示（由 ./nvui-api.js 生成）</h3>
+                    <h3 class="pv-sub-title">真实 API 演示（由 ./nvui-api.js 生成 · v2.5.0）</h3>
                     <div class="nvui-btn-row">
                         <button type="button" class="nvui-btn is-primary" id="pv-api-open-panel">用 API 打开面板</button>
+                        <button type="button" class="nvui-btn is-secondary" id="pv-api-show-update">动态点亮更新徽标</button>
+                        <button type="button" class="nvui-btn is-secondary" id="pv-api-clear-update">清除更新徽标</button>
                         <button type="button" class="nvui-btn is-secondary" id="pv-api-toast">API 吐司</button>
+                        <button type="button" class="nvui-btn is-ghost" id="pv-api-clear-state">重置布局记忆</button>
                     </div>
                     <p class="nvui-hint pv-api-status" id="pv-api-status" role="status">
-                        「用 API 打开面板」调用 NVUI.createPanel 生成「基本 / 关于」两个 tab，并插入 feature 开关、
-                        折叠分组与输入行；「API 吐司」调用 NVUI.showToast。也可用
-                        <code class="nvui-code">?api=1</code> 载入即打开 API 面板（供截图/审核）。
+                        点击「用 API 打开面板」体验 v2.5.0 布局持久化（记忆尺寸与 Tab）、右上角主题切换按钮与 720px 黄金宽度；
+                        点击「动态点亮更新徽标」测试 panel.showUpdate() 动态插入与 A11y；
+                        点击「重置布局记忆」测试 NVUI.clearLayoutState()。
                     </p>
-                    <pre class="pv-code-block">// 最小用法（浏览器，需先 &lt;script src="./nvui-api.js"&gt;&lt;/script&gt;）
+                    <pre class="pv-code-block">// v2.5.0 极简调用（具备持久化、主题切换与动态更新）
 var panel = NVUI.createPanel({
     id: 'pv-api-panel',
     title: 'API 生成的面板',
-    version: 'v2.2.0',
+    version: 'v2.5.0',
+    persist: true,         // 一键开启尺寸、Tab 与折叠记忆
+    themeToggle: true,     // 预置头部日/月平滑主题切换按钮
     tabs: [{ key: 'basic', label: '基本' }, { key: 'about', label: '关于' }],
     footer: [{ label: '关闭', variant: 'ghost', close: true }]
 });
 panel.addSwitch('basic', { label: 'API 生成的开关', value: true, feature: true });
-panel.addAccordion('basic', {
-    title: 'API 生成的折叠',
-    summary: '摘要：由 NVUI.createPanel 生成',
-    open: true,
-    content: [panel.addInput('basic', { label: 'API 生成的输入行', type: 'number', value: 80 })]
-});
 panel.open();
-NVUI.showToast({ message: '由 NVUI API 生成的吐司', type: 'success' });</pre>
+
+// 异步动态点亮更新胶囊
+panel.showUpdate({ version: 'v2.5.0', label: '新版本 v2.5.0 可用', url: 'https://github.com/zgy-beep/ui-kit/releases' });</pre>
                 </div>
                 <div class="pv-demo">
                     <h3 class="pv-sub-title">给 AI / 其它软件的使用方式</h3>
@@ -3256,7 +3264,12 @@ NVUI.showToast({ message: '由 NVUI API 生成的吐司', type: 'success' });</p
         var panel = NVUI.createPanel({
             id: 'pv-api-panel',
             title: 'API 生成的面板',
-            version: 'v2.2.0',
+            version: 'v2.5.0',
+            persist: true,         // v2.5.0 声明式持久化
+            themeToggle: true,     // v2.5.0 头部预置主题切换
+            onThemeChange: function (theme) {
+                setApiStatus('面板头部主题切换触发：已切换为 ' + (theme === 'light' ? '浅色主题' : '深色主题'));
+            },
             tabs: [
                 { key: 'basic', label: '基本' },
                 { key: 'about', label: '关于' }
@@ -3278,8 +3291,8 @@ NVUI.showToast({ message: '由 NVUI API 生成的吐司', type: 'success' });</p
         var aboutText = document.createElement('p');
         aboutText.className = 'pv-on-glass';
         aboutText.textContent = '这个面板由 ./nvui-api.js 的 NVUI.createPanel() 在运行时生成：' +
-            '自动包含 dialog.nvui-tl 顶层载体、role=dialog / aria-modal、桌面顶部 tabs 与手机底部导航同步、' +
-            'Esc 与点遮罩关闭、关闭后焦点归还触发按钮。业务插件只写数据，不必再手写 DOM。';
+            'v2.5.0 全量集成持久化记忆（拖拽改变大小后关闭重开可保持）、右上角预置主题切换、' +
+            '720px 黄金尺寸与动态更新点亮能力。自动包含 dialog.nvui-tl 顶层载体与无障碍支持。';
         panel.addNode('about', aboutText);
         panel.addAccordion('about', {
             title: 'tokens.json',
@@ -3289,7 +3302,7 @@ NVUI.showToast({ message: '由 NVUI API 生成的吐司', type: 'success' });</p
             ]
         });
         apiPanelCtl = panel;
-        setApiStatus('API 面板已创建：顶部「基本 / 关于」两个 tab，切换时底部导航与 aria 状态同步；关闭后焦点回到触发按钮。');
+        setApiStatus('API 面板已创建：已开启 persist 记忆与 themeToggle 主题切换；默认宽度 720px。');
         return apiPanelCtl;
     }
 
@@ -3298,6 +3311,47 @@ NVUI.showToast({ message: '由 NVUI API 生成的吐司', type: 'success' });</p
         apiOpenBtn.addEventListener('click', function () {
             var panel = getApiPanel();
             if (panel) panel.open();
+        });
+    }
+
+    // 绑定动态点亮更新按钮
+    var apiShowUpdateBtn = document.getElementById('pv-api-show-update');
+    if (apiShowUpdateBtn) {
+        apiShowUpdateBtn.addEventListener('click', function () {
+            var panel = getApiPanel();
+            if (!panel) return;
+            panel.showUpdate({
+                version: 'v2.5.0',
+                label: '新版本 v2.5.0 可用',
+                url: 'https://github.com/zgy-beep/ui-kit/releases/tag/v2.5.0'
+            });
+            setApiStatus('已调用 panel.showUpdate() 点亮更新徽标！点击徽标可跳转链接；键盘 Tab 键可聚焦。');
+            panel.open();
+        });
+    }
+
+    // 绑定清除更新按钮
+    var apiClearUpdateBtn = document.getElementById('pv-api-clear-update');
+    if (apiClearUpdateBtn) {
+        apiClearUpdateBtn.addEventListener('click', function () {
+            var panel = getApiPanel();
+            if (!panel) return;
+            panel.showUpdate(null);
+            setApiStatus('已调用 panel.showUpdate(null) 清除更新徽标。');
+        });
+    }
+
+    // 绑定重置布局状态按钮
+    var apiClearStateBtn = document.getElementById('pv-api-clear-state');
+    if (apiClearStateBtn) {
+        apiClearStateBtn.addEventListener('click', function () {
+            var panel = getApiPanel();
+            if (panel && typeof panel.clearLayoutState === 'function') {
+                panel.clearLayoutState();
+            } else if (typeof NVUI !== 'undefined' && typeof NVUI.clearLayoutState === 'function') {
+                NVUI.clearLayoutState('pv-api-panel');
+            }
+            setApiStatus('已调用 clearLayoutState() 清理存储，DOM 尺寸已重置回默认 720px。');
         });
     }
 

@@ -361,8 +361,8 @@ for (const [name, p] of Object.entries(REQUIRED_FILES)) {
     check(`独立项目文件存在：${name}`, fs.existsSync(p) && fs.statSync(p).size > 10, p);
 }
 const KIT_VERSION = pkg.version;
-check('package.json 版本为合法 semver（2.4.0）',
-    /^2\.4\.0$/.test(String(KIT_VERSION)), String(KIT_VERSION));
+check('package.json 版本为合法 semver（2.5.0）',
+    /^2\.5\.0$/.test(String(KIT_VERSION)), String(KIT_VERSION));
 check('package.json 声明 MIT 许可且与 LICENSE 文件一致',
     pkg.license === 'MIT' && /^MIT License/.test(license));
 check('package.json scripts.test 指向项目内测试（可 npm test）',
@@ -384,9 +384,9 @@ try {
 check('nvui-api.js 零依赖运行时可在 Node 直接 require（加载时不访问 DOM）',
     !!nvuiApi && !nvuiApiLoadError, nvuiApiLoadError);
 const API_FUNCTIONS = ['createPanel', 'showToast', 'switchRow', 'inputRow', 'accordion',
-    'progress', 'openLayer', 'closeLayer', 'getToken', 'setTheme'];
+    'progress', 'openLayer', 'closeLayer', 'getToken', 'setTheme', 'clearLayoutState'];
 const missingApiFunctions = API_FUNCTIONS.filter((fn) => !nvuiApi || typeof nvuiApi[fn] !== 'function');
-check('nvui-api.js 导出设计调用 API 齐全（10 个函数）且 version 与 kit 一致',
+check('nvui-api.js 导出设计调用 API 齐全（11 个函数）且 version 与 kit 一致',
     !!nvuiApi && nvuiApi.version === KIT_VERSION && missingApiFunctions.length === 0,
     missingApiFunctions.length ? `缺少: ${missingApiFunctions.join(', ')}` : `version=${nvuiApi && nvuiApi.version}`);
 
@@ -543,8 +543,8 @@ const GOLDEN_DARK = {
     '--nvui-on-accent': '#ffffff',
     '--nvui-radius': '12px',
     '--nvui-radius-xl': '20px',
-    // v2.1.0 插件面板尺寸令牌（桌面居中面板）
-    '--nvui-panel-width': '880px',
+    // v2.5.0 插件面板尺寸令牌（桌面居中 720px 黄金尺寸）
+    '--nvui-panel-width': '720px',
     '--nvui-panel-max-h': '88vh',
     // v2.2.0 玻璃层（深色：line 改「表面内直线分隔」，highlight 用作柔和顶光）
     '--nvui-glass-bg': 'rgba(22, 26, 36, 0.64)',
@@ -1628,11 +1628,11 @@ check('nvui-api 在 createPanel / showToast / openLayer 中同步宿主模态降
 check('宿主模态降级态不依赖 :modal 之外的选择器，且排除 kit 自身载体（不自我降级）',
     /dialog:modal/.test(apiSrc)
     && /classList\.contains\('nvui-tl'\)\)\s*continue/.test(apiSrc));
-check('版本号全量对齐 v2.4.0（package.json / tokens.json / tokens.css / components.css）',
-    pkg.version === '2.4.0'
-    && tokensJson.version === '2.4.0'
-    && /ui-kit v2\.4\.0/.test(tokensCss)
-    && /ui-kit v2\.4\.0/.test(componentsCss));
+check('版本号全量对齐 v2.5.0（package.json / tokens.json / tokens.css / components.css）',
+    pkg.version === '2.5.0'
+    && tokensJson.version === '2.5.0'
+    && /ui-kit v2\.5\.0/.test(tokensCss)
+    && /ui-kit v2\.5\.0/.test(componentsCss));
 // ---- 防模板漂移：st-extension-template/ui-kit/ 下每个资产文件都必须与根目录**逐文件**一致 ----
 // 历史教训：早期只校验了 nvui-api.js / components.css / tokens.css 三个文件，
 // 漏掉 tokens.json（机器可读镜像），导致副本版本号落后两版、且缺失 --nvui-z-layer
@@ -2085,6 +2085,99 @@ check('nvui-api: 焦点归还前校验触发元素仍可聚焦',
     /isFocusable\(opener\)/.test(apiSrc));
 check('nvui-api: 实现焦点陷阱（focus trap），使 aria-modal 声明成立',
     /FOCUSABLE/.test(apiSrc) && /event\.key\s*!==\s*'Tab'/.test(apiSrc));
+
+/* --- 9.7 v2.5.0 布局持久化与面板头部标准化契约守卫 --- */
+
+/* 9.7a NVUI.clearLayoutState 导出与安全清理契约 */
+check('nvui-api: 导出 clearLayoutState 且空参/非法参调用幂等不抛错', (() => {
+    if (typeof nvuiApi.clearLayoutState !== 'function') return false;
+    try {
+        nvuiApi.clearLayoutState();
+        nvuiApi.clearLayoutState('');
+        nvuiApi.clearLayoutState(null);
+        return true;
+    } catch {
+        return false;
+    }
+})());
+
+check('nvui-api: clearLayoutState 沙箱前缀 nvui_state_ 且支持 storage.delete 与 storage.set 回退', (() => {
+    let deletedKey = null;
+    let setKey = null;
+    let setVal = 'init';
+    nvuiApi.clearLayoutState('test-panel-1', { delete: (k) => { deletedKey = k; } });
+    nvuiApi.clearLayoutState('test-panel-2', { set: (k, v) => { setKey = k; setVal = v; } });
+    return deletedKey === 'nvui_state_test-panel-1'
+        && setKey === 'nvui_state_test-panel-2'
+        && setVal === null;
+})());
+
+check('nvui-api: clearLayoutState 遇到 storage 抛错时安全吸收不穿透', (() => {
+    const orig = nvuiApi.config && nvuiApi.config.logger;
+    if (nvuiApi.config) nvuiApi.config.logger = { warn: () => {}, error: () => {}, log: () => {} };
+    try {
+        nvuiApi.clearLayoutState('err-panel', { delete: () => { throw new Error('storage failure'); } });
+        if (nvuiApi.config) nvuiApi.config.logger = orig;
+        return true;
+    } catch {
+        if (nvuiApi.config) nvuiApi.config.logger = orig;
+        return false;
+    }
+})());
+
+check('nvui-api: createPanel 控制器导出 clearLayoutState 实例清理方法',
+    /clearLayoutState:\s*panelClearLayoutState/.test(apiSrc));
+
+/* 9.7b opts.width 与 720px 黄金尺寸 & Viewport Clamping & 防抖 */
+check('nvui-api: 导出 clampPanelLayout 且默认采用 720px 黄金尺寸与 opts.width 自定义支持',
+    typeof nvuiApi.clampPanelLayout === 'function'
+    && /function clampPanelLayout\(savedSize,\s*savedPos,\s*options\)/.test(apiSrc)
+    && /fallbackW\s*=\s*\(options\s*&&[^)]*options\.width/.test(apiSrc)
+    && /720/.test(apiSrc));
+
+check('nvui-api: clampPanelLayout 离线/Node 安全（无 DOM 时返回默认安全结构）', (() => {
+    const res = nvuiApi.clampPanelLayout();
+    return res && res.isMobile === false && res.width === null && res.styleWidth === '';
+})());
+
+check('nvui-api: 状态持久化内置 250ms 写入防抖与生命周期 flushPersistSave 冲刷',
+    /schedulePersistSave/.test(apiSrc)
+    && /250/.test(apiSrc)
+    && /flushPersistSave/.test(apiSrc)
+    && /cleanupPersist/.test(apiSrc));
+
+/* 9.7c 头部操作流规范排序与 themeToggle / onThemeChange */
+check('nvui-api: 头部操作流严格保证 [自定义 actions...] -> [themeToggle] -> [closeBtn] 顺序',
+    /actions\.appendChild\(themeToggleBtn\)[\s\S]*actions\.appendChild\(closeBtn\)/.test(apiSrc));
+
+check('nvui-api: 预置 themeToggle 支持日/月图标切换并联动 onThemeChange 与 themeToggle.onThemeChange 回调',
+    /themeToggleBtn\s*=\s*el\('button',\s*'nvui-icon-btn nvui-theme-toggle'/.test(apiSrc)
+    && /fa-solid fa-sun/.test(apiSrc)
+    && /fa-solid fa-moon/.test(apiSrc)
+    && /opts\.onThemeChange/.test(apiSrc)
+    && /opts\.themeToggle\.onThemeChange/.test(apiSrc));
+
+check('components.css: 包含 .nvui-theme-toggle 平滑过渡与 hover/active 态',
+    /\.nvui-theme-toggle/.test(componentsClean)
+    && /\.nvui-theme-toggle\s*i\s*\{[^}]*transition:/.test(componentsClean));
+
+/* 9.7d panel.showUpdate 动态接口、XSS 防护与 WAI-ARIA */
+check('nvui-api: createPanel 控制器导出 showUpdate 动态点亮接口',
+    /showUpdate:\s*showUpdate/.test(apiSrc)
+    && /function showUpdate\(updateConfig\)/.test(apiSrc));
+
+check('nvui-api: showUpdate 采用 textContent 防 XSS 且 url 校验 isSafeUrl',
+    /updatePill\.textContent\s*=\s*labelStr/.test(apiSrc)
+    && /isSafeUrl\(urlStr\)/.test(apiSrc));
+
+check('nvui-api: showUpdate 更新胶囊符合 WAI-ARIA 无障碍规范（role="button", tabindex="0", Enter/Space 键盘响应）',
+    /role:\s*'button'/.test(apiSrc)
+    && /tabindex:\s*'0'/.test(apiSrc)
+    && /e\.key\s*===\s*'Enter'/.test(apiSrc));
+
+check('components.css: 包含 .nvui-update-pill 扁平无描边与 --nvui-focus-ring 焦点环样式',
+    /\.nvui-update-pill\s*\{/.test(componentsClean)
+    && /\.nvui-update-pill:focus-visible\s*\{[^}]*--nvui-focus-ring/.test(componentsClean));
 
 /* --- 9.6 行为级断言（需要 DOM；无 DOM 时跳过） --- */
 const hasDom = typeof globalThis.document !== 'undefined' && typeof globalThis.document.createElement === 'function';

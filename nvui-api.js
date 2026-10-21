@@ -1,7 +1,7 @@
 /**
  * SillyTavern NVUI Kit · 可选运行时 API（零依赖）
  * ------------------------------------------------------------------
- * 版本：ui-kit v2.4.0（与 package.json / tokens.css / components.css 版本号保持一致）
+ * 版本：ui-kit v2.5.0（与 package.json / tokens.css / components.css 版本号保持一致）
  * 用途：给插件/其它软件一个「可调用的设计接口」——用函数创建符合本 Kit 规范的面板、
  *       标签页、折叠分组、开关行、输入行、进度条、吐司，自动带上布局标准、无障碍属性、
  *       动效降级与焦点管理，避免每个插件各写一套 DOM。
@@ -52,7 +52,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this), function () {
     'use strict';
 
-    var VERSION = '2.4.0';
+    var VERSION = '2.5.0';
     var PANEL_CLASS = 'nvui-panel';
     var TOAST_LAYER_ID = 'nvui-api-toast-layer';
 
@@ -239,6 +239,19 @@
         /* id 不能以数字开头（CSS 选择器与部分工具链不接受） */
         if (/^[0-9]/.test(safe)) safe = '_' + safe;
         return safe;
+    }
+
+    /** URL 安全协议校验（拒绝 javascript: / data: / vbscript: 伪协议注入通道） */
+    function isSafeUrl(rawUrl) {
+        if (typeof rawUrl !== 'string' || !rawUrl) return false;
+        var normalized = rawUrl.replace(/[\u0000-\u0020\u007f-\u009f\s]+/g, '').toLowerCase();
+        if (!normalized) return false;
+        if (normalized.indexOf('javascript:') === 0 ||
+            normalized.indexOf('data:') === 0 ||
+            normalized.indexOf('vbscript:') === 0) {
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -623,7 +636,7 @@
     function accordion(options) {
         var opts = options || {};
         var root = el('div', 'nvui-acc' + (opts.open ? ' is-open' : ''));
-        var head = el('button', 'nvui-acc-head', { type: 'button', 'aria-expanded': opts.open ? 'true' : 'false' });
+        var head = el('button', 'nvui-acc-head nvui-acc-header', { type: 'button', 'aria-expanded': opts.open ? 'true' : 'false' });
         var title = el('span', 'nvui-acc-title', { text: opts.title || '' });
         var summary = el('span', 'nvui-acc-summary', { text: opts.summary || '' });
         var chev = el('i', 'nvui-acc-chev', { 'aria-hidden': 'true' });
@@ -967,6 +980,176 @@
         };
     }
 
+    /* ---------------------- 表现层布局状态持久化 (Issue #5) ---------------------- */
+
+    var PERSIST_DEBOUNCE_MS = 250;
+
+    /**
+     * 默认存储适配器：基于 window.localStorage，
+     * 键名带沙箱前缀 nvui_state_${id}。
+     * 所有读写均受 try/catch 保护，吸纳 QuotaExceededError 与 SecurityError 并记录 warn。
+     */
+    var defaultStorageAdapter = {
+        get: function (key) {
+            try {
+                if (typeof window !== 'undefined' && window.localStorage) {
+                    var raw = window.localStorage.getItem(key);
+                    return raw ? JSON.parse(raw) : null;
+                }
+            } catch (err) {
+                warn('defaultStorageAdapter.get(): 无法读取 localStorage', err);
+            }
+            return null;
+        },
+        set: function (key, val) {
+            try {
+                if (typeof window !== 'undefined' && window.localStorage) {
+                    if (val === null || val === undefined) {
+                        window.localStorage.removeItem(key);
+                    } else {
+                        window.localStorage.setItem(key, JSON.stringify(val));
+                    }
+                }
+            } catch (err) {
+                warn('defaultStorageAdapter.set(): 无法写入 localStorage', err);
+            }
+        },
+        delete: function (key) {
+            try {
+                if (typeof window !== 'undefined' && window.localStorage) {
+                    window.localStorage.removeItem(key);
+                }
+            } catch (err) {
+                warn('defaultStorageAdapter.delete(): 无法清除 localStorage', err);
+            }
+        }
+    };
+
+    /**
+     * 辅助清理接口：清除指定面板在存储中的历史布局记忆。
+     * 可选传入自定义 storageAdapter，默认使用 defaultStorageAdapter。
+     */
+    function clearLayoutState(id, storageAdapter) {
+        if (!id) return;
+        var key = 'nvui_state_' + sanitizeIdPart(String(id), 'nvui-panel');
+        var storage = storageAdapter || defaultStorageAdapter;
+        try {
+            if (typeof storage.delete === 'function') {
+                var delResult = storage.delete(key);
+                if (delResult && typeof delResult.catch === 'function') {
+                    delResult.catch(function (err) {
+                        warn('clearLayoutState(): 异步清除存储状态失败', err);
+                    });
+                }
+            } else if (typeof storage.set === 'function') {
+                var sResult = storage.set(key, null);
+                if (sResult && typeof sResult.catch === 'function') {
+                    sResult.catch(function (err) {
+                        warn('clearLayoutState(): 异步清除存储状态失败', err);
+                    });
+                }
+            }
+        } catch (e) {
+            warn('clearLayoutState(): 清理存储状态失败', e);
+        }
+    }
+
+    /** 读取当前视口尺寸，优先以 window.innerWidth/innerHeight 为准以适配移动端模拟与缩放 */
+    function getViewport() {
+        var vw = (typeof window !== 'undefined' && typeof window.innerWidth === 'number' && window.innerWidth > 0)
+            ? window.innerWidth
+            : ((typeof document !== 'undefined' && document.documentElement && document.documentElement.clientWidth) || 0);
+        var vh = (typeof window !== 'undefined' && typeof window.innerHeight === 'number' && window.innerHeight > 0)
+            ? window.innerHeight
+            : ((typeof document !== 'undefined' && document.documentElement && document.documentElement.clientHeight) || 0);
+        return { vw: vw, vh: vh, isMobile: vw <= 600 };
+    }
+
+    /** 辅助比较两个持久化状态是否实质一致（避免冗余写入） */
+    function isStateEqual(a, b) {
+        if (!a || !b) return false;
+        if (a.tab !== b.tab) return false;
+        var aSize = a.size;
+        var bSize = b.size;
+        if (!aSize !== !bSize) return false;
+        if (aSize && bSize) {
+            if (aSize.width !== bSize.width) return false;
+            if (aSize.height !== bSize.height) return false;
+            if (!!aSize.isMaximized !== !!bSize.isMaximized) return false;
+        }
+        var aAcc = a.accordion;
+        var bAcc = b.accordion;
+        if (!aAcc !== !bAcc) return false;
+        if (aAcc && bAcc) {
+            var aKeys = Object.keys(aAcc);
+            var bKeys = Object.keys(bAcc);
+            if (aKeys.length !== bKeys.length) return false;
+            for (var i = 0; i < aKeys.length; i++) {
+                var k = aKeys[i];
+                if (aAcc[k] !== bAcc[k]) return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 多分辨率跨屏视口越界钳制防护数学模型 (Viewport Clamping)。
+     * - 手机端（<=600px）强制清空内联固定像素，交由 CSS 100% 抽屉规范接管；
+     * - 桌面端钳制宽在 [min(320, vw-32), vw-32]，高在 [min(240, vh-32), vh-32]；
+     * - 默认 targetW 采用 720px 黄金尺寸（支持 opts.width 自定义）；
+     * - 坐标自愈钳制在安全可视边距 (margin >= 16px) 范围内，确保标题栏与关闭按钮绝对可达。
+     */
+    function clampPanelLayout(savedSize, savedPos, options) {
+        if (!isDomAvailable()) {
+            return { isMobile: false, width: null, height: null, styleWidth: '', styleHeight: '' };
+        }
+
+        var vp = getViewport();
+        var vw = vp.vw;
+        var vh = vp.vh;
+        var isMobile = vp.isMobile;
+
+        // 移动端安全降级：必须遵守手机端底部抽屉标准规范
+        if (isMobile) {
+            return {
+                isMobile: true,
+                width: null,
+                height: null,
+                styleWidth: '',
+                styleHeight: '',
+            };
+        }
+
+        var margin = 16;
+        var minW = Math.min(320, Math.max(0, vw - margin * 2));
+        var minH = Math.min(240, Math.max(0, vh - margin * 2));
+        var maxW = Math.max(minW, Math.max(0, vw - margin * 2));
+        var maxH = Math.max(minH, Math.max(0, vh - margin * 2));
+
+        var fallbackW = (options && typeof options.width === 'number' && !isNaN(options.width)) ? options.width : 720;
+        var targetW = (savedSize && typeof savedSize.width === 'number' && !isNaN(savedSize.width)) ? savedSize.width : fallbackW;
+        var targetH = (savedSize && typeof savedSize.height === 'number' && !isNaN(savedSize.height)) ? savedSize.height : null;
+
+        var clampedW = Math.max(minW, Math.min(targetW, maxW));
+        var clampedH = targetH ? Math.max(minH, Math.min(targetH, maxH)) : null;
+
+        var res = {
+            isMobile: false,
+            width: clampedW,
+            height: clampedH,
+            styleWidth: clampedW + 'px',
+            styleHeight: clampedH ? (clampedH + 'px') : '',
+        };
+
+        if (savedPos && typeof savedPos.x === 'number' && typeof savedPos.y === 'number' && !isNaN(savedPos.x) && !isNaN(savedPos.y)) {
+            var clampedX = Math.max(margin, Math.min(savedPos.x, vw - clampedW - margin));
+            var clampedY = Math.max(margin, Math.min(savedPos.y, vh - (clampedH || 400) - margin));
+            res.x = clampedX;
+            res.y = clampedY;
+        }
+        return res;
+    }
+
     /* ---------------------- 面板（布局标准） ---------------------- */
 
     /**
@@ -1009,11 +1192,46 @@
         /* 装一次监听：宿主模态动态开关时自动降级/还原 */
         installHostModalWatcher();
 
+        /* 持久化配置解析 (Issue #5) */
+        var persistConfig = null;
+        if (opts.persist === true) {
+            persistConfig = { size: true, tab: true, accordion: true, storage: defaultStorageAdapter };
+        } else if (opts.persist && typeof opts.persist === 'object') {
+            persistConfig = {
+                size: opts.persist.size !== false,
+                tab: opts.persist.tab !== false,
+                accordion: opts.persist.accordion !== false,
+                storage: (opts.persist.storage && typeof opts.persist.storage.get === 'function' && typeof opts.persist.storage.set === 'function')
+                    ? opts.persist.storage
+                    : defaultStorageAdapter,
+            };
+        } else if (opts.persist) {
+            warn('createPanel(): 无效 persist 配置，已忽略');
+        }
+        var storageKey = 'nvui_state_' + sanitizeIdPart(opts.id || id, 'nvui-panel');
+        var storage = persistConfig ? persistConfig.storage : null;
+        var loadedState = null;
+        var isRestoring = false;
+        var isInitialized = false;
+        var hasSaved = false;
+        var persistTimer = null;
+        var accList = [];
+        var resizeRaf = null;
+        var resizeObserver = null;
+
         /* NEW-36：显式设置 closing="" 与 role="presentation"，杜绝 SillyTavern fixToastrForDialogs 劫持注入 */
         var dialogTitleStr = (typeof opts.title === 'symbol') ? '面板' : (opts.title || '面板');
         var dialog = el('dialog', 'nvui-tl', { id: id + '-layer', closing: '', role: 'presentation', 'aria-label': dialogTitleStr + ' 浮层' });
         var overlay = el('div', 'nvui-overlay is-panel', { id: id + '-overlay', hidden: '' });
         var panel = el('div', 'nvui-panel', { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': id + '-title' });
+
+        /* 初始自定义宽度（opts.width，默认交由 CSS / token 720px） */
+        if (typeof opts.width === 'number' && !isNaN(opts.width)) {
+            var initClamp = clampPanelLayout({ width: opts.width }, null, opts);
+            if (!initClamp.isMobile && initClamp.styleWidth) {
+                panel.style.width = initClamp.styleWidth;
+            }
+        }
 
         /* 手机拖拽把手（纯视觉） */
         panel.appendChild(el('div', 'nvui-sheet-handle', { 'aria-hidden': 'true' }));
@@ -1022,6 +1240,97 @@
         var header = el('div', 'nvui-panel-header');
         var title = el('b', 'nvui-panel-title', { id: id + '-title', text: opts.title || '面板' });
         if (opts.version) title.appendChild(el('span', 'nvui-badge', { text: opts.version }));
+
+        /* 版本更新提示胶囊与动态点亮接口 (Issue #6) */
+        var updatePill = null;
+        var currentUpdateConfig = null;
+        var isSuppressedForUpdate = false;
+
+        function showUpdate(updateConfig) {
+            isSuppressedForUpdate = true;
+            try {
+                if (!updateConfig || updateConfig.hidden === true) {
+                    if (updatePill && updatePill.parentNode) {
+                        updatePill.parentNode.removeChild(updatePill);
+                    }
+                    updatePill = null;
+                    currentUpdateConfig = null;
+                    return null;
+                }
+
+                if (typeof updateConfig !== 'object') {
+                    warn('showUpdate(): 无效 update 配置，已忽略');
+                    return null;
+                }
+
+                currentUpdateConfig = updateConfig;
+                var verStr = (updateConfig.version === null || updateConfig.version === undefined) ? '' : String(updateConfig.version);
+                var labelStr = (updateConfig.label !== null && updateConfig.label !== undefined)
+                    ? String(updateConfig.label)
+                    : (verStr ? ('v' + verStr + ' 可用') : '新版本可用');
+
+                if (!updatePill) {
+                    updatePill = el('span', 'nvui-badge is-accent nvui-update-pill', {
+                        role: 'button',
+                        tabindex: '0',
+                        'aria-label': updateConfig.ariaLabel || (verStr ? ('发现新版本: ' + verStr) : '版本更新可用'),
+                    });
+
+                    var handleUpdateTrigger = function (e) {
+                        if (!currentUpdateConfig) return;
+                        var handled = false;
+                        if (typeof currentUpdateConfig.onClick === 'function') {
+                            handled = true;
+                            try {
+                                currentUpdateConfig.onClick(e);
+                            } catch (err) {
+                                warn('showUpdate onClick error', err);
+                            }
+                        }
+                        if (!handled && currentUpdateConfig.url) {
+                            var urlStr = String(currentUpdateConfig.url).trim();
+                            if (!isSafeUrl(urlStr)) {
+                                warn('showUpdate(): 已拒绝非法的 URL 协议: ' + urlStr);
+                                return;
+                            }
+                            try {
+                                if (typeof window !== 'undefined' && window.open) {
+                                    window.open(urlStr, '_blank', 'noopener,noreferrer');
+                                }
+                            } catch (err) {
+                                warn('showUpdate(): 打开更新链接失败', err);
+                            }
+                        }
+                    };
+
+                    on(updatePill, 'click', handleUpdateTrigger);
+                    on(updatePill, 'keydown', function (e) {
+                        if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                            e.preventDefault();
+                            handleUpdateTrigger(e);
+                        }
+                    });
+
+                    title.appendChild(updatePill);
+                } else {
+                    updatePill.setAttribute('aria-label', updateConfig.ariaLabel || (verStr ? ('发现新版本: ' + verStr) : '版本更新可用'));
+                }
+
+                // 严格采用 textContent 写入文本，杜绝 XSS 注入通道
+                updatePill.textContent = labelStr;
+                return updatePill;
+            } finally {
+                setTimeout(function () {
+                    isSuppressedForUpdate = false;
+                }, 100);
+            }
+        }
+
+        if (opts.update) {
+            showUpdate(opts.update);
+        }
+
+        /* 头部操作流区：严格保证 [自定义 actions...] -> [主题切换 themeToggle] -> [关闭 closeBtn] */
         var actions = el('span', 'nvui-panel-actions');
         (opts.actions || []).forEach(function (a) {
             var btn = el('button', 'nvui-icon-btn', { type: 'button', 'aria-label': a.label || '操作' });
@@ -1030,6 +1339,51 @@
             if (typeof a.onClick === 'function') on(btn, 'click', a.onClick);
             actions.appendChild(btn);
         });
+
+        /* 预置主题切换按钮 (Issue #6) */
+        var themeToggleBtn = null;
+        var hasThemeToggle = (opts.themeToggle === true) || (opts.themeToggle && typeof opts.themeToggle === 'object');
+        var isCurrentLight = function () {
+            return isDomAvailable() && document.body && document.body.classList.contains('nvui-theme-light');
+        };
+        var updateThemeToggleUi = null;
+
+        if (hasThemeToggle) {
+            if (opts.themeToggle && typeof opts.themeToggle === 'object' && (opts.themeToggle.initial === 'dark' || opts.themeToggle.initial === 'light')) {
+                setTheme(opts.themeToggle.initial);
+            }
+            var curLight = isCurrentLight();
+            themeToggleBtn = el('button', 'nvui-icon-btn nvui-theme-toggle', {
+                type: 'button',
+                title: '切换主题',
+                'aria-label': curLight ? '切换为深色主题' : '切换为浅色主题',
+            });
+            var themeIcon = el('i', curLight ? 'fa-solid fa-moon' : 'fa-solid fa-sun', { 'aria-hidden': 'true' });
+            themeToggleBtn.appendChild(themeIcon);
+
+            updateThemeToggleUi = function (light) {
+                if (!themeToggleBtn) return;
+                themeToggleBtn.setAttribute('aria-label', light ? '切换为深色主题' : '切换为浅色主题');
+                if (themeIcon) {
+                    themeIcon.className = light ? 'fa-solid fa-moon' : 'fa-solid fa-sun';
+                }
+            };
+
+            on(themeToggleBtn, 'click', function () {
+                var nextTheme = isCurrentLight() ? 'dark' : 'light';
+                setTheme(nextTheme);
+                updateThemeToggleUi(nextTheme === 'light');
+                if (typeof opts.onThemeChange === 'function') {
+                    try { opts.onThemeChange(nextTheme); } catch (e) { warn('onThemeChange error', e); }
+                }
+                if (opts.themeToggle && typeof opts.themeToggle.onThemeChange === 'function') {
+                    try { opts.themeToggle.onThemeChange(nextTheme); } catch (e) { warn('themeToggle.onThemeChange error', e); }
+                }
+            });
+
+            actions.appendChild(themeToggleBtn);
+        }
+
         var closeBtn = el('button', 'nvui-icon-btn', { type: 'button', 'aria-label': '关闭面板' });
         closeBtn.appendChild(el('i', 'fa-solid fa-xmark', { 'aria-hidden': 'true' }));
         actions.appendChild(closeBtn);
@@ -1093,6 +1447,8 @@
             tabs.forEach(function (t) {
                 var tab = el('button', 'nvui-tab' + (t.domKey === activeDom ? ' is-active' : ''), {
                     type: 'button', role: 'tab', id: id + '-tab-' + t.domKey,
+                    'data-tab': t.key,
+                    'data-key': t.key,
                     'aria-selected': t.domKey === activeDom ? 'true' : 'false',
                     'aria-controls': id + '-pane-' + t.domKey,
                     tabindex: t.domKey === activeDom ? '0' : '-1',
@@ -1164,6 +1520,8 @@
             tabs.forEach(function (t) {
                 var item = el('button', 'nvui-bottom-nav-item' + (t.domKey === activeDom ? ' is-active' : ''), {
                     type: 'button', 'aria-label': t.label || t.key,
+                    'data-tab': t.key,
+                    'data-key': t.key,
                 });
                 if (t.domKey === activeDom) item.setAttribute('aria-current', 'page');
                 var ic = iconNode(t.icon);
@@ -1204,6 +1562,325 @@
             return null;
         }
 
+        /* 持久化调度与视口钳制方法 */
+        function schedulePersistSave() {
+            if (!persistConfig || isRestoring) return;
+            if (persistTimer) clearTimeout(persistTimer);
+            persistTimer = setTimeout(function () {
+                persistTimer = null;
+                flushPersistSave();
+            }, PERSIST_DEBOUNCE_MS);
+        }
+
+        function flushPersistSave(force) {
+            if (!persistConfig) return;
+            var hadTimer = !!persistTimer;
+            if (persistTimer) {
+                clearTimeout(persistTimer);
+                persistTimer = null;
+            }
+            try {
+                var defaultW = (opts && typeof opts.width === 'number' && !isNaN(opts.width)) ? opts.width : 720;
+                var currentW = defaultW;
+                var currentH = null;
+                var isMax = panel.classList.contains('is-maximized');
+                var vp = getViewport();
+                var isMobile = vp.isMobile;
+
+                if (isMobile && loadedState && loadedState.size) {
+                    currentW = loadedState.size.width;
+                    currentH = loadedState.size.height;
+                    isMax = !!loadedState.size.isMaximized;
+                } else {
+                    if (panel.style.width && panel.style.width.indexOf('px') !== -1) {
+                        currentW = parseInt(panel.style.width, 10);
+                    } else if (panel.offsetWidth > 0) {
+                        currentW = panel.offsetWidth;
+                    } else if (loadedState && loadedState.size && typeof loadedState.size.width === 'number') {
+                        currentW = loadedState.size.width;
+                    }
+
+                    if (panel.style.height && panel.style.height.indexOf('px') !== -1) {
+                        currentH = parseInt(panel.style.height, 10);
+                    } else if (panel.offsetHeight > 0 && !isMobile) {
+                        currentH = panel.offsetHeight;
+                    } else if (loadedState && loadedState.size && typeof loadedState.size.height === 'number') {
+                        currentH = loadedState.size.height;
+                    }
+                }
+
+                var currentTabKey = null;
+                if (tabs.length) {
+                    for (var i = 0; i < tabs.length; i++) {
+                        if (tabs[i].domKey === activeDom) {
+                            currentTabKey = tabs[i].key;
+                            break;
+                        }
+                    }
+                }
+
+                var currentAccState = {};
+                for (var a = 0; a < accList.length; a++) {
+                    var item = accList[a];
+                    currentAccState[item.id] = item.node.classList.contains('is-open');
+                }
+                if (loadedState && loadedState.accordion) {
+                    for (var k in loadedState.accordion) {
+                        if (currentAccState[k] === undefined && Object.prototype.hasOwnProperty.call(loadedState.accordion, k)) {
+                            currentAccState[k] = loadedState.accordion[k];
+                        }
+                    }
+                }
+
+                var toSave = {
+                    version: 1,
+                    timestamp: Date.now(),
+                    size: persistConfig.size ? {
+                        width: currentW,
+                        height: currentH,
+                        isMaximized: isMax,
+                    } : (loadedState ? loadedState.size : null),
+                    tab: persistConfig.tab ? currentTabKey : (loadedState ? loadedState.tab : null),
+                    accordion: persistConfig.accordion ? currentAccState : (loadedState ? loadedState.accordion : null),
+                };
+
+                if (!hadTimer && hasSaved && !force && isStateEqual(toSave, loadedState)) {
+                    return;
+                }
+
+                loadedState = toSave;
+                hasSaved = true;
+                var saveResult = storage.set(storageKey, toSave);
+                if (saveResult && typeof saveResult.catch === 'function') {
+                    saveResult.catch(function (err) {
+                        warn('flushPersistSave(): 异步保存状态失败', err);
+                    });
+                }
+                debug('flushPersistSave(): 已保存面板状态 key=' + storageKey);
+            } catch (e) {
+                warn('flushPersistSave(): 保存布局状态失败', e);
+            }
+        }
+
+        function applyLoadedState(saved) {
+            if (!saved || typeof saved !== 'object') {
+                isInitialized = true;
+                return;
+            }
+            isRestoring = true;
+            try {
+                // 1. 恢复尺寸
+                if (persistConfig && persistConfig.size && saved.size) {
+                    if (saved.size.isMaximized) {
+                        panel.classList.add('is-maximized');
+                    } else {
+                        panel.classList.remove('is-maximized');
+                    }
+                    var clamped = clampPanelLayout(saved.size, saved.position, opts);
+                    if (clamped.isMobile) {
+                        panel.style.width = '';
+                        panel.style.height = '';
+                    } else {
+                        if (saved.size.isMaximized) {
+                            panel.style.width = 'calc(100vw - 32px)';
+                            panel.style.height = 'calc(100vh - 32px)';
+                        } else {
+                            if (clamped.styleWidth) panel.style.width = clamped.styleWidth;
+                            if (clamped.styleHeight) panel.style.height = clamped.styleHeight;
+                        }
+                    }
+                }
+
+                // 2. 恢复 Tab（支持数值 0 及失效/删除 key 优雅回退）
+                if (persistConfig && persistConfig.tab && saved.tab !== undefined && saved.tab !== null) {
+                    var rawSavedKey = String(saved.tab);
+                    var hasTabKey = keyMap.has(rawSavedKey);
+                    if (!hasTabKey) {
+                        for (var tIdx = 0; tIdx < tabs.length; tIdx++) {
+                            if (tabs[tIdx].domKey === rawSavedKey) {
+                                hasTabKey = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (hasTabKey) {
+                        setTab(saved.tab);
+                    } else if (tabs.length) {
+                        warn('applyLoadedState(): 存储中的标签 key "' + rawSavedKey + '" 不存在或已失效，已回退到首个可用标签');
+                        setTabByDom(tabs[0].domKey);
+                    }
+                }
+
+                // 3. 恢复 Accordion
+                if (persistConfig && persistConfig.accordion && saved.accordion) {
+                    for (var a = 0; a < accList.length; a++) {
+                        var item = accList[a];
+                        if (typeof saved.accordion[item.id] === 'boolean') {
+                            item.node.setOpen(saved.accordion[item.id]);
+                        }
+                    }
+                }
+            } finally {
+                isRestoring = false;
+                isInitialized = true;
+            }
+        }
+
+        function applyClamping() {
+            if (!isDomAvailable()) return;
+            var vp = getViewport();
+            if (vp.isMobile) {
+                panel.style.width = '';
+                panel.style.height = '';
+                return;
+            }
+            var isMax = panel.classList.contains('is-maximized');
+            if (isMax) {
+                panel.style.width = 'calc(100vw - 32px)';
+                panel.style.height = 'calc(100vh - 32px)';
+                return;
+            }
+
+            var targetW = null;
+            if (panel.style.width && panel.style.width.indexOf('px') !== -1) {
+                targetW = parseInt(panel.style.width, 10);
+            } else if (loadedState && loadedState.size && typeof loadedState.size.width === 'number') {
+                targetW = loadedState.size.width;
+            } else if (typeof opts.width === 'number' && !isNaN(opts.width)) {
+                targetW = opts.width;
+            }
+
+            var targetH = null;
+            if (panel.style.height && panel.style.height.indexOf('px') !== -1) {
+                targetH = parseInt(panel.style.height, 10);
+            } else if (loadedState && loadedState.size && typeof loadedState.size.height === 'number') {
+                targetH = loadedState.size.height;
+            }
+
+            if (targetW !== null || targetH !== null) {
+                var clamped = clampPanelLayout({ width: targetW, height: targetH }, null, opts);
+                if (clamped.styleWidth) panel.style.width = clamped.styleWidth;
+                if (clamped.styleHeight) panel.style.height = clamped.styleHeight;
+            }
+        }
+
+        function trackAccordion(accNode, accId) {
+            var item = { id: accId, node: accNode };
+            accList.push(item);
+            if (loadedState && loadedState.accordion && typeof loadedState.accordion[accId] === 'boolean') {
+                accNode.setOpen(loadedState.accordion[accId]);
+            }
+            if (accNode.head) {
+                on(accNode.head, 'click', function () {
+                    if (persistConfig && persistConfig.accordion && !isRestoring) {
+                        schedulePersistSave();
+                    }
+                });
+            }
+            var origSetOpen = accNode.setOpen;
+            accNode.setOpen = function (v) {
+                origSetOpen.call(accNode, v);
+                if (persistConfig && persistConfig.accordion && !isRestoring) {
+                    schedulePersistSave();
+                }
+            };
+        }
+
+        function cleanupPersist() {
+            if (!persistConfig) return;
+            try { window.removeEventListener('resize', onWindowResize); } catch (e) {}
+            if (resizeRaf) { cancelAnimationFrame(resizeRaf); resizeRaf = null; }
+            flushPersistSave();
+            if (resizeObserver) {
+                try { resizeObserver.disconnect(); } catch (e) {}
+                resizeObserver = null;
+            }
+        }
+
+        function panelClearLayoutState() {
+            if (persistTimer) {
+                clearTimeout(persistTimer);
+                persistTimer = null;
+            }
+            clearLayoutState(opts.id || id, storage);
+            loadedState = null;
+            hasSaved = false;
+            panel.style.width = '';
+            panel.style.height = '';
+            panel.classList.remove('is-maximized');
+            if (tabs.length) {
+                setTabByDom(tabs[0].domKey);
+            }
+            for (var a = 0; a < accList.length; a++) {
+                accList[a].node.setOpen(false);
+            }
+            if (tabsNav) syncTabsIndicator(tabsNav, false);
+        }
+
+        var onWindowResize = function () {
+            if (overlay.hidden || overlay.classList.contains('is-closing')) return;
+            if (resizeRaf) cancelAnimationFrame(resizeRaf);
+            resizeRaf = requestAnimationFrame(function () {
+                resizeRaf = null;
+                applyClamping();
+                if (tabsNav) syncTabsIndicator(tabsNav, false);
+            });
+        };
+
+        if (persistConfig) {
+            try {
+                var raw = storage.get(storageKey);
+                if (raw && typeof raw.then === 'function') {
+                    raw.then(function (val) {
+                        loadedState = val;
+                        applyLoadedState(loadedState);
+                    }).catch(function (err) {
+                        warn('createPanel(): 异步读取存储失败', err);
+                        isInitialized = true;
+                    });
+                } else {
+                    loadedState = raw;
+                    applyLoadedState(loadedState);
+                }
+            } catch (err) {
+                warn('createPanel(): 读取存储异常', err);
+                isInitialized = true;
+            }
+
+            var lastObservedW = null;
+            var lastObservedH = null;
+
+            if (persistConfig.size && typeof ResizeObserver !== 'undefined' && isDomAvailable()) {
+                try {
+                    resizeObserver = new ResizeObserver(function () {
+                        if (isRestoring || !isInitialized) return;
+                        if (overlay.hidden || overlay.classList.contains('is-closing')) return;
+                        var vp = getViewport();
+                        if (vp.isMobile) return;
+                        var curW = Math.round(panel.offsetWidth);
+                        var curH = Math.round(panel.offsetHeight);
+                        if (lastObservedW === null) {
+                            lastObservedW = curW;
+                            lastObservedH = curH;
+                            return;
+                        }
+                        if (isSuppressedForUpdate) {
+                            lastObservedW = curW;
+                            lastObservedH = curH;
+                            return;
+                        }
+                        if (curW === lastObservedW && curH === lastObservedH) return;
+                        lastObservedW = curW;
+                        lastObservedH = curH;
+                        schedulePersistSave();
+                    });
+                    resizeObserver.observe(panel);
+                } catch (e) {
+                    warn('createPanel(): ResizeObserver 注册失败', e);
+                }
+            }
+        }
+
         /** 按 domKey 切换标签（内部用） */
         function setTabByDom(domKey) {
             if (!panes.get(domKey)) return;
@@ -1233,6 +1910,9 @@
             var nextPane = panes.get(domKey);
             if (prevPane && prevPane !== nextPane) prevPane.classList.remove('is-active');
             if (nextPane) nextPane.classList.add('is-active');
+            if (persistConfig && persistConfig.tab && !isRestoring) {
+                schedulePersistSave();
+            }
         }
 
         /**
@@ -1271,6 +1951,13 @@
             if (escapeEntry && typeof escapeEntry.promote === 'function') {
                 escapeEntry.promote();
             }
+            if (hasThemeToggle && themeToggleBtn && typeof updateThemeToggleUi === 'function') {
+                updateThemeToggleUi(isCurrentLight());
+            }
+            if (persistConfig) {
+                applyClamping();
+                on(window, 'resize', onWindowResize);
+            }
             focusBody();
             if (tabsNav) {
                 setTimeout(function () { syncTabsIndicator(tabsNav, false); }, 0);
@@ -1278,6 +1965,11 @@
         }
 
         function closePanel() {
+            if (persistConfig) {
+                try { window.removeEventListener('resize', onWindowResize); } catch (e) {}
+                if (resizeRaf) { cancelAnimationFrame(resizeRaf); resizeRaf = null; }
+                flushPersistSave();
+            }
             closeLayer(dialog, overlay, function () {
                 restoreFocus();
                 opener = null;
@@ -1408,6 +2100,16 @@
             else if (tabs.length && panes.get(tabs[0].domKey)) pane = panes.get(tabs[0].domKey);
             if (!pane) pane = body;
             append(pane, node);
+            if (persistConfig && node && node.classList && node.classList.contains('nvui-acc') && typeof node.setOpen === 'function') {
+                var found = false;
+                for (var ai = 0; ai < accList.length; ai++) {
+                    if (accList[ai].node === node) { found = true; break; }
+                }
+                if (!found) {
+                    var accId = node.id ? String(node.id) : ('acc-' + (accList.length + 1));
+                    trackAccordion(node, accId);
+                }
+            }
             return node;
         }
 
@@ -1448,12 +2150,18 @@
                 removed = true;
                 if (dialog && dialog.parentNode) dialog.parentNode.removeChild(dialog);
                 if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+                if (updatePill && updatePill.parentNode) {
+                    updatePill.parentNode.removeChild(updatePill);
+                }
+                updatePill = null;
+                currentUpdateConfig = null;
             }
             opener = null;
+            cleanupPersist();
             if (typeof opts.destroy === 'function') opts.destroy();
         }
 
-        return {
+        var controller = {
             id: id,
             dialog: dialog,
             overlay: overlay,
@@ -1465,14 +2173,51 @@
             close: closePanel,
             destroy: destroy,
             setTab: setTab,
+            showUpdate: showUpdate,
             syncIndicator: function () { if (tabsNav) syncTabsIndicator(tabsNav, false); },
             addNode: addNode,
             addSwitch: function (key, o) { return addNode(key, switchRow(o)); },
             addInput: function (key, o) { return addNode(key, inputRow(o)); },
-            addAccordion: function (key, o) { return addNode(key, accordion(o)); },
+            addAccordion: function (key, o) {
+                var acc = accordion(o);
+                if (persistConfig) {
+                    var accId = (o && o.id) ? String(o.id) : sanitizeIdPart((o && o.title) || ('acc-' + (accList.length + 1)), 'acc-' + (accList.length + 1));
+                    trackAccordion(acc, accId);
+                }
+                return addNode(key, acc);
+            },
             addProgress: function (key, o) { return addNode(key, progress(o)); },
             addSectionTitle: function (key, text) { return addNode(key, el('div', 'nvui-section-title', { text: text })); },
+            clearLayoutState: panelClearLayoutState,
+            flushPersistSave: flushPersistSave,
+            setSize: function (w, h) {
+                if (typeof w === 'number') panel.style.width = w + 'px';
+                if (typeof h === 'number') panel.style.height = h + 'px';
+                applyClamping();
+                if (persistConfig && persistConfig.size) schedulePersistSave();
+            },
+            setMaximized: function (v) {
+                panel.classList.toggle('is-maximized', !!v);
+                applyClamping();
+                if (persistConfig && persistConfig.size) schedulePersistSave();
+            },
         };
+
+        Object.defineProperty(controller, 'activeTab', {
+            get: function () {
+                if (!tabs.length) return null;
+                for (var i = 0; i < tabs.length; i++) {
+                    if (tabs[i].domKey === activeDom) {
+                        return tabs[i].key;
+                    }
+                }
+                return tabs[0].key;
+            },
+            enumerable: true,
+            configurable: true,
+        });
+
+        return controller;
     }
 
     /* ---------------------- 吐司 ---------------------- */
@@ -1612,5 +2357,8 @@
         progress: progress,
         createPanel: createPanel,
         showToast: showToast,
+        clearLayoutState: clearLayoutState,
+        clampPanelLayout: clampPanelLayout,
+        defaultStorageAdapter: defaultStorageAdapter,
     };
 });

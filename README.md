@@ -1,7 +1,7 @@
 # SillyTavern 插件 UI Kit · 设计规范
 
-> 版本：**v2.4.0**（语义化版本；破坏性改名/删 token 升大版本，新增组件/新增 token 升小版本，调 token 取值/动效打磨/反馈修复升补丁版本）
-> 来源：从 novel-stream 扩展（另一个 SillyTavern 插件）的浮动 UI（设置弹窗 / 悬浮入口 / 图片预览 / 提示层）中提炼，已在实际酒馆宿主（深/浅主题、桌面/手机）上验证；**v2.0.0 起升级为「Flat Glass（扁平玻璃）」设计语言**（扁平化 + 玻璃拟态 + 动效体系 + 能力降级）；**v2.0.1 玻璃更透、浮层描边更柔和、动效补强（16 关键帧）**；**v2.1.0 新增「SillyTavern 插件面板布局标准（桌面 / 手机）」（第 12 章）**；**v2.1.1 描边再减弱、焦点环单圈 1.5px、面板固定尺寸、隐藏滚动条**；**v2.2.0 描边精致化（圆角玻璃去外框 1px 描边，改柔光+阴影成形；ghost/空态/指示器去圆角描边；焦点环回到单圈 2px 整数像素）并新增可选 `nvui-api.js` 设计调用 API、`tokens.json` 机器可读令牌镜像与 `AI-GUIDE.md` AI 协作指南（第 13 章）**；**v2.3.0 修复浮层载体层级 bug——非模态 `dialog.show()` 实测不进浏览器 top layer，新增 `--nvui-z-layer: 1000000` 载体档位，否则会被宿主正 z-index 表面（酒馆 `#sheld` z-index:30）整块盖住**。**v2.4.0 完善浮层载体与宿主模态的共存——宿主 `showModal()` 模态会给整页加 `inert`（`inert` 元素不参与命中测试），kit 浮层**无法**压过它（`popover=manual` 亦然），故改为**主动让位**：新增 `.is-host-modal` 降级态（不可点 + 压暗）与三个宿主模态 API（`countHostModals` / `syncHostModalState` / `getCarrierState`），宿主模态关闭后自动还原（见 §13.7）**。
+> 版本：**v2.5.0**（语义化版本；破坏性改名/删 token 升大版本，新增组件/新增 token 升小版本，调 token 取值/动效打磨/反馈修复升补丁版本）
+> 来源：从 novel-stream 扩展（另一个 SillyTavern 插件）的浮动 UI（设置弹窗 / 悬浮入口 / 图片预览 / 提示层）中提炼，已在实际酒馆宿主（深/浅主题、桌面/手机）上验证；**v2.0.0 起升级为「Flat Glass（扁平玻璃）」设计语言**（扁平化 + 玻璃拟态 + 动效体系 + 能力降级）；**v2.0.1 玻璃更透、浮层描边更柔和、动效补强（16 关键帧）**；**v2.1.0 新增「SillyTavern 插件面板布局标准（桌面 / 手机）」（第 12 章）**；**v2.1.1 描边再减弱、焦点环单圈 1.5px、面板固定尺寸、隐藏滚动条**；**v2.2.0 描边精致化（圆角玻璃去外框 1px 描边，改柔光+阴影成形；ghost/空态/指示器去圆角描边；焦点环回到单圈 2px 整数像素）并新增可选 `nvui-api.js` 设计调用 API、`tokens.json` 机器可读令牌镜像与 `AI-GUIDE.md` AI 协作指南（第 13 章）**；**v2.3.0 修复浮层载体层级 bug——非模态 `dialog.show()` 实测不进浏览器 top layer，新增 `--nvui-z-layer: 1000000` 载体档位，否则会被宿主正 z-index 表面（酒馆 `#sheld` z-index:30）整块盖住**。**v2.4.0 完善浮层载体与宿主模态的共存——宿主 `showModal()` 模态会给整页加 `inert`（`inert` 元素不参与命中测试），kit 浮层**无法**压过它（`popover=manual` 亦然），故改为**主动让位**：新增 `.is-host-modal` 降级态（不可点 + 压暗）与三个宿主模态 API（`countHostModals` / `syncHostModalState` / `getCarrierState`），宿主模态关闭后自动还原（见 §13.7）**。**v2.5.0 实施表现层布局持久化（Issue #5，persist / StorageAdapter / 250ms 防抖 / 跨屏视口越界钳制 / clearLayoutState）与面板头部标准化（Issue #6，themeToggle 平滑切换 / 标题区 update 胶囊 / panel.showUpdate 动态点亮 / WAI-ARIA 与无描边红线），电脑端面板宽度优化为 720px 黄金尺寸，提供标准扩展 ESM 与酒馆助手单文件双模式调用与平滑升级指南**。
 > 定位：**独立项目 + SillyTavern 插件自有的 body 级浮动 UI**。本目录自带 `package.json` / `LICENSE` / `CHANGELOG` / `test/`，**不依赖任何外部仓库或父目录，可整目录复制/移动到任意文件夹或仓库**。不接管聊天区、原生抽屉等宿主区域（那些区域必须沿用酒馆主题变量）。
 > 演示：**[在线组件预览（GitHub Pages）](https://zgy-beep.github.io/ui-kit/preview.html)**（免下载直接体验；可切换深/浅主题与实心/玻璃模式、演示面板布局）。
 
@@ -723,7 +723,7 @@ v2.0.0 起，阴影只允许出现在浮层（弹窗 / 悬浮面板 / 工具提�
 | `--nvui-switch-knob-on` | `15px` | 勾选态滑钮右移距离 |
 | `--nvui-modal-width` | `680px` | 弹窗最大宽度 |
 | `--nvui-modal-max-h` | `80vh` | 弹窗最大高度（窄屏为 `92dvh`） |
-| `--nvui-panel-width` | `880px` | 插件面板最大宽度（`min(--nvui-panel-width, 100%)`；v2.1.0 新增） |
+| `--nvui-panel-width` | `720px` | 插件面板最大宽度（`min(--nvui-panel-width, 100%)`；v2.1.0 引入 880px，v2.5.0 优化为 720px 黄金尺寸） |
 | `--nvui-panel-max-h` | `88vh` | 插件面板最大高度（桌面；手机底部抽屉为 `92dvh`；v2.1.0 新增） |
 
 ### 6.6 层级
@@ -1386,7 +1386,7 @@ v2.1.0 是**小版本**：只新增组件族与尺寸令牌，**无删除 / 重�
 
 | 新增 | 内容 | 接入方式 |
 | :--- | :--- | :--- |
-| 尺寸令牌 2 | `--nvui-panel-width: 880px`、`--nvui-panel-max-h: 88vh` | 覆盖 token 即可自定义面板宽高（tokens 总数 107 → 109） |
+| 尺寸令牌 2 | `--nvui-panel-width: 720px`、`--nvui-panel-max-h: 88vh` | 覆盖 token 即可自定义面板宽高（v2.5.0 优化为 720px） |
 | 组件类 10 | `.nvui-panel` / `.nvui-panel-header` / `.nvui-panel-title` / `.nvui-panel-actions` / `.nvui-panel-body` / `.nvui-panel-footer` / `.nvui-panel-heading` / `.nvui-sheet-handle` / `.nvui-bottom-nav` / `.nvui-bottom-nav-item` | 组件类总数 68 → 78；完整 DOM 与规则见 [第 12 章](#12-sillytavern-插件面板布局标准桌面--手机) |
 | 状态类 3 | `.nvui-overlay.is-panel` / `.nvui-switch-row.is-feature` / `.nvui-bottom-nav-item.is-active` | 按需添加；不进入组件类清单 |
 | 响应式 | 桌面 >600px 居中面板；手机 ≤600px 底部抽屉 + 底部图标导航 + 拖拽把手 + safe-area | 同一份 DOM 自动切换，无需 JS 分支 |
@@ -1484,6 +1484,79 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API；**
 3. 运行 `npm test`（测试已同步 2.4.0：token 110 + 载体让位机制断言）；
 4. 可选：宿主若用 `showModal()` 开弹窗，kit 会自动让位，**无需业务代码改动**。
 
+### 10.10 v2.4.0 → v2.5.0 布局持久化 + 面板头部标准化 + 720px 黄金尺寸（平滑升级指南）
+
+#### 10.10.1 双载体调用范式
+
+##### 1. SillyTavern ESM 标准扩展
+在标准扩展中结合宿主 `extension_settings`、`saveSettingsDebounced` 与 `checkGitHubRelease` 动态点亮：
+```javascript
+import { extension_settings as extensionSettings } from '../../../extensions.js';
+import { saveSettingsDebounced } from '../../../../script.js';
+import './ui-kit/nvui-api.js';
+
+const EXTENSION_NAME = 'my_plugin';
+
+function getStorage() {
+    const s = extensionSettings[EXTENSION_NAME] || (extensionSettings[EXTENSION_NAME] = { layout: {} });
+    return {
+        get: (k) => s.layout?.[k] || null,
+        set: (k, v) => { (s.layout || (s.layout = {}))[k] = v; saveSettingsDebounced(); },
+        delete: (k) => { delete s.layout?.[k]; saveSettingsDebounced(); }
+    };
+}
+
+const panel = NVUI.createPanel({
+    id: 'my_plugin_panel',
+    title: '我的插件',
+    version: 'v2.5.0',
+    persist: { size: true, tab: true, accordion: true, storage: getStorage() },
+    themeToggle: true,
+    tabs: [{ key: 'basic', label: '基本' }]
+});
+
+// 异步点亮更新徽标
+checkUpdate().then(info => {
+    if (info?.hasUpdate) panel.showUpdate({ version: info.version, url: info.url });
+});
+```
+
+##### 2. 酒馆助手单文件 IIFE 脚本（零构建 CDN 模式）
+通过 CDN 动态引入，一键声明 `persist: true` 与 `themeToggle: true`：
+```javascript
+// 一键开启原生 localStorage 记忆与主题切换
+const panel = NVUI.createPanel({
+    id: 'tavern_helper_panel',
+    title: '酒馆助手',
+    version: 'v2.5.0',
+    persist: true,     // 自动存取 localStorage 键 nvui_state_tavern_helper_panel
+    themeToggle: true, // 预置主题切换按钮
+    tabs: [{ key: 'main', label: '主面板' }]
+});
+```
+
+#### 10.10.2 平滑升级指南与安全替换清单 (v2.2~v2.4 -> v2.5.0)
+- **100% 向后兼容，零破坏性变更**：
+  - 所有新功能均为可选参数（`persist` 默认关闭、`themeToggle` 默认关闭）；
+  - 既有代码不加任何修改直接覆盖 `ui-kit/` 四大文件（`tokens.css`, `components.css`, `nvui-api.js`, `tokens.json`）即可无感升级。
+- **720px 黄金尺寸自适应**：
+  - 电脑端默认宽度由 880px 调整为 720px，视觉重心更加集中；若业务插件必须保留 880px 宽度，仅需在 `createPanel` 中配置 `width: 880` 或在 CSS 中覆盖 `--nvui-panel-width: 880px` 即可。
+- **安全替换清单**：
+  - [x] 将最新 `ui-kit/` 覆盖至插件目录；
+  - [x] 既有 `NVUI.createPanel(...)` 调用保持原样，运行正常；
+  - [x] 按需为面板添加 `persist: true` 或 `themeToggle: true`。
+
+#### 10.10.3 常见问题 FAQ
+- **Q1: 多个插件如果使用了相同的 panel id 会导致持久化数据冲突吗？**
+  - **解答**：不会。UI Kit 严格遵循沙箱键名规范 `nvui_state_${id}`，并且 `createPanel` 内部对 ID 进行归一化清洗；若遇到完全相同的 ID，`uniqueId` 调度器会自动附加唯一递增后缀保证隔离。但最佳实践依然推荐插件在 ID 中加上自身插件命名空间（如 `id: 'translator_panel'`）。
+- **Q2: 用户在 4K 大屏调整了超大面板，随后在手机或小屏笔记本打开，会导致关闭按钮飞出屏幕吗？**
+  - **解答**：不会。v2.5.0 实施了严格的 Viewport Clamping 算法：
+    - 移动端（<=600px）强制移除固定像素宽高，安全回退到 100% 底部抽屉规范；
+    - 桌面与笔记本视口下，位置与尺寸受到视口边界（保留 16px 安全边距）钳制，确保标题栏和右上角关闭按钮时刻可见、可点击；
+    - 开发者或用户也可随时调用 `NVUI.clearLayoutState(id)` 或 `panel.clearLayoutState()` 彻底重置。
+- **Q3: 自定义 StorageAdapter 异步写盘或频繁拖拽是否会引发 I/O 轰炸？**
+  - **解答**：不会。面板内部部署了严格的 250ms 防抖调度引擎，在拖拽改变大小、连续点击折叠面板或快速切 Tab 时，变动会被合并为单次落盘；并在面板关闭与销毁（`destroy()`）时执行安全冲刷（Flush），杜绝悬挂定时器与数据丢失。
+
 ---
 
 ## 11. 版本管理与 SemVer 规范（Major / Minor / Patch）
@@ -1519,10 +1592,11 @@ SillyTavern UI Kit 严格遵循 [Semantic Versioning 2.0.0 (SemVer)](https://sem
 
 ### 11.4 历史变更记录（倒序）
 
-- 当前 **v2.4.0**（2026-10-21）：**全链路深度加固与宿主模态让位**——宿主 `showModal()` 模态会给整页加 `inert`（`inert` 不参与命中测试），kit 浮层**无法**压过它（`popover=manual` 亦然，实测证伪）；改为**主动让位**：新增 `.is-host-modal` 降级态（不可点 + 压暗）与 3 个宿主模态 API（`countHostModals` / `syncHostModalState` / `getCarrierState`），宿主模态开关时自动降级/还原；NEW-25 ~ NEW-46 全量 22 项深度渗透加固；110 令牌 / 47 浅色 / 78 类 / 16 关键帧，无破坏性变更（小版本）。
-- 上一版 **v2.3.0**（2026-10-20）：**浮层载体完善**——宿主 `showModal()` 模态会给整页加 `inert`（`inert` 不参与命中测试），kit 浮层**无法**压过它（`popover=manual` 亦然，实测证伪）；改为**主动让位**：新增 `.is-host-modal` 降级态（不可点 + 压暗）与 3 个宿主模态 API（`countHostModals` / `syncHostModalState` / `getCarrierState`），宿主模态开关时自动降级/还原；110 令牌 / 47 浅色 / 78 类 / 16 关键帧，无破坏性变更（小版本）。
+- 当前 **v2.5.0**（2026-10-21）：**布局状态持久化与头部标准化**——createPanel 支持声明式 `persist: true` 或精细化对象，记忆宽高尺寸、最大化状态、当前激活 Tab Key 与折叠开合；支持可插拔 StorageAdapter（默认 localStorage 沙箱键 `nvui_state_${id}`），内置 250ms 写入防抖与 Viewport Clamping 跨屏视口越界安全钳制；面板头部右上角标准化预置 `themeToggle` 平滑主题切换按钮，标题区支持 `update` 选项与 `panel.showUpdate()` 动态点亮接口；电脑端面板默认宽度优化为 720px 黄金尺寸（`--nvui-panel-width: 720px`）；提供双载体完整调用范式与平滑升级指南；100% 向后兼容（小版本）。
+- 上一版 **v2.4.0**（2026-10-21）：**全链路深度加固与宿主模态让位**——宿主 `showModal()` 模态会给整页加 `inert`（`inert` 不参与命中测试），kit 浮层**无法**压过它（`popover=manual` 亦然，实测证伪）；改为**主动让位**：新增 `.is-host-modal` 降级态（不可点 + 压暗）与 3 个宿主模态 API（`countHostModals` / `syncHostModalState` / `getCarrierState`），宿主模态开关时自动降级/还原；NEW-25 ~ NEW-46 全量 22 项深度渗透加固；110 令牌 / 47 浅色 / 78 类 / 16 关键帧，无破坏性变更（小版本）。
 - 上一版 **v2.3.0**（2026-10-20）：**浮层载体层级修复**——非模态 `dialog.show()` 实测不进浏览器 top layer（只有 `showModal()` 进，但其 `inert` 会废掉宿主交互），载体此前无 z-index，会被宿主正 z-index 表面（酒馆 `#sheld` z-index:30，聊天非空时）整块盖住；新增 `--nvui-z-layer: 1000000` 载体档位并修正文档中「dialog 提升渲染层级」的错误论断；110 令牌 / 47 浅色 / 78 类 / 16 关键帧，无破坏性变更（小版本）。
 - 变更记录（倒序）：
+  - **v2.5.0**：新增布局持久化引擎（`persist` / StorageAdapter / 250ms 防抖 / 视口越界钳制 / `NVUI.clearLayoutState` / `panel.clearLayoutState`）；新增面板头部标准化操作流（`themeToggle` 平滑主题切换 / 标题区 `update` 胶囊 / `panel.showUpdate` 动态点亮）；电脑端面板优化为 720px 黄金尺寸；新增双载体调用范式与平滑升级指南；100% 向后兼容。
   - **v2.4.0**：新增 `.is-host-modal` 宿主模态降级态（`pointer-events:none` + `opacity:0.35` + `grayscale(0.6)`，子浮层一并让位）；`nvui-api.js` 新增 `countHostModals()` / `syncHostModalState()` / `getCarrierState()` 三个 API，并在 `createPanel()` / `showToast()` / `openLayer()` 中同步降级态；装幂等 watcher（`MutationObserver` 监听 `dialog[open]` + 捕获 `close` 事件）实现宿主模态动态开关的自动降级/还原；README 新增 §13.7 与 §10.9；实测脚本 `test/st-carrier-host-modal-check.js`（18 项断言）；CHANGELOG / package.json / tokens.json 升 2.4.0（令牌数不变）。**另含两批静态审查缺陷修复**（见 CHANGELOG「静态审查缺陷修复批次」与「静态审查批次二」两节）：前者修吐司层不重开 / 输入类型塌缩 / 焦点归还断链 / 属性白名单等 12 条，后者修令牌缓存 / 切 tab 全量遍历 / 吐司定时器泄漏 / 挂载点抛错等 9 条中低危项 —— 均为非破坏性修复，DOM 契约不变，详见 CHANGELOG。
   - **v2.3.0**：新增 `--nvui-z-layer: 1000000`（`dialog.nvui-tl` 载体档位，非模态无 top layer 提升、档位即生命线）；修正 §6.6 / §7.3 / §8 红线 1 / §10.8 / AI-GUIDE 中「dialog 提升层级 / top layer 决定层级 / html transform」等错误论断为实测真相；测试新增宿主 z-30 遮挡 + elementFromPoint 命中回归断言（共 229 条）；README 新增 §10.8；CHANGELOG / package.json / tokens.json 升 2.3.0。
   - **v2.2.0**：描边精致化（6 处分圆角玻璃去外框 1px、7 处直线分隔改玻璃分隔色、ghost/空态/指示器去圆角描边、焦点环 1.5px → 2px 单圈）；新增可选 JS API（`nvui-api.js`，`createPanel` / `showToast` 等）、`tokens.json`（109/47）、`AI-GUIDE.md`；README 新增第 13 章「JS API 与 AI 协作指南」（原许可顺延第 14 章）、§10.7 修订说明；无破坏性变更。
@@ -1534,9 +1608,9 @@ SillyTavern UI Kit 严格遵循 [Semantic Versioning 2.0.0 (SemVer)](https://sem
   - **v1.0.0**：首个版本。token 体系、组件样式、预览页、规范文档、`test/test-ui-kit.js`。
 - 兼容性约定：
   - 修 bug / 调整单个 token 值 / 动效打磨 / 反馈修复：补丁版本（2.1.x）；
-  - 新增组件 / 新增 token / 新增可选文件 / 新增可选 API（不破坏既有 DOM 与取值）：小版本（2.x.0）；当前 **2.4.0** 即小版本迭代（载体让位机制 + 3 个新 API），无破坏性变更，覆盖 CSS 即可升级；
+  - 新增组件 / 新增 token / 新增可选文件 / 新增可选 API（不破坏既有 DOM 与取值）：小版本（2.x.0）；当前 **2.5.0** 即小版本迭代（表现层布局持久化 + 头部标准化 + 720px 黄金尺寸），无破坏性变更，覆盖即可升级；
   - 重命名类/token、删除 token、修改 DOM 契约：大版本（x.0.0），并同步更新本文件的迁移对照表与 `test/test-ui-kit.js` 的金标准/必填清单。
-- 升级步骤：用新版本目录覆盖 `tokens.css` / `components.css` → 打开 `preview.html` 确认视觉无回归 → 在本目录运行 `npm test` →（若集成在插件中）再跑该插件的测试。v2.0.1 的升级细节见 [10.4](#104-v200--v201-修订说明)，v2.1.0 面板布局接入见 [10.5](#105-v201--v210-新增面板布局标准) 与 [第 12 章](#12-sillytavern-插件面板布局标准桌面--手机)，v2.1.1 描边 / 尺寸 / 滚动条调整见 [10.6](#106-v210--v211-描边再减弱--单圈焦点环--固定面板尺寸--隐藏滚动条)，v2.2.0 描边精致化与 API 接入见 [10.7](#107-v211--v220-描边精致化--新增-js-api--tokensjson--ai-指南) 与 [第 13 章](#13-js-api-与-ai-协作指南)，v2.3.0 浮层载体层级修复见 [10.8](#108-v220--v230-浮层载体层级修复新增---nvui-z-layer)，v2.4.0 载体完善见 [10.9](#109-v230--v240-载体完善宿主模态让位机制--3-个新-api) 与 [13.7](#137-载体与宿主模态v240--主动让位而非硬压)。
+- 升级步骤：用新版本目录覆盖 `tokens.css` / `components.css` → 打开 `preview.html` 确认视觉无回归 → 在本目录运行 `npm test` →（若集成在插件中）再跑该插件的测试。v2.0.1 的升级细节见 [10.4](#104-v200--v201-修订说明)，v2.1.0 面板布局接入见 [10.5](#105-v201--v210-新增面板布局标准) 与 [第 12 章](#12-sillytavern-插件面板布局标准桌面--手机)，v2.1.1 描边 / 尺寸 / 滚动条调整见 [10.6](#106-v210--v211-描边再减弱--单圈焦点环--固定面板尺寸--隐藏滚动条)，v2.2.0 描边精致化与 API 接入见 [10.7](#107-v211--v220-描边精致化--新增-js-api--tokensjson--ai-指南) 与 [第 13 章](#13-js-api-与-ai-协作指南)，v2.3.0 浮层载体层级修复见 [10.8](#108-v220--v230-浮层载体层级修复新增---nvui-z-layer)，v2.4.0 载体完善见 [10.9](#109-v230--v240-载体完善宿主模态让位机制--3-个新-api) 与 [13.7](#137-载体与宿主模态v240--主动让位而非硬压)，v2.5.0 布局持久化与头部标准化见 [10.10](#1010-v240--v250-布局持久化--面板头部标准化--720px-黄金尺寸平滑升级指南)。
 
 > 备注：`ui-kit/` 作为独立项目时，版本号只看本目录内的 `package.json` / `CHANGELOG.md`；它不代表任何宿主插件的版本。
 
@@ -1546,7 +1620,7 @@ SillyTavern UI Kit 严格遵循 [Semantic Versioning 2.0.0 (SemVer)](https://sem
 
 很多 SillyTavern 插件都需要一个「设置面板」。本章给出一套**跨桌面/手机共用同一份 DOM** 的排列标准（v2.1.0 新增）：
 
-- **电脑（>600px）**：居中玻璃面板，宽 `--nvui-panel-width`（880px，`min(…, 100%)`）、固定高 `--nvui-panel-max-h`（88vh），顶部横向 tabs 做分区导航；
+- **电脑（>600px）**：居中玻璃面板，宽 `--nvui-panel-width`（720px，`min(…, 100%)`）、固定高 `--nvui-panel-max-h`（88vh），顶部横向 tabs 做分区导航；
 - **手机（≤600px）**：底部抽屉（bottom sheet），全宽、固定高 `92dvh`、仅上圆角，隐藏顶部 tabs，改用**底部图标导航** + 拖拽把手 + safe-area。
 
 > **只参考排列结构，不复制皮肤**：本章的层次（标题栏 → 分区导航 → 内容列表 → 可选底部操作）来自常见插件面板的截图结构，但视觉一律使用 Kit 的 **Flat Glass**（紫色强调、磨砂玻璃、扁平列表、统一焦点环），不引入参考图的青色/他插件配色。组件实现见 `components.css`，`preview.html` 第 18 节有可打开的真实面板 demo（`?panel=1`）。
@@ -1554,7 +1628,7 @@ SillyTavern UI Kit 严格遵循 [Semantic Versioning 2.0.0 (SemVer)](https://sem
 ### 12.1 设计目标
 
 1. **同一份 DOM 自适应**：桌面顶部 tabs 与手机底部导航是同一份面板 DOM 的两种呈现，CSS 断点自动切换；不需要为两端写两套 HTML。
-2. **固定尺寸、不跳变（v2.1.1）**：面板外框尺寸固定——宽 `min(var(--nvui-panel-width), 100%)`（默认 880px 上限）、桌面高 `var(--nvui-panel-max-h)`（88vh）、手机高 `92dvh`；折叠/展开内容只改变 `.nvui-panel-body` 内部滚动内容，**不改变面板外框**。
+2. **固定尺寸、不跳变（v2.1.1 / v2.5.0）**：面板外框尺寸固定——宽 `min(var(--nvui-panel-width), 100%)`（默认 720px 上限，支持 opts.width 自定义与视口越界钳制）、桌面高 `var(--nvui-panel-max-h)`（88vh）、手机高 `92dvh`；折叠/展开内容只改变 `.nvui-panel-body` 内部滚动内容，**不改变面板外框**。
 3. **单一滚动层、隐藏滚动条（v2.1.1）**：只有 `.nvui-panel-body` 滚动（`overflow-y:auto`），且滚动条隐藏（`scrollbar-width: none` + `::-webkit-scrollbar { display: none }`），**滚动能力保留**；避免嵌套滚动与滚动穿透。
 4. **玻璃 + 扁平**：面板本体用玻璃（`--nvui-glass-bg` + 模糊 + 最低对比受光边 + 圆角），内部列表/折叠/开关保持扁平色阶（不描边、不投影）。
 5. **可访问性内建**：`role="dialog"` + `aria-modal="true"` + `aria-labelledby`；焦点管理沿用 [2.3 弹窗骨架](#23-弹窗骨架含浮层载体) 配方；底部导航用 `aria-current="page"`。
@@ -1565,7 +1639,7 @@ SillyTavern UI Kit 严格遵循 [Semantic Versioning 2.0.0 (SemVer)](https://sem
 ```text
 +------------------------------------------------------------------------------------------+
 |  .nvui-overlay.is-panel（flex 居中 + padding: space-4）                                   |
-|   +------------------------- .nvui-panel（min(880px,100%) / 固定高 88vh）---------------+  |
+|   +------------------------- .nvui-panel（min(720px,100%) / 固定高 88vh）---------------+  |
 |   |  .nvui-panel-header    插件标题（fs-2xl 粗体，单行省略）      [更多]  [关闭]       |  |
 |   +------------------------------------------------------------------------------------+  |
 |   |  .nvui-tabs（桌面顶部导航，常显）  [连载] [过滤] [导出] [同步] [关于]             |  |
@@ -1728,7 +1802,7 @@ SillyTavern UI Kit 严格遵循 [Semantic Versioning 2.0.0 (SemVer)](https://sem
 | 规则 | 桌面（>600px） | 手机（≤600px） |
 | :--- | :--- | :--- |
 | `.nvui-overlay.is-panel` | flex 居中 + `padding: --nvui-space-4` | `align-items: flex-end` + `padding: 0` |
-| `.nvui-panel` 宽度 | `min(var(--nvui-panel-width), 100%)`（默认 880px 上限） | `width: 100%` |
+| `.nvui-panel` 宽度 | `min(var(--nvui-panel-width), 100%)`（默认 720px 上限，支持 opts.width） | `width: 100%` |
 | `.nvui-panel` 高度（**固定**） | `height: var(--nvui-panel-max-h)`（默认 88vh；不随内容变化） | `height: 92dvh`（固定；不随内容变化） |
 | 圆角 | `--nvui-radius-xl`（四角） | 仅上圆角 `xl xl 0 0`（底部抽屉） |
 | 顶部 tabs | 显示 | 隐藏（导航交给底部） |
@@ -1876,7 +1950,7 @@ v2.2.0 新增三个可选的协作资产，让「用 Kit 规范做界面」从"�
 ```js
 // Node（测试 / 构建期静态生成；不触发 DOM）
 const NVUI = require('./nvui-api.js');
-console.log(NVUI.version);        // '2.4.0'
+console.log(NVUI.version);        // '2.5.0'
 console.log(typeof NVUI.createPanel); // 'function'
 ```
 
@@ -1887,6 +1961,8 @@ console.log(typeof NVUI.createPanel); // 'function'
 | `NVUI.version` / `NVUI.VERSION` | 版本号字符串（与 package.json / tokens.css 一致） | `string` |
 | `NVUI.PANEL_CLASS` | 面板根类名常量 `'nvui-panel'` | `string` |
 | `NVUI.classes` | 常用类名映射（`panel` / `overlayPanel` / `tabs` / `tab` / `tabpane` / `bottomNav` / `bottomNavItem` / `accordion` / `switchRow` / `inputRow` / `toast`） | `object` |
+| `NVUI.clearLayoutState(id, storageAdapter?)` | 清除指定面板的布局记忆（StorageAdapter 或默认 localStorage） | `void` |
+| `NVUI.clampPanelLayout(savedSize, savedPos, options?)` | 跨屏幕多分辨率视口越界钳制计算引擎（保证桌面与移动端安全贴边，避免关闭按钮不可达） | `object` |
 | `NVUI.getToken(name, scope?)` | 读取当前作用域的 CSS 变量值（如 `getToken('--nvui-accent')`）；**内置缓存**（键 = 令牌名 + scope），宿主的 class / 内联样式一变即自动重算 | `string` |
 | `NVUI.invalidateTokenCache()` | 手动让令牌缓存失效。宿主在 kit 之外改了样式表（如动态改写 CSS 变量值）且未触发 class / 内联样式变化时调用；`setTheme()` 内部已自动调用 | `void` |
 | `NVUI.setTheme(theme, options?)` | 切换主题 / 实心模式（`theme: 'light'`、`options.solid: true`；只切类名，不写颜色） | `void` |
@@ -1911,6 +1987,11 @@ console.log(typeof NVUI.createPanel); // 'function'
 | `id` | 根 id 前缀（默认自动生成） |
 | `title` | 面板标题（`aria-labelledby` 指向它） |
 | `version` | 右上角版本徽标文字（可选） |
+| `width` | 初始自定义宽度（number，单位 px，默认 720；自动经 Viewport Clamping 钳制） |
+| `persist` | `boolean 或 PersistConfig`：布局状态持久化开关。传 true 开启全部（尺寸/tab/accordion）；支持自定义 `storage` 适配器 |
+| `themeToggle` | `boolean 或 { onThemeChange, initial }`：头部右上角预置主题切换按钮（平滑太阳/月亮动效，自动同步 `NVUI.setTheme`） |
+| `onThemeChange` | `(theme: 'dark' 或 'light') => void`：主题切换事件回调 |
+| `update` | `UpdateConfig`：`{ version, label, url, onClick }`，面板标题右侧预置版本更新胶囊 |
 | `tabs` | `[{ key, label, icon }]`；为空时无导航（单页面板） |
 | `active` | 初始 tab key（默认第一个） |
 | `actions` | 标题栏右侧额外图标按钮 `[{ icon, label, onClick }]` |
@@ -1922,7 +2003,8 @@ console.log(typeof NVUI.createPanel); // 'function'
 
 控制器提供：`id` / `dialog` / `overlay` / `panel` / `body` / `tabs` / `bottomNav` 节点，以及
 `open()` / `close()` / `destroy()` / `setTab(key)` / `syncIndicator()` / `addNode(key, node)` /
-`addSwitch(key, opts)` / `addInput(key, opts)` / `addAccordion(key, opts)` / `addProgress(key, opts)` / `addSectionTitle(key, text)`。
+`addSwitch(key, opts)` / `addInput(key, opts)` / `addAccordion(key, opts)` / `addProgress(key, opts)` / `addSectionTitle(key, text)` /
+`showUpdate(updateConfig)` / `clearLayoutState()` / `setSize(width, height)` / `setMaximized(boolean)`。
 
 > **`destroy()`**：销毁面板并从 DOM 移除其 dialog/overlay、注销全局 Esc 监听、触发 `destroy` 回调。
 > 长生命周期的插件（如可反复打开的设置页）建议在插件卸载 / 重复初始化前调用，避免重复 DOM 与监听器累积。
@@ -1970,7 +2052,7 @@ panel.open();
 ```json
 {
   "name": "sillytavern-nvui-kit-tokens",
-  "version": "2.3.0",
+  "version": "2.5.0",
   "description": "SillyTavern UI Kit 设计令牌机器可读镜像（由 tokens.css 生成，勿手改）。dark = 深色默认，light = .nvui-theme-light 覆盖。",
   "generatedFrom": "tokens.css",
   "dark": { "--nvui-bg": "#161a24", "--nvui-accent": "#8b6dff", "...": "共 110 个令牌" },

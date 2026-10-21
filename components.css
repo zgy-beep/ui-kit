@@ -1,7 +1,7 @@
 /**
  * SillyTavern 插件通用 UI Kit · 组件样式
  * ------------------------------------------------------------------
- * 版本：ui-kit v2.4.0；依赖：tokens.css（必须先引入或先拼进来）
+ * 版本：ui-kit v2.5.0；依赖：tokens.css（必须先引入或先拼进来）
  *
  * 本目录是独立项目（自带 package.json / LICENSE / CHANGELOG / test/），
  * 可整目录复制/移动到任意文件夹或仓库，不依赖任何外部文件。
@@ -1867,7 +1867,7 @@ dialog.nvui-tl > .nvui-toast-stack {
  *   </div></dialog>
  *
  * 响应式规则（断点 600px，与 Kit 其它组件一致）：
- *   电脑 >600px：overlay 居中、panel 定宽 --nvui-panel-width（880px）并限高 88vh；
+ *   电脑 >600px：overlay 居中、panel 定宽 --nvui-panel-width（720px）并限高 88vh；
  *                显示顶部 tabs，隐藏底部导航与拖拽把手。
  *   手机 <=600px：overlay 底部对齐、panel 全宽底部抽屉（92dvh、仅上圆角）；
  *                隐藏顶部 tabs，显示拖拽把手与底部图标导航；底部导航自动加 safe-area。
@@ -1879,7 +1879,7 @@ dialog.nvui-tl > .nvui-toast-stack {
 .nvui-panel {
     display: flex;
     flex-direction: column;
-    /* v2.1.1：固定尺寸，折叠/展开内容不会改变面板外框（宽 880 上限、高 88vh） */
+    /* v2.1.1：固定尺寸，折叠/展开内容不会改变面板外框（宽 720 上限、高 88vh） */
     width: min(var(--nvui-panel-width), 100%);
     height: var(--nvui-panel-max-h);
     max-height: var(--nvui-panel-max-h);
@@ -1921,6 +1921,81 @@ dialog.nvui-tl > .nvui-toast-stack {
     display: inline-flex;
     align-items: center;
     gap: var(--nvui-space-1);
+    flex-shrink: 0;
+}
+
+/* ==========================================================================
+ * v2.5.0 面板头部标准化：主题切换按钮与更新提示胶囊
+ * ========================================================================== */
+
+/* 1. 主题切换按钮（.nvui-theme-toggle）
+ * 继承 .nvui-icon-btn 扁平无边框风格，内置日/月图标平滑过渡动效 */
+.nvui-theme-toggle i {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform var(--nvui-duration-base) var(--nvui-ease-standard),
+        opacity var(--nvui-duration-base) var(--nvui-ease-standard),
+        color var(--nvui-duration-fast) var(--nvui-ease-standard);
+}
+
+.nvui-theme-toggle:hover i {
+    transform: rotate(20deg) scale(1.08);
+    color: var(--nvui-text);
+}
+
+.nvui-theme-toggle:active i {
+    transform: rotate(45deg) scale(0.92);
+}
+
+/* 2. 版本更新提示胶囊（.nvui-update-pill）
+ * Flat Glass 扁平优先原则：仅使用淡底 + 文字，严禁 1px 实体外描边。
+ * 具备完整 WAI-ARIA 交互态与统一焦点环 */
+.nvui-update-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--nvui-space-1);
+    flex-shrink: 0;
+    padding: 2px var(--nvui-space-2);
+    border: none;
+    outline: none;
+    border-radius: var(--nvui-radius-pill);
+    background: var(--nvui-accent-bg);
+    color: var(--nvui-accent-2);
+    font-size: var(--nvui-fs-xs);
+    font-weight: var(--nvui-fw-medium);
+    line-height: var(--nvui-lh-tight);
+    vertical-align: middle;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    transition: background-color var(--nvui-transition),
+        color var(--nvui-transition),
+        transform var(--nvui-duration-fast) var(--nvui-ease-standard);
+}
+
+.nvui-update-pill:hover {
+    background: var(--nvui-accent-bg-hover);
+    color: var(--nvui-text);
+}
+
+.nvui-update-pill:active {
+    transform: scale(0.95);
+}
+
+.nvui-update-pill:focus-visible {
+    outline: var(--nvui-focus-ring-w) solid var(--nvui-focus-ring-color);
+    outline-offset: var(--nvui-focus-ring-offset);
+}
+
+.nvui-update-pill:focus:not(:focus-visible) {
+    outline: none;
+}
+
+/* 3. 面板标题栏内部徽标与胶囊防挤压守卫 */
+.nvui-panel-title > .nvui-badge,
+.nvui-panel-title > .nvui-update-pill {
     flex-shrink: 0;
 }
 
@@ -2198,7 +2273,9 @@ dialog.nvui-tl > .nvui-toast-stack {
         .nvui-pop-in,
         .nvui-stagger,
         .nvui-pulse,
-        .nvui-bottom-nav-item
+        .nvui-bottom-nav-item,
+        .nvui-theme-toggle,
+        .nvui-update-pill
     ),
     :is(
         .nvui-overlay,
@@ -2226,7 +2303,9 @@ dialog.nvui-tl > .nvui-toast-stack {
         .nvui-pop-in,
         .nvui-stagger,
         .nvui-pulse,
-        .nvui-bottom-nav-item
+        .nvui-bottom-nav-item,
+        .nvui-theme-toggle,
+        .nvui-update-pill
     )::before,
     :is(
         .nvui-overlay,
@@ -2254,9 +2333,12 @@ dialog.nvui-tl > .nvui-toast-stack {
         .nvui-pop-in,
         .nvui-stagger,
         .nvui-pulse,
-        .nvui-bottom-nav-item
+        .nvui-bottom-nav-item,
+        .nvui-theme-toggle,
+        .nvui-update-pill
     )::after,
     .nvui-stagger > *,
+    .nvui-theme-toggle i,
     .nvui-switch-row input[type="checkbox"],
     .nvui-switch-row input[type="checkbox"]::after {
         animation-duration: 0.01ms !important;
