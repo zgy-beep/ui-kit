@@ -1491,7 +1491,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API；**
 - 当前 **v2.4.0**（2026-10-20）：**浮层载体完善**——宿主 `showModal()` 模态会给整页加 `inert`（`inert` 不参与命中测试），kit 浮层**无法**压过它（`popover=manual` 亦然，实测证伪）；改为**主动让位**：新增 `.is-host-modal` 降级态（不可点 + 压暗）与 3 个宿主模态 API（`countHostModals` / `syncHostModalState` / `getCarrierState`），宿主模态开关时自动降级/还原；110 令牌 / 47 浅色 / 78 类 / 16 关键帧，无破坏性变更（小版本）。
 - 上一版 **v2.3.0**（2026-10-20）：**浮层载体层级修复**——非模态 `dialog.show()` 实测不进浏览器 top layer（只有 `showModal()` 进，但其 `inert` 会废掉宿主交互），载体此前无 z-index，会被宿主正 z-index 表面（酒馆 `#sheld` z-index:30，聊天非空时）整块盖住；新增 `--nvui-z-layer: 1000000` 载体档位并修正文档中「dialog 提升渲染层级」的错误论断；110 令牌 / 47 浅色 / 78 类 / 16 关键帧，无破坏性变更（小版本）。
 - 变更记录（倒序）：
-  - **v2.4.0**：新增 `.is-host-modal` 宿主模态降级态（`pointer-events:none` + `opacity:0.35` + `grayscale(0.6)`，子浮层一并让位）；`nvui-api.js` 新增 `countHostModals()` / `syncHostModalState()` / `getCarrierState()` 三个 API，并在 `createPanel()` / `showToast()` / `openLayer()` 中同步降级态；装幂等 watcher（`MutationObserver` 监听 `dialog[open]` + 捕获 `close` 事件）实现宿主模态动态开关的自动降级/还原；README 新增 §13.7 与 §10.9；实测脚本 `test/st-carrier-host-modal-check.js`（18 项断言）；CHANGELOG / package.json / tokens.json 升 2.4.0（令牌数不变）。
+  - **v2.4.0**：新增 `.is-host-modal` 宿主模态降级态（`pointer-events:none` + `opacity:0.35` + `grayscale(0.6)`，子浮层一并让位）；`nvui-api.js` 新增 `countHostModals()` / `syncHostModalState()` / `getCarrierState()` 三个 API，并在 `createPanel()` / `showToast()` / `openLayer()` 中同步降级态；装幂等 watcher（`MutationObserver` 监听 `dialog[open]` + 捕获 `close` 事件）实现宿主模态动态开关的自动降级/还原；README 新增 §13.7 与 §10.9；实测脚本 `test/st-carrier-host-modal-check.js`（18 项断言）；CHANGELOG / package.json / tokens.json 升 2.4.0（令牌数不变）。**另含两批静态审查缺陷修复**（见 CHANGELOG「静态审查缺陷修复批次」与「静态审查批次二」两节）：前者修吐司层不重开 / 输入类型塌缩 / 焦点归还断链 / 属性白名单等 12 条，后者修令牌缓存 / 切 tab 全量遍历 / 吐司定时器泄漏 / 挂载点抛错等 9 条中低危项 —— 均为非破坏性修复，DOM 契约不变，详见 CHANGELOG。
   - **v2.3.0**：新增 `--nvui-z-layer: 1000000`（`dialog.nvui-tl` 载体档位，非模态无 top layer 提升、档位即生命线）；修正 §6.6 / §7.3 / §8 红线 1 / §10.8 / AI-GUIDE 中「dialog 提升层级 / top layer 决定层级 / html transform」等错误论断为实测真相；测试新增宿主 z-30 遮挡 + elementFromPoint 命中回归断言（共 229 条）；README 新增 §10.8；CHANGELOG / package.json / tokens.json 升 2.3.0。
   - **v2.2.0**：描边精致化（6 处分圆角玻璃去外框 1px、7 处直线分隔改玻璃分隔色、ghost/空态/指示器去圆角描边、焦点环 1.5px → 2px 单圈）；新增可选 JS API（`nvui-api.js`，`createPanel` / `showToast` 等）、`tokens.json`（109/47）、`AI-GUIDE.md`；README 新增第 13 章「JS API 与 AI 协作指南」（原许可顺延第 14 章）、§10.7 修订说明；无破坏性变更。
   - **v2.1.1**：补丁迭代——描边 token 再降一档（line / line-2 / dash / block-line / block-line-2 / glass-line / glass-highlight）、`--nvui-focus-ring-w` 2px → 1.5px 且单圈不叠边、`.nvui-panel` 固定高度（折叠展开不跳变）、`.nvui-panel-body` / `.nvui-modal-body` 隐藏滚动条（保留滚动）；README §10.6 记录修订，第 12 章补固定尺寸与滚动条说明；无破坏性变更。
@@ -1855,7 +1855,8 @@ console.log(typeof NVUI.createPanel); // 'function'
 | `NVUI.version` / `NVUI.VERSION` | 版本号字符串（与 package.json / tokens.css 一致） | `string` |
 | `NVUI.PANEL_CLASS` | 面板根类名常量 `'nvui-panel'` | `string` |
 | `NVUI.classes` | 常用类名映射（`panel` / `overlayPanel` / `tabs` / `tab` / `tabpane` / `bottomNav` / `bottomNavItem` / `accordion` / `switchRow` / `inputRow` / `toast`） | `object` |
-| `NVUI.getToken(name, scope?)` | 读取当前作用域的 CSS 变量值（如 `getToken('--nvui-accent')`） | `string` |
+| `NVUI.getToken(name, scope?)` | 读取当前作用域的 CSS 变量值（如 `getToken('--nvui-accent')`）；**内置缓存**（键 = 令牌名 + scope），宿主的 class / 内联样式一变即自动重算 | `string` |
+| `NVUI.invalidateTokenCache()` | 手动让令牌缓存失效。宿主在 kit 之外改了样式表（如动态改写 CSS 变量值）且未触发 class / 内联样式变化时调用；`setTheme()` 内部已自动调用 | `void` |
 | `NVUI.setTheme(theme, options?)` | 切换主题 / 实心模式（`theme: 'light'`、`options.solid: true`；只切类名，不写颜色） | `void` |
 | `NVUI.detectGlassSupport(options?)` | 探测宿主是否**实际**禁用了 `backdrop-filter`（读渲染后的计算值，不猜宿主类名）；`options.force` 强制重探 | `boolean` |
 | `NVUI.syncGlassFallback(options?)` | 探测并在模糊不可用时自动给根节点加 `.nvui-solid`（实心回退）。`createPanel()` / `showToast()` 已内置调用 | `boolean` |

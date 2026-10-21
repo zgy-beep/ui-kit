@@ -1189,6 +1189,9 @@ dialog.nvui-tl > .nvui-toast-stack {
     inset: 0;
     background: linear-gradient(90deg, transparent, var(--nvui-skeleton-shine), transparent);
     transform: translateX(-100%);
+    /* NEW-13：扫光是纯 transform 位移动画（不触发 layout），
+       提前提升为合成层，避免骨架屏批量渲染时每条都跑一次主线程动画。 */
+    will-change: transform;
     animation: nvui-shimmer var(--nvui-shimmer-duration) var(--nvui-ease-standard) infinite;
 }
 
@@ -1238,6 +1241,8 @@ dialog.nvui-tl > .nvui-toast-stack {
     inset: 0;
     background: linear-gradient(90deg, transparent, var(--nvui-skeleton-shine), transparent);
     transform: translateX(-100%);
+    /* NEW-13：同上，纯 transform 扫光，提升为合成层动画。 */
+    will-change: transform;
     animation: nvui-shimmer var(--nvui-shimmer-duration) var(--nvui-ease-standard) infinite;
 }
 

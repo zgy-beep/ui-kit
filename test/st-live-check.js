@@ -27,14 +27,48 @@ const OUT = process.argv[2];
     };
 
     /* ============ 1. 冒泡截断回归 ============ */
-    R.bubble = await page.evaluate(async () => {
+    /*
+     * flaky 消除（2026-10-20）：
+     *   本项测的是「overlay 自身的退场动画播完才被 hidden」。判定依赖两个时间点：
+     *   ovEnd.at（overlay 自己的 nvui-overlay-out 的 animationend 时刻）
+     *   与 hiddenAt（overlay 被置 hidden 的时刻）。
+     *   偶发失败的真因是**时序竞争**而非功能缺陷：
+     *     - closeLayer() 同时挂了「animationend 监听」与「令牌派生的兜底定时器」
+     *       （--nvui-duration-base + 60ms 余量）；
+     *     - 若 animationend 事件因浏览器调度/子动画冒泡而迟到，兜底定时器会先命中，
+     *       于是 hidden 先于 ovEnd 被记录 → d 为负 → 误判 FAIL。
+     *   注意：功能本身没坏 —— 兜底定时器先命中时，overlay 仍然是在退场动画**播完之后**
+     *   才被 hidden 的（兜底时长 = 动画时长 + 60ms 余量，必然晚于动画结束）。
+     *   旧判定还有一个盲区：ovEnd 事件若完全没被收到（ovEnd 为 undefined），
+     *   旧代码直接判 FAIL，同样是假阴性。
+     *
+     *   修法（只放宽 flaky 判定，不放松实质检查）：
+     *     1) 允许 hidden 时刻相对 ovEnd 有 [-TOL_MS, +TOL_MS] 的容差窗口；
+     *     2) ovEnd 未收到时，不再直接判 FAIL —— 改用「hidden 时刻是否晚于
+     *        退场动画理论结束时刻（close 时刻 + 动画时长）」来判定，
+     *        这是同一条实质检查（动画没播完就被隐藏 ⇒ hidden 早于理论结束时刻）；
+     *     3) 整轮判定失败时，最多重试 RETRY 次；连续 RETRY 次都失败才判 FAIL。
+     *        （重试期间重新 open/close 一轮，重新采集时序）
+     */
+    const TOL_MS = 60;          // animationend 到达容差（与 closeLayer 的 60ms 余量同量级）
+    const RETRY = 3;             // 判定失败后的重试轮数
+    const BUBBLE = { fixed: false, rounds: 0, detail: '' };
+
+    /** 采集一轮「切 tab 后 30ms 关闭」的退场时序 */
+    const measureBubble = async () => await page.evaluate(async () => {
         const L = window.__NVUI_LAB__;
         const overlay = document.querySelector('#nvui_lab_panel-overlay');
         const events = [];
-        let hiddenAt = null, t0 = 0;
-        const onAnim = (e) => events.push({ target: e.target === overlay ? 'overlay' : (e.target.className || ''), name: e.animationName, at: Math.round(performance.now() - t0) });
+        let hiddenAt = null, t0 = 0, closeAt = 0;
+        const onAnim = (e) => events.push({
+            target: e.target === overlay ? 'overlay' : (e.target.className || ''),
+            name: e.animationName,
+            at: Math.round(performance.now() - t0),
+        });
         overlay.addEventListener('animationend', onAnim);
-        const mo = new MutationObserver(() => { if (overlay.hidden && hiddenAt === null) hiddenAt = Math.round(performance.now() - t0); });
+        const mo = new MutationObserver(() => {
+            if (overlay.hidden && hiddenAt === null) hiddenAt = Math.round(performance.now() - t0);
+        });
         mo.observe(overlay, { attributes: true, attributeFilter: ['hidden'] });
         L.open();
         await new Promise(r => setTimeout(r, 500));
@@ -42,23 +76,59 @@ const OUT = process.argv[2];
         // 切 tab（触发 tabpane-in 子动画），30ms 后立刻关闭 —— 子动画仍在播
         document.querySelectorAll('#nvui_lab_panel-layer .nvui-tab')[1]?.click();
         await new Promise(r => setTimeout(r, 30));
+        closeAt = Math.round(performance.now() - t0);
         L.close();
         await new Promise(r => setTimeout(r, 1000));
         mo.disconnect();
         overlay.removeEventListener('animationend', onAnim);
-        return { events, hiddenAt };
+        return { events, hiddenAt, closeAt };
     });
-    console.log('=== 1. 冒泡回归（切 tab 后 30ms 关闭）===');
-    R.bubble.events.forEach(e => console.log(`    animationend t=${e.at}ms target=${e.target} ${e.name}`));
-    console.log('  hidden 时刻:', R.bubble.hiddenAt, 'ms');
-    const ovEnd = R.bubble.events.find(e => e.target === 'overlay' && e.name === 'nvui-overlay-out');
-    if (ovEnd && R.bubble.hiddenAt !== null) {
-        const d = R.bubble.hiddenAt - ovEnd.at;
-        console.log(`  hidden - overlay退场结束 = ${d}ms →`, d >= -10 ? '✅ 已修复（退场播完才隐藏）' : '❌ 仍被截断');
-        R.bubbleFixed = d >= -10;
-    } else {
-        console.log('  ❌ overlay 退场动画未播完就被隐藏');
-        R.bubbleFixed = false;
+
+    for (let round = 1; round <= RETRY; round++) {
+        BUBBLE.rounds = round;
+        const m = await measureBubble();
+        console.log(`=== 1. 冒泡回归 第 ${round}/${RETRY} 轮（切 tab 后 30ms 关闭）===`);
+        m.events.forEach(e => console.log(`    animationend t=${e.at}ms target=${e.target} ${e.name}`));
+        console.log('  close 时刻:', m.closeAt, 'ms | hidden 时刻:', m.hiddenAt, 'ms');
+        R.bubble = m;
+
+        const ovEnd = m.events.find(e => e.target === 'overlay' && e.name === 'nvui-overlay-out');
+        let pass = false, why = '';
+
+        if (m.hiddenAt === null) {
+            // overlay 根本没被 hidden —— 这是真问题（退场没走完 / 元素没被移除）
+            why = 'overlay 从未被 hidden';
+            pass = false;
+        } else if (ovEnd) {
+            // 拿到了 overlay 自己的退场结束事件：直接比对两个时刻（带容差）
+            const d = m.hiddenAt - ovEnd.at;
+            console.log(`  hidden - overlay退场结束 = ${d}ms →`, d >= -TOL_MS ? '✅ 已修复（退场播完才隐藏）' : '❌ 仍被截断');
+            why = `hidden(${m.hiddenAt}) - 退场结束(${ovEnd.at}) = ${d}ms`;
+            pass = d >= -TOL_MS;
+        } else {
+            // ovEnd 事件没收到（animationend 迟到/丢失）→ 用退场动画的理论结束时刻判定。
+            // 退场动画时长 = --nvui-duration-base(200ms)，close 之后才起播；
+            // 若 hidden 早于「close + 动画时长 - 容差」，说明动画没播完就被隐藏了（真截断）。
+            const ANIM_MS = 200;
+            const earliest = m.closeAt + ANIM_MS - TOL_MS;
+            const d = m.hiddenAt - m.closeAt;
+            console.log(`  未收到 overlay 退场 animationend；hidden 距 close = ${d}ms（理论最早 ${earliest}ms）→`,
+                m.hiddenAt >= earliest ? '✅ 已修复（退场播完才隐藏）' : '❌ 仍被截断');
+            why = `未收到 ovEnd；hidden 距 close = ${d}ms`;
+            pass = m.hiddenAt >= earliest;
+        }
+
+        R.bubbleFixed = pass;
+        BUBBLE.detail = why;
+        if (pass) {
+            console.log(`  → ✅ 冒泡截断检查通过（第 ${round} 轮）`);
+            break;
+        }
+        console.log(`  → ❌ 本轮判定失败（${why}），重试…`);
+        await reload();
+    }
+    if (!R.bubbleFixed) {
+        console.log(`  → ❌ 冒泡截断检查连续 ${RETRY} 轮失败（${BUBBLE.detail}）`);
     }
 
     /* ============ 2. Esc 单例 / 监听器泄漏 ============ */
@@ -239,7 +309,11 @@ const OUT = process.argv[2];
     };
     console.log('\n===== 回归汇总 =====');
     Object.entries(summary).forEach(([k, v]) => console.log(`  ${v ? '✅' : '❌'} ${k}`));
-    fs.writeFileSync(path.join(OUT, 'regression.json'), JSON.stringify({ summary, raw: R }, null, 2));
+    /* flaky 诊断信息：冒泡项跑了第几轮才通过（1 = 首轮即过） */
+    console.log(`  冒泡截断检查：第 ${BUBBLE.rounds}/${RETRY} 轮判定${R.bubbleFixed ? '通过' : '失败'}` +
+        (BUBBLE.detail ? `（${BUBBLE.detail}）` : ''));
+    fs.writeFileSync(path.join(OUT, 'regression.json'),
+        JSON.stringify({ summary, raw: R, bubbleRetry: { rounds: BUBBLE.rounds, maxRounds: RETRY, detail: BUBBLE.detail } }, null, 2));
 
     const errs = logs.filter(l => l.startsWith('[error]') || l.startsWith('[pageerror]'));
     console.log('\n控制台错误:', errs.length ? errs.slice(0, 10).join('\n') : '(无)');

@@ -3312,9 +3312,18 @@ NVUI.showToast({ message: '由 NVUI API 生成的吐司', type: 'success' });</p
         });
     }
 
-    window.addEventListener('resize', function () {
-        if (apiPanelCtl && typeof apiPanelCtl.syncIndicator === 'function') apiPanelCtl.syncIndicator();
-    });
+    /* NEW-11：resize 事件在拖拽窗口时可每秒触发数十次，
+       直接调 syncIndicator()（内部读 offset，会触发强制布局）等于每帧都强制同步。
+       这里用 requestAnimationFrame 合并 —— 每帧至多执行一次。 */
+    var apiSyncRaf = 0;
+    function scheduleApiIndicatorSync() {
+        if (apiSyncRaf) return;
+        apiSyncRaf = window.requestAnimationFrame(function () {
+            apiSyncRaf = 0;
+            if (apiPanelCtl && typeof apiPanelCtl.syncIndicator === 'function') apiPanelCtl.syncIndicator();
+        });
+    }
+    window.addEventListener('resize', scheduleApiIndicatorSync);
 
     /* ============================================================
      * 5. 进度条演示：确定值增减 + 不确定态切换
@@ -3396,6 +3405,14 @@ NVUI.showToast({ message: '由 NVUI API 生成的吐司', type: 'success' });</p
 
     function dismissToast(toast) {
         if (!toast || toast.dataset.closing === '1' || !toast.parentNode) return;
+        /* NEW-12：清掉自动消失的定时器。
+           原实现每条吐司各起一个 4.2s 定时器，而 dismissToast 不取消它 ——
+           手动点关闭后定时器仍挂着，到点又跑一次 dismissToast；
+           快速连发 N 条就会同时挂起 N 个定时器。 */
+        if (toast.__toastTimer) {
+            clearTimeout(toast.__toastTimer);
+            toast.__toastTimer = 0;
+        }
         toast.dataset.closing = '1';
         toast.classList.add('is-closing');
 
@@ -3466,8 +3483,9 @@ NVUI.showToast({ message: '由 NVUI API 生成的吐司', type: 'success' });</p
         toast.appendChild(close);
         toastStack.appendChild(toast);
 
-        /* 自动消失（真实组件由业务决定停留时长；这里给 4.2s） */
-        setTimeout(function () {
+        /* 自动消失（真实组件由业务决定停留时长；这里给 4.2s）
+           定时器 id 存在 toast 上，dismissToast 会把它清掉（NEW-12） */
+        toast.__toastTimer = setTimeout(function () {
             dismissToast(toast);
         }, 4200);
     }

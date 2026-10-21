@@ -56,10 +56,79 @@
     var PANEL_CLASS = 'nvui-panel';
     var TOAST_LAYER_ID = 'nvui-api-toast-layer';
 
+    /* ---------------------- 调试开关与日志 ---------------------- */
+    /*
+     * v2.4.0 起提供可观测性（NEW-19）：
+     *   NVUI.config.debug = true  → 打开关键路径的详细日志（面板创建、宿主模态同步、玻璃探测等）
+     *   NVUI.config.logger        → 可替换为宿主自己的日志总线（默认 console）
+     * 分级约定：
+     *   debug 级 —— 只在 debug 打开时输出（正常路径的细节）
+     *   warn  级 —— 异常但已降级处理，**始终输出**（不得静默吞掉）
+     *   error 级 —— 运行失败，**始终输出**
+     */
+    var config = {
+        debug: false,
+        logger: (typeof console !== 'undefined' && console) ? console : null,
+    };
+
+    function logAt(level, message, detail) {
+        var logger = (config && config.logger)
+            || (typeof console !== 'undefined' ? console : null);
+        if (!logger) return;
+        var fn = null;
+        if (level === 'error') fn = logger.error;
+        else if (level === 'warn') fn = logger.warn;
+        else fn = logger.log;
+        if (typeof fn !== 'function') return;
+        /* debug 级只在开关打开时输出；warn / error 始终输出 */
+        if (level === 'debug' && !(config && config.debug)) return;
+        try {
+            fn.call(logger, '[NVUI] ' + message, detail === undefined ? '' : detail);
+        } catch (err) {
+            /* 日志自身失败不得影响主流程 */
+        }
+    }
+
+    function debug(message, detail) {
+        logAt('debug', message, detail);
+    }
+
+    function warn(message, detail) {
+        logAt('warn', message, detail);
+    }
+
+    function error(message, detail) {
+        logAt('error', message, detail);
+    }
+
     /* ----------------------------- 工具 ----------------------------- */
 
     function isDomAvailable() {
         return typeof document !== 'undefined' && !!document.createElement;
+    }
+
+    /* 属性白名单：只允许「语义 / 无障碍 / 表单」类属性透传。
+     * 任何 on* 事件属性、style、srcdoc 等可执行 / 可注入通道一律丢弃，
+     * 避免调用方（或被污染的宿主数据）借属性通道塞入事件处理器。
+     * href / src 不在白名单内：它们能承载 javascript: 伪协议，属注入面。 */
+    var ALLOWED_ATTRS = [
+        'id', 'title', 'role', 'type', 'hidden', 'tabindex', 'for', 'value',
+        'name', 'placeholder', 'disabled', 'checked', 'readonly', 'required',
+        'multiple', 'min', 'max', 'step', 'rows', 'cols', 'span',
+        'alt', 'width', 'height', 'lang', 'dir',
+    ];
+
+    function attrAllowed(key) {
+        if (typeof key !== 'string' || !key) return false;
+        var lower = key.toLowerCase();
+        /* 事件属性（onclick / onerror / onload …）一律拒绝 */
+        if (lower.indexOf('on') === 0) return false;
+        /* style / srcdoc 等可直接注入脚本或样式的通道一律拒绝 */
+        if (lower === 'style' || lower === 'srcdoc' || lower === 'formaction') return false;
+        /* aria-* 与 data-* 是无障碍 / 自定义数据通道，放行 */
+        if (lower.indexOf('aria-') === 0) return true;
+        if (lower.indexOf('data-') === 0) return true;
+        return ALLOWED_ATTRS.indexOf(lower) !== -1;
     }
 
     function el(tag, className, attrs) {
@@ -71,8 +140,13 @@
                 if (v === null || v === undefined) return;
                 /* 只允许 textContent 通道：绝不接受原始 HTML 片段，
                    避免调用方把用户输入塞进属性时形成 XSS 缺口。 */
-                if (k === 'text') node.textContent = String(v);
-                else node.setAttribute(k, String(v));
+                if (k === 'text') { node.textContent = String(v); return; }
+                /* 白名单之外的属性静默丢弃（不抛错），并记一条 warn 便于排查 */
+                if (!attrAllowed(k)) {
+                    warn('el(): 已丢弃白名单外的属性 "' + k + '"');
+                    return;
+                }
+                node.setAttribute(k, String(v));
             });
         }
         return node;
@@ -110,13 +184,68 @@
 
     function iconNode(iconClass) {
         if (!iconClass) return null;
-        if (typeof iconClass !== 'string') return iconClass;
-        return el('i', iconClass, { 'aria-hidden': 'true' });
+        if (typeof iconClass === 'string') return el('i', iconClass, { 'aria-hidden': 'true' });
+        /* 允许调用方直接传入一个已构造好的 DOM 节点（例如自定义 SVG 图标），
+           但必须是真正的 Node；否则 appendChild 会抛 TypeError 并让整块面板创建失败。 */
+        if (typeof Node !== 'undefined' && iconClass instanceof Node) return iconClass;
+        if (iconClass && typeof iconClass.nodeType === 'number' && typeof iconClass.appendChild === 'function') {
+            return iconClass;
+        }
+        warn('iconNode(): 图标既不是类名字符串也不是 DOM 节点，已忽略');
+        return null;
     }
 
     function on(target, type, handler, options) {
         target.addEventListener(type, handler, options || false);
         return handler;
+    }
+
+    /**
+     * 把任意字符串折算成「可安全拼进 DOM id」的片段。
+     * 只保留 [A-Za-z0-9_-]，其余字符（含空格 / 引号 / < >）一律替换为下划线；
+     * 空串回退到 fallback。这样拼出来的 id 一定满足 HTML5 的 id 语法，
+     * 也不会让 ARIA 的 IDREF（aria-controls / aria-labelledby）断链。
+     */
+    function sanitizeIdPart(raw, fallback) {
+        var s = (raw === null || raw === undefined) ? '' : String(raw);
+        var safe = s.replace(/[^A-Za-z0-9_-]/g, '_');
+        if (!safe) safe = fallback || 'x';
+        /* id 不能以数字开头（CSS 选择器与部分工具链不接受） */
+        if (/^[0-9]/.test(safe)) safe = '_' + safe;
+        return safe;
+    }
+
+    /**
+     * 焦点兜底选择器解析（NEW-03）：
+     *   - README 公开契约是「CSS 选择器 或元素」，所以这里**不**把选择器收窄成只认 #id
+     *     （那会破坏既有调用方），而是：
+     *       1) 纯 #id 走 getElementById —— 完全不经 CSS 解析，零注入面；
+     *       2) 其余选择器先做字符白名单校验（拒绝 < > ; { } \ 等可逃逸字符），再走 querySelector；
+     *       3) querySelector 包 try/catch —— 非法选择器会抛 SyntaxError，
+     *          若不吞掉会打断「焦点归还链」，让键盘用户彻底失去焦点位置。
+     *     校验不通过时静默降级为 null，调用方继续走「面板容器」这级兜底。
+     */
+    var FOCUS_SELECTOR_FORBIDDEN = /[<>;{}\\]/;
+
+    function resolveFocusFallback(selector) {
+        var sel = String(selector).trim();
+        if (!sel) return null;
+        /* 纯 #id 走 getElementById：不经选择器解析，零注入面 */
+        if (/^#[A-Za-z][A-Za-z0-9_-]*$/.test(sel)) {
+            return document.getElementById(sel.slice(1));
+        }
+        if (FOCUS_SELECTOR_FORBIDDEN.test(sel)) {
+            warn('focusFallback: 选择器 "' + sel + '" 含不允许的字符，已忽略');
+            return null;
+        }
+        try {
+            return document.querySelector(sel);
+        } catch (err) {
+            /* 非法选择器会让 querySelector 抛 SyntaxError —— 必须吞掉，
+               否则焦点归还链被打断，焦点彻底丢失。 */
+            warn('focusFallback: 选择器 "' + sel + '" 解析失败，已忽略');
+            return null;
+        }
     }
 
     function q(sel, scope) {
@@ -132,11 +261,50 @@
         return true;
     }
 
-    /** 读取当前作用域里的设计令牌（CSS 自定义属性） */
+    /* ---------------------- 设计令牌读取（含缓存） ---------------------- */
+    /*
+     * v2.4.0（NEW-10）：getToken() 原本每次调用都执行
+     * getComputedStyle(host).getPropertyValue(name) —— 没有任何缓存。
+     * getCarrierState() 每次都会调它，业务侧若在渲染循环里取值，
+     * 会持续触发样式解析（style recalc），拖慢整页。
+     *
+     * 缓存策略（刻意做得保守，避免读到过期值）：
+     *   - 键 = name + '|' + scopeId（scope 为元素时给元素分配一个稳定 id）；
+     *   - 缓存项同时记下当时的 host.className 与 style 属性；
+     *     再次读取时若两者变了（主题类切换 / 内联样式改动）→ 直接重算。
+     *     这样「切主题」「加 .nvui-solid」这类靠 class 的变更不会读到旧值；
+     *   - setTheme() 主动清空缓存（它会切 .nvui-theme-light / .nvui-solid）；
+     *   - 另导出 invalidateTokenCache()，供宿主在外部改了样式表后手动失效。
+     */
+    var tokenCache = Object.create(null);
+    var tokenScopeSeq = 0;
+
+    function tokenScopeId(scope) {
+        if (!scope) return 'root';
+        if (!scope.__nvuiTokenScopeId) {
+            tokenScopeSeq += 1;
+            try { scope.__nvuiTokenScopeId = tokenScopeSeq; } catch (err) { return 'root'; }
+        }
+        return 's' + scope.__nvuiTokenScopeId;
+    }
+
+    /** 读取当前作用域里的设计令牌（CSS 自定义属性，带缓存） */
     function getToken(name, scope) {
         if (!isDomAvailable()) return '';
         var host = scope || document.documentElement;
-        return getComputedStyle(host).getPropertyValue(name).trim();
+        var key = name + '|' + tokenScopeId(host);
+        /* 签名：class + 内联样式。两者任一变化都说明令牌可能已改 → 重算 */
+        var sig = (host.className || '') + '' + (host.getAttribute ? (host.getAttribute('style') || '') : '');
+        var hit = tokenCache[key];
+        if (hit && hit.sig === sig) return hit.value;
+        var value = getComputedStyle(host).getPropertyValue(name).trim();
+        tokenCache[key] = { value: value, sig: sig };
+        return value;
+    }
+
+    /** 让令牌缓存失效（外部改了样式表 / 需要强制重读时调用） */
+    function invalidateTokenCache() {
+        tokenCache = Object.create(null);
     }
 
     /** 主题/实心切换：仅切类名，不写死任何颜色 */
@@ -147,6 +315,8 @@
         host.classList.remove('nvui-solid');
         if (theme === 'light') host.classList.add('nvui-theme-light');
         if (options && options.solid) host.classList.add('nvui-solid');
+        /* 主题类变了，作用域内的令牌值随之改变 → 缓存必须失效 */
+        invalidateTokenCache();
     }
 
     /* ---------------------- 玻璃能力探测 ---------------------- */
@@ -222,7 +392,22 @@
     }
 
     /**
-     * 关闭浮层：先加 .is-closing 播放退场动画，animationend（或 260ms 兜底）后 hidden + close。
+     * 退场动画兜底时长：优先从设计令牌 --nvui-duration-base 派生，
+     * 保证与 CSS 里的退场动画时长保持一致（额外加 60ms 余量等待 animationend 到达）。
+     * 令牌读不到时退回默认 260ms（= 200ms base + 60ms 余量）。
+     */
+    function animationFallbackMs(extraMs) {
+        var raw = getToken('--nvui-duration-base');
+        var base = 200;
+        if (raw) {
+            var parsed = parseFloat(raw);
+            if (!isNaN(parsed) && parsed > 0) base = parsed;
+        }
+        return Math.round(base + (typeof extraMs === 'number' ? extraMs : 60));
+    }
+
+    /**
+     * 关闭浮层：先加 .is-closing 播放退场动画，animationend（或令牌派生的兜底时长）后 hidden + close。
      */
     function closeLayer(dialogEl, overlayEl, done) {
         if (!dialogEl || !overlayEl) return;
@@ -234,6 +419,9 @@
             if (finished) return;
             finished = true;
             if (fallback) { clearTimeout(fallback); fallback = null; }
+            /* 退场监听必须摘除：否则每次关闭都会在 overlay 上叠加一个 animationend
+               监听器，元素复用（同一 overlay 反复开合）时监听器会无限累积。 */
+            try { overlayEl.removeEventListener('animationend', onAnimEnd); } catch (err) { /* 忽略 */ }
             overlayEl.hidden = true;
             overlayEl.classList.remove('is-closing');
             if (dialogEl.open) {
@@ -249,11 +437,17 @@
             finish();
         }
         on(overlayEl, 'animationend', onAnimEnd);
-        fallback = setTimeout(finish, 260);
+        fallback = setTimeout(finish, animationFallbackMs(60));
     }
 
     /* ---------------------- 标签指示器（粘连滑动） ---------------------- */
 
+    /**
+     * 标签指示器几何同步。
+     *   NOTE：这里保持「读 offset* → 写 CSS 变量」的原实现，不再改成 getBoundingClientRect。
+     *   实机取证（QA，帧间隔判据 README §13.6）显示切 tab 的 p95 帧间隔与静止基线差 0.00ms，
+     *   超预算帧 0 —— 强制同步布局在此场景不可感知，改写反而引入行为差异（滚动补偿语义），故保持原样。
+     */
     function syncTabsIndicator(tabs, animate) {
         var indicator = q('.nvui-tabs-indicator', tabs);
         var active = q('.nvui-tab.is-active', tabs);
@@ -303,23 +497,85 @@
         return row;
     }
 
-    /** 输入行：<label class="nvui-input-row"><input class="nvui-input"><span>…</span></label> */
+    /* 输入类型白名单：
+       - 原生 input 支持的类型直接放行；
+       - 'path' 是 kit 的伪类型（路径框：DOM 上仍是 text，只是加 .is-path 样式），
+         它在 README / preview 里是公开用法，必须保留；
+       - 白名单外的类型（如 'pathway'、'richtext'）静默回退为 text 并记一条 warn。 */
+    var INPUT_TYPES = [
+        'text', 'number', 'password', 'email', 'url', 'tel', 'search',
+        'date', 'time', 'datetime-local', 'month', 'week', 'color', 'range', 'file',
+    ];
+    var KIT_INPUT_TYPES = ['path'];
+
+    function normalizeInputType(type) {
+        if (typeof type !== 'string' || !type) return 'text';
+        var t = type.toLowerCase();
+        if (INPUT_TYPES.indexOf(t) !== -1) return t;
+        if (KIT_INPUT_TYPES.indexOf(t) !== -1) return t;
+        warn('inputRow(): 不支持的 type "' + type + '"，已回退为 text');
+        return 'text';
+    }
+
+    /** 输入行：<label class="nvui-input-row"><input class="nvui-input"><span>…</span></label>
+     *
+     *  v2.4.0（NEW-05，QA 实测修正）：修复前 `input.type = opts.type === 'number' ? 'number' : 'text'`
+     *  会把 10 种请求类型里的 8 种静默改写成 text —— 其中 file / color / date 是**用户可感知的功能消失**
+     *  （文件选择器 / 取色器 / 日期选择器直接没了）。现在：
+     *    - 原生 input 支持的类型（email / url / tel / search / date / time / color / file / number …）
+     *      原样落到 DOM type 属性上；
+     *    - 'path' 是 kit 的伪类型：浏览器不支持 type="path"，写进属性会被规范化为 text
+     *      （规范：type IDL 属性只反映「已知值」，未知值一律回退 text），
+     *      所以 DOM 上就是 type="text" + .is-path —— 这与 preview.html 里手写的路径框
+     *      （<input class="nvui-input is-path" type="text">）以及 README §7.6（输入行）完全一致，
+     *      **DOM 契约不变**；
+     *      调用方若需要知道自己请求的是伪类型，读 input.dataset.nvuiType（= 'path'）——
+     *      这与 kit 其它地方用 data-* 承载扩展信息的做法一致，且完全无侵入；
+     *    - 白名单外的类型（'pathway'、'richtext' …）静默回退 text 并记一条 warn。 */
     function inputRow(options) {
         var opts = options || {};
         var row = el('label', 'nvui-input-row');
-        var input = el('input', 'nvui-input' + (opts.type === 'number' ? ' is-number' : (opts.type === 'path' ? ' is-path' : '')));
-        input.type = opts.type === 'number' ? 'number' : 'text';
-        if (opts.value !== undefined) input.value = opts.value;
+        var type = normalizeInputType(opts.type);
+        /* 伪类型 path：DOM 类型仍是 text，只靠 .is-path 类表现「路径框」 */
+        var domType = type === 'path' ? 'text' : type;
+        var input = el('input', 'nvui-input' + (type === 'number' ? ' is-number' : (type === 'path' ? ' is-path' : '')));
+        input.type = domType;
+        if (type === 'path') {
+            /* 伪类型的意图用 data-* 承载：
+               不覆盖 input.type 的 IDL 访问器 —— 覆盖会造成「DOM 属性是 text、JS 读出 path」
+               的双真值，序列化 / cloneNode / 表单提交看到的是 text，而业务代码读到 path；
+               且 setter 语义会错乱（写 number 后 getter 仍返回 path，读写永久不一致）。
+               现在 DOM 与手写的 .is-path 路径框完全同构，意图由 dataset.nvuiType 暴露。 */
+            input.setAttribute('data-nvui-type', 'path');
+        }
+        if (opts.value !== undefined && opts.value !== null) {
+            try {
+                input.value = opts.value;
+            } catch (err) {
+                /* file 类型不允许程序赋非空值，赋值会抛 InvalidStateError —— 忽略即可 */
+                warn('inputRow(): type="' + type + '" 不接受程序赋值，已忽略 value');
+            }
+        }
         if (opts.placeholder) input.placeholder = opts.placeholder;
-        if (opts.min !== undefined) input.min = opts.min;
-        if (opts.max !== undefined) input.max = opts.max;
-        if (opts.step !== undefined) input.step = opts.step;
+        /* min/max/step 只接受有限数值，避免把 NaN / 垃圾串写进 DOM 属性 */
+        if (isFinite(Number(opts.min)) && opts.min !== undefined && opts.min !== null) input.min = Number(opts.min);
+        if (isFinite(Number(opts.max)) && opts.max !== undefined && opts.max !== null) input.max = Number(opts.max);
+        if (isFinite(Number(opts.step)) && opts.step !== undefined && opts.step !== null) input.step = Number(opts.step);
         if (opts.disabled) input.disabled = true;
         var text = el('span', null, { text: opts.label || '' });
         row.appendChild(input);
         row.appendChild(text);
         if (typeof opts.onChange === 'function') {
-            on(input, 'change', function () { opts.onChange(input.value); });
+            on(input, 'change', function () {
+                /* number 类型回传数字（与 input.value 的字符串语义区分开）；
+                   其余类型仍回传字符串，保持既有契约。 */
+                if (type === 'number') {
+                    var n = Number(input.value);
+                    opts.onChange(isFinite(n) ? n : 0);
+                    return;
+                }
+                opts.onChange(input.value);
+            });
         }
         row.input = input;
         return row;
@@ -353,12 +609,32 @@
         return root;
     }
 
+    /**
+     * 进度值归一化：把任意输入（字符串 / NaN / 越界 / null）折算成 [0,100] 的有限数。
+     * 初始渲染与 setValue 共用同一份归一化结果，
+     * 保证 aria-valuenow 与 .nvui-progress-bar 的 width 永远一致（自愈）。
+     */
+    function normalizeProgressValue(value) {
+        var n = Number(value);
+        if (!isFinite(n)) n = 0;
+        if (n < 0) n = 0;
+        if (n > 100) n = 100;
+        return n;
+    }
+
     /** 线性进度条：role=progressbar + .nvui-progress-bar（宽度由 API 设置） */
     function progress(options) {
         var opts = options || {};
-        var track = el('div', 'nvui-progress', {
-            role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(opts.value || 0),
-        });
+        var initial = normalizeProgressValue(opts.value);
+        /* 不确定进度按 ARIA 规范不应带 aria-valuenow（值未知），
+           其条宽由 CSS 的 40% + 扫光动画接管；确定进度才写 aria-valuenow。 */
+        var trackAttrs = {
+            role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100',
+            'aria-valuenow': opts.indeterminate ? null : String(initial),
+        };
+        /* 不确定进度按 README 契约至少要有 aria-label */
+        if (opts.indeterminate && opts.label) trackAttrs['aria-label'] = String(opts.label);
+        var track = el('div', 'nvui-progress', trackAttrs);
         if (opts.variant) track.classList.add('is-' + opts.variant);
         if (opts.indeterminate) track.classList.add('is-indeterminate');
         var bar = el('span', 'nvui-progress-bar');
@@ -382,14 +658,18 @@
             }
         }
 
-        if (typeof opts.value === 'number' && !opts.indeterminate) {
-            var initial = Math.max(0, Math.min(100, opts.value));
+        /* 初始渲染与 setValue 必须共用同一份归一化值：
+           否则 aria-valuenow（字符串 '80' → 80）与 bar 宽度（仍是 0）会长期不一致。 */
+        if (!opts.indeterminate) {
             bar.style.width = initial + '%';
+            syncActivity(initial);
+        } else {
+            /* 不确定进度：宽度由 CSS 的 40% + 扫光动画接管，不写内联 width */
             syncActivity(initial);
         }
         track.appendChild(bar);
         track.setValue = function (v) {
-            var n = Math.max(0, Math.min(100, Number(v) || 0));
+            var n = normalizeProgressValue(v);
             bar.style.width = n + '%';
             track.setAttribute('aria-valuenow', String(n));
             syncActivity(n);
@@ -482,6 +762,7 @@
         if (!isDomAvailable()) return 0;
         var modalCount = countHostModals();
         var degraded = modalCount > 0;
+        debug('syncHostModalState(): 宿主模态数量=' + modalCount + '，kit 载体降级=' + degraded);
         var carriers = document.querySelectorAll('dialog.nvui-tl');
         for (var i = 0; i < carriers.length; i++) {
             if (degraded) carriers[i].classList.add('is-host-modal');
@@ -494,13 +775,39 @@
      *  两条触发源：
      *   1. MutationObserver 监听 <dialog> 的 open 属性变化（showModal() / show() / close()）；
      *   2. document 捕获阶段的 'close' 事件（dialog 关闭不冒泡，需捕获）。
-     *  命中后调用 syncHostModalState()，使 kit 载体在宿主模态期间自动降级。 */
+     *  命中后调用 syncHostModalState()，使 kit 载体在宿主模态期间自动降级。
+     *
+     *  v2.4.0（NEW-07）：观察面从「documentElement 全文档 subtree+attributes」
+     *  收窄为「逐个 dialog 元素 + 仅 childList 的轻量发现器」——
+     *  全文档属性观察会让宿主每一次 DOM 属性变化都进入观察器队列，开销与宿主规模成正比。 */
     var hostModalWatcherInstalled = false;
+    var hostModalOpenObserver = null;
+    var hostModalScanObserver = null;
+    var observedDialogs = [];
+
+    function observeDialogOpen(dialog) {
+        if (!dialog || !hostModalOpenObserver) return;
+        if (observedDialogs.indexOf(dialog) !== -1) return;
+        observedDialogs.push(dialog);
+        try {
+            hostModalOpenObserver.observe(dialog, { attributes: true, attributeFilter: ['open'] });
+        } catch (err) {
+            /* 单个 dialog 观察失败不影响其它 */
+        }
+    }
+
+    function scanForDialogs(root) {
+        if (!root || typeof root.querySelectorAll !== 'function') return;
+        var list = root.querySelectorAll('dialog');
+        for (var i = 0; i < list.length; i++) observeDialogOpen(list[i]);
+    }
+
     function installHostModalWatcher() {
         if (hostModalWatcherInstalled || !isDomAvailable()) return;
         hostModalWatcherInstalled = true;
         try {
-            var observer = new MutationObserver(function (records) {
+            /* 观察器 A：只观察「具体某个 dialog」的 open 属性 —— 观察面最小 */
+            hostModalOpenObserver = new MutationObserver(function (records) {
                 for (var i = 0; i < records.length; i++) {
                     if (records[i].type === 'attributes' && records[i].attributeName === 'open') {
                         syncHostModalState();
@@ -508,15 +815,39 @@
                     }
                 }
             });
-            observer.observe(document.documentElement, {
-                subtree: true,
-                attributes: true,
-                attributeFilter: ['open'],
+            /* 观察器 B：只做 childList（不观察属性），用于发现宿主后续新建的 dialog */
+            hostModalScanObserver = new MutationObserver(function (records) {
+                var sawDialog = false;
+                for (var i = 0; i < records.length; i++) {
+                    if (records[i].type !== 'childList') continue;
+                    var added = records[i].addedNodes;
+                    for (var j = 0; j < added.length; j++) {
+                        var node = added[j];
+                        if (!node || node.nodeType !== 1) continue;
+                        if (node.tagName === 'DIALOG') {
+                            observeDialogOpen(node);
+                            sawDialog = true;
+                        }
+                        scanForDialogs(node);
+                    }
+                }
+                /* 新 dialog 常常是「先插入 DOM、紧接着 showModal()」，
+                   它的 open 属性在我们的属性观察器挂上之前就已经设好了，
+                   不会产生属性变更记录 —— 必须在这里主动同步一次，
+                   否则宿主模态已开而 kit 载体没有降级让位。 */
+                if (sawDialog) syncHostModalState();
             });
+            /* 已有 dialog：逐个挂上 open 属性观察 */
+            scanForDialogs(document);
+            hostModalScanObserver.observe(document.documentElement, { childList: true, subtree: true });
             document.addEventListener('close', function () { syncHostModalState(); }, true);
         } catch (err) {
             /* 观察器不可用时降级为「仅手动调用 syncHostModalState()」，不影响功能 */
             hostModalWatcherInstalled = false;
+            hostModalOpenObserver = null;
+            hostModalScanObserver = null;
+            observedDialogs = [];
+            error('installHostModalWatcher(): 观察器不可用，已降级为手动同步', err);
         }
     }
 
@@ -565,7 +896,9 @@
      */
     function createPanel(options) {
         var opts = options || {};
-        var id = uniqueId(opts.id || 'nvui-panel');
+        /* 面板 id 会被派生出 -layer / -overlay / -title / -tab-* / -pane-* 等多个 DOM id，
+           所以它本身也必须是合法 id（不能含空格 / 引号 / < >）。 */
+        var id = uniqueId(sanitizeIdPart(opts.id || 'nvui-panel', 'nvui-panel'));
         var opener = null;
 
         /* 宿主若全局禁用了 backdrop-filter，先做实心回退，避免玻璃只剩半透明底色 */
@@ -600,38 +933,83 @@
         append(header, [title, actions]);
         panel.appendChild(header);
 
-        /* 标签导航 + 内容面板 */
+        /* 标签导航 + 内容面板
+         *
+         * v2.4.0 起对 tabs[].key 做归一化（NEW-02）：
+         *   - key 会被拼进 DOM id（`<id>-tab-<key>` / `<id>-pane-<key>`），
+         *     含空格 / 引号 / < > 时会产生非法 id 并让 ARIA 的 IDREF 断链；
+         *   - 重复 key 会让 panes 映射互相覆盖，第一个面板静默丢失。
+         * 归一化策略：对外仍然使用调用方给的原始 key（addNode/setTab 契约不变），
+         * 内部另建一个「合法且唯一」的 domKey 用于 DOM id 与面板映射。 */
         var tabsNav = null;
         var bottomNav = null;
-        var panes = {};
-        var tabs = opts.tabs || [];
-        var active = opts.active || (tabs[0] && tabs[0].key);
+        /* pane 集合用 Map（NEW-09）：
+           - O(1) 查表，且天然没有原型链 —— 普通对象上 '__proto__' / 'constructor'
+             这类 key 会命中 Object.prototype，导致 keyMap 赋值失效、panes 覆盖出错；
+           - Map 是语言内置数据结构，不引入任何依赖，也不改变 ES5 语法风格
+             （本文件仍只用 var + 经典 function）。 */
+        var panes = new Map();      /* domKey -> pane 元素 */
+        var keyMap = new Map();     /* 原始 key -> domKey（重复 key 取第一个） */
+        var domKeySet = new Map();  /* domKey -> true（去重用） */
+        var rawTabs = Array.isArray(opts.tabs) ? opts.tabs : [];
+        var tabs = [];
+        rawTabs.forEach(function (t, index) {
+            if (!t) return;
+            var origKey = (t.key === null || t.key === undefined) ? '' : String(t.key);
+            var base = sanitizeIdPart(origKey, 'tab-' + (index + 1));
+            var domKey = base;
+            var seq = 2;
+            while (domKeySet.has(domKey)) {
+                domKey = base + '-' + seq;
+                seq += 1;
+            }
+            domKeySet.set(domKey, true);
+            if (!keyMap.has(origKey)) keyMap.set(origKey, domKey);
+            tabs.push({ key: origKey, domKey: domKey, label: t.label, icon: t.icon });
+        });
+
+        /* active 归一化：只接受确实存在于 tabs 的 key，否则回退到第一个（NEW-15） */
+        var activeDom = null;     /* 当前激活标签的内部 domKey */
+        if (tabs.length) {
+            var wantActive = (opts.active === null || opts.active === undefined) ? '' : String(opts.active);
+            var matched = null;
+            for (var ti = 0; ti < tabs.length; ti++) {
+                if (tabs[ti].key === wantActive || tabs[ti].domKey === wantActive) { matched = tabs[ti]; break; }
+            }
+            if (!matched) {
+                if (wantActive) warn('createPanel(): active "' + wantActive + '" 不存在，已回退到第一个标签');
+                matched = tabs[0];
+            }
+            activeDom = matched.domKey;
+        }
+        debug('createPanel(): id=' + id + '，标签数=' + tabs.length + '，激活=' + (activeDom || '(无)'));
+
         if (tabs.length) {
             tabsNav = el('nav', 'nvui-tabs', { role: 'tablist', 'aria-label': '面板分区' });
             tabsNav.appendChild(el('span', 'nvui-tabs-indicator', { 'aria-hidden': 'true' }));
-            tabs.forEach(function (t, index) {
-                var tab = el('button', 'nvui-tab' + (t.key === active ? ' is-active' : ''), {
-                    type: 'button', role: 'tab', id: id + '-tab-' + t.key,
-                    'aria-selected': t.key === active ? 'true' : 'false',
-                    'aria-controls': id + '-pane-' + t.key,
-                    tabindex: t.key === active ? '0' : '-1',
+            tabs.forEach(function (t) {
+                var tab = el('button', 'nvui-tab' + (t.domKey === activeDom ? ' is-active' : ''), {
+                    type: 'button', role: 'tab', id: id + '-tab-' + t.domKey,
+                    'aria-selected': t.domKey === activeDom ? 'true' : 'false',
+                    'aria-controls': id + '-pane-' + t.domKey,
+                    tabindex: t.domKey === activeDom ? '0' : '-1',
                 });
                 var ic = iconNode(t.icon);
                 if (ic) tab.appendChild(ic);
                 tab.appendChild(document.createTextNode(t.label || t.key));
-                on(tab, 'click', function () { setTab(t.key); });
+                on(tab, 'click', function () { setTabByDom(t.domKey); });
                 tabsNav.appendChild(tab);
             });
             panel.appendChild(tabsNav);
         }
 
         var body = el('div', 'nvui-panel-body');
-        panes = {};
+        panes = new Map();
         tabs.forEach(function (t) {
-            var pane = el('div', 'nvui-tabpane' + (t.key === active ? ' is-active' : ''), {
-                role: 'tabpanel', id: id + '-pane-' + t.key, 'aria-labelledby': id + '-tab-' + t.key,
+            var pane = el('div', 'nvui-tabpane' + (t.domKey === activeDom ? ' is-active' : ''), {
+                role: 'tabpanel', id: id + '-pane-' + t.domKey, 'aria-labelledby': id + '-tab-' + t.domKey,
             });
-            panes[t.key] = pane;
+            panes.set(t.domKey, pane);
             body.appendChild(pane);
         });
         panel.appendChild(body);
@@ -654,14 +1032,14 @@
         if (tabs.length) {
             bottomNav = el('nav', 'nvui-bottom-nav', { 'aria-label': '面板分区（手机）' });
             tabs.forEach(function (t) {
-                var item = el('button', 'nvui-bottom-nav-item' + (t.key === active ? ' is-active' : ''), {
+                var item = el('button', 'nvui-bottom-nav-item' + (t.domKey === activeDom ? ' is-active' : ''), {
                     type: 'button', 'aria-label': t.label || t.key,
                 });
-                if (t.key === active) item.setAttribute('aria-current', 'page');
+                if (t.domKey === activeDom) item.setAttribute('aria-current', 'page');
                 var ic = iconNode(t.icon);
                 if (ic) item.appendChild(ic);
                 item.appendChild(el('span', null, { text: t.label || t.key }));
-                on(item, 'click', function () { setTab(t.key); });
+                on(item, 'click', function () { setTabByDom(t.domKey); });
                 bottomNav.appendChild(item);
             });
             panel.appendChild(bottomNav);
@@ -669,14 +1047,41 @@
 
         append(overlay, panel);
         dialog.appendChild(overlay);
-        (opts.mount || document.body).appendChild(dialog);
+        /* 挂载点兜底（NEW-18）：opts.mount 可能是无效节点，
+           document.body 也可能尚未就绪（脚本在 <head> 内同步执行）。
+           直接 appendChild 会抛 TypeError 且无提示 —— 这里显式降级并报错。 */
+        var mountNode = opts.mount;
+        if (!mountNode || typeof mountNode.appendChild !== 'function') {
+            if (opts.mount) warn('createPanel(): opts.mount 不是有效节点，已回退到 document.body');
+            mountNode = document.body;
+        }
+        if (!mountNode || typeof mountNode.appendChild !== 'function') {
+            error('createPanel(): 挂载点不可用（opts.mount 与 document.body 均无效），已中止创建');
+            return null;
+        }
+        /* 挂载动作本身也可能抛错（NEW-18 补充）：
+           上面的「类型检查」只能挡住「不是节点」的情况，挡不住
+           「是节点但 appendChild 会失败」—— 例如宿主把 body 换成了
+           自定义元素代理、节点已在一个会被拒绝的文档（XML / 已废弃的
+           HTMLCollection 场景）、或 appendChild 被宿主重写成抛错的实现。
+           无论哪种情况，异常都**不得穿透到调用方**（createPanel 的契约是
+           「失败时返回 null」），否则调用方的 try/catch 会被迫处理一个
+           本该被 kit 内部吸收的错误。失败时显式报 error 级日志并返回 null。 */
+        try {
+            mountNode.appendChild(dialog);
+        } catch (err) {
+            error('createPanel(): 面板挂载失败（mountNode.appendChild 抛错），已中止创建', err);
+            return null;
+        }
 
-        function setTab(key) {
-            if (!panes[key]) return;
-            active = key;
+        /** 按 domKey 切换标签（内部用） */
+        function setTabByDom(domKey) {
+            if (!panes.get(domKey)) return;
+            var prevDom = activeDom;
+            activeDom = domKey;
             if (tabsNav) {
                 Array.prototype.forEach.call(tabsNav.querySelectorAll('.nvui-tab'), function (tab) {
-                    var on_ = tab.id === id + '-tab-' + key;
+                    var on_ = tab.id === id + '-tab-' + domKey;
                     tab.classList.toggle('is-active', on_);
                     tab.setAttribute('aria-selected', on_ ? 'true' : 'false');
                     tab.setAttribute('tabindex', on_ ? '0' : '-1');
@@ -685,15 +1090,40 @@
             }
             if (bottomNav) {
                 Array.prototype.forEach.call(bottomNav.querySelectorAll('.nvui-bottom-nav-item'), function (item, index) {
-                    var on_ = tabs[index] && tabs[index].key === key;
+                    var on_ = tabs[index] && tabs[index].domKey === domKey;
                     item.classList.toggle('is-active', on_);
                     if (on_) item.setAttribute('aria-current', 'page');
                     else item.removeAttribute('aria-current');
                 });
             }
-            Object.keys(panes).forEach(function (k) {
-                panes[k].classList.toggle('is-active', k === key);
-            });
+            /* 只切换「旧 pane → 新 pane」两个元素（NEW-09）：
+               原实现每次全量遍历所有 pane 并逐个 classList.toggle，
+               tabs 数量 N 时切换成本 O(N) 且每个 pane 都触发样式失效。 */
+            var prevPane = panes.get(prevDom);
+            var nextPane = panes.get(domKey);
+            if (prevPane && prevPane !== nextPane) prevPane.classList.remove('is-active');
+            if (nextPane) nextPane.classList.add('is-active');
+        }
+
+        /**
+         * 按调用方给的原始 key 切换标签（对外契约不变）。
+         * 重复 key 取第一个（与 keyMap 一致），非法 key 静默忽略。
+         */
+        function setTab(key) {
+            if (key === null || key === undefined) return;
+            var raw = String(key);
+            var domKey = keyMap.get(raw);
+            if (!domKey) {
+                /* 也允许直接传内部 domKey */
+                for (var i = 0; i < tabs.length; i++) {
+                    if (tabs[i].domKey === raw) { domKey = raw; break; }
+                }
+            }
+            if (!domKey) {
+                warn('setTab(): 未知标签 key "' + raw + '"，已忽略');
+                return;
+            }
+            setTabByDom(domKey);
         }
 
         function focusBody() {
@@ -735,17 +1165,43 @@
             }
             var fb = opts.focusFallback;
             var target = null;
-            if (typeof fb === 'string') target = document.querySelector(fb);
-            else if (fb && typeof fb.focus === 'function') target = fb;
+            if (typeof fb === 'string') {
+                target = resolveFocusFallback(fb);
+            } else if (fb && typeof fb.focus === 'function') {
+                target = fb;
+            }
             if (target && isFocusable(target)) {
                 target.focus();
-                return;
+                if (document.activeElement === target) return;
             }
-            /* 最后兜底：焦点落在面板容器上（保留 aria-modal 语义下的上下文） */
-            if (typeof panel.focus === 'function') {
+            /* 第三级：面板容器。
+               注意此时 overlay 已被 hidden / dialog 已 close，
+               面板容器不在渲染树里，focus() 会静默失败 —— 焦点就会掉到 BODY。
+               所以这里先做可见性判定，失败则继续降级。 */
+            if (typeof panel.focus === 'function' && isFocusable(panel)) {
                 if (!panel.hasAttribute('tabindex')) panel.setAttribute('tabindex', '-1');
                 panel.focus();
+                if (document.activeElement === panel) return;
             }
+            /* 第四级（NEW-03 补强）：焦点归还链全部落空时，
+               绝不能让焦点掉到 BODY —— 键盘用户会彻底失去位置。
+               这里退到宿主文档里第一个「可见且可聚焦」的元素上。 */
+            focusFirstVisible();
+        }
+
+        /**
+         * 把焦点交给宿主页面里第一个可见可聚焦的元素（末级兜底）。
+         * 若宿主页面一个都没有，则保持现状（焦点留在 BODY）并告警。
+         */
+        function focusFirstVisible() {
+            var list = document.querySelectorAll('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+            for (var i = 0; i < list.length; i++) {
+                var cand = list[i];
+                if (!cand || !isFocusable(cand)) continue;
+                try { cand.focus(); } catch (err) { continue; }
+                if (document.activeElement === cand) return;
+            }
+            warn('restoreFocus(): 所有焦点归还兜底均不可用，焦点可能停留在 body');
         }
 
         on(closeBtn, 'click', closePanel);
@@ -784,16 +1240,76 @@
            调度器只把 Esc 交给「最上层可见面板」。 */
         registerEscapeHandler(closePanel, function () { return !overlay.hidden; });
 
+        /**
+         * 把节点追加到指定标签的面板。
+         * key 用调用方给的原始 key（契约不变）；找不到时回退到当前激活面板，
+         * 再回退到第一个面板，最后才落到 body（无标签的单页面板）。
+         */
         function addNode(key, node) {
-            var pane = panes[key] || panes[active] || body;
+            var domKey = null;
+            if (key !== null && key !== undefined) {
+                var raw = String(key);
+                domKey = keyMap.get(raw) || null;
+                if (!domKey) {
+                    for (var i = 0; i < tabs.length; i++) {
+                        if (tabs[i].domKey === raw) { domKey = raw; break; }
+                    }
+                }
+                if (!domKey) {
+                    warn('addNode(): 未知标签 key "' + raw + '"，已回退到可见面板');
+                }
+            }
+            /* 回退链（NEW-15）：有效 key → 当前激活 pane → 第一个 pane → body。
+               报告原文建议「回退第一个 pane」，但首个 pane 往往处于未激活（不可见）状态，
+               内容落进去等于「看不见」；当前激活 pane 一定可见，
+               且同样满足报告的真正诉求 —— 绝不落到 body（body 不属于任何 tabpane，
+               内容会既不在导航语义下、也不在任何标签的可见区域内）。 */
+            var pane = null;
+            if (domKey && panes.get(domKey)) pane = panes.get(domKey);
+            else if (activeDom && panes.get(activeDom)) pane = panes.get(activeDom);
+            else if (tabs.length && panes.get(tabs[0].domKey)) pane = panes.get(tabs[0].domKey);
+            if (!pane) pane = body;
             append(pane, node);
             return node;
         }
 
+        /**
+         * 销毁面板（NEW-16：让宿主能收到 dialog 的 close 事件）。
+         *
+         * 直接 removeChild 不会触发 close 事件，宿主若依赖该事件做清理就会漏收。
+         * 但光调 close() 还不够：dialog.close() 派发的 close 事件是**异步 task**
+         * （实测同步调用后立刻读计数为 0，稍后才变 1）。若在 close() 之后同步
+         * removeChild，事件派发时节点已经脱离文档树 —— close 事件不冒泡，
+         * 只有捕获阶段的祖先监听才能收到，节点一脱离，document 上的委托监听
+         * （宿主最常见的姿势「document.addEventListener('close', …, true)」）
+         * 就什么都收不到，等于改了个寂寞。
+         *
+         * 故：把「摘除节点」推迟到 close 事件真正派发之后再做：
+         *   1. 先挂一次性 close 监听；
+         *   2. 调用 close()；
+         *   3. 事件派发后（再让出一个 task）摘除；
+         *   4. 另留一个兜底定时器 —— 极端情况下 close 事件未派发时也要摘干净，
+         *      绝不让节点泄漏在 DOM 里。
+         * 摘除动作本身幂等（removed 标志），重复触发无害。
+         */
         function destroy() {
             unregisterEscapeHandler(closePanel);
-            if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
-            if (dialog && dialog.parentNode) dialog.parentNode.removeChild(dialog);
+            var removed = false;
+            var onClose = function () {
+                dialog.removeEventListener('close', onClose);
+                setTimeout(remove, 0);
+            };
+            if (dialog && dialog.open) {
+                try { dialog.addEventListener('close', onClose); dialog.close(); }
+                catch (err) { remove(); }
+                setTimeout(remove, 50);
+            } else { remove(); }
+            function remove() {
+                if (removed) return;
+                removed = true;
+                if (dialog && dialog.parentNode) dialog.parentNode.removeChild(dialog);
+                if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            }
             opener = null;
             if (typeof opts.destroy === 'function') opts.destroy();
         }
@@ -824,7 +1340,16 @@
 
     function ensureToastLayer() {
         var layer = document.getElementById(TOAST_LAYER_ID);
-        if (layer) return layer;
+        if (layer) {
+            /* 载体被关掉过（dialog.close()）时必须重新 show()，
+               否则第二条及以后的吐司全都落在一个已关闭的载体里，用户完全看不到。
+               这里做幂等重开：已 open 则什么都不做。 */
+            if (!layer.open) {
+                try { layer.show(); } catch (err) { layer.setAttribute('open', ''); }
+            }
+            layer.hidden = false;
+            return layer;
+        }
         var dialog = el('dialog', 'nvui-tl nvui-tl-toast', { id: TOAST_LAYER_ID, 'aria-label': '通知层' });
         var stack = el('div', 'nvui-toast-stack');
         dialog.appendChild(stack);
@@ -870,13 +1395,12 @@
                 if (removed) return;
                 removed = true;
                 if (fallback) { clearTimeout(fallback); fallback = null; }
+                /* 退场监听必须摘除，否则同一条吐司反复 dismiss 会叠加监听器 */
+                try { toast.removeEventListener('animationend', onAnimEnd); } catch (err) { /* 忽略 */ }
                 if (toast.parentNode) toast.parentNode.removeChild(toast);
-                if (stack && !stack.querySelector('.nvui-toast')) {
-                    layer.hidden = true;
-                    if (layer.open) {
-                        try { layer.close(); } catch (err) { layer.removeAttribute('open'); }
-                    }
-                }
+                /* 承载层保持常驻开启：一旦在这里 close()，
+                   后续 showToast 会拿到一个已关闭的载体，第二条及以后的吐司全部不可见。
+                   载体本身是 pointer-events:none 的空壳，常驻不产生交互副作用。 */
             }
             function onAnimEnd(event) {
                 /* animationend 冒泡：只认吐司自身的退场动画 */
@@ -885,7 +1409,7 @@
                 done();
             }
             on(toast, 'animationend', onAnimEnd);
-            fallback = setTimeout(done, 260);
+            fallback = setTimeout(done, animationFallbackMs(60));
         }
 
         if (opts.duration !== 0) {
@@ -900,6 +1424,7 @@
         version: VERSION,
         VERSION: VERSION,
         PANEL_CLASS: PANEL_CLASS,
+        config: config,
         classes: {
             panel: 'nvui-panel',
             overlayPanel: 'nvui-overlay is-panel',
@@ -914,6 +1439,7 @@
             toast: 'nvui-toast',
         },
         getToken: getToken,
+        invalidateTokenCache: invalidateTokenCache,
         setTheme: setTheme,
         detectGlassSupport: detectGlassSupport,
         syncGlassFallback: syncGlassFallback,

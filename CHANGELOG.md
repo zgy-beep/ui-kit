@@ -6,6 +6,222 @@
 - 新增组件 / 新增 token（不破坏既有 DOM 与取值）：小版本（2.x.0）
 - 重命名类 / token、删除 token、修改 DOM 契约：大版本（x.0.0）
 
+## v2.4.0（2026-10-20）· 静态审查批次二（9 条中低危项）
+
+> 与下方「静态审查缺陷修复批次（12 条高危/中危 + 调试开关）」同属 **v2.4.0**，
+> 故不单独升版本号（kit 的版本号在 `package.json` / `tokens.json` / `tokens.css` /
+> `nvui-api.js` / `README.md` / `AI-GUIDE.md` 六处统一声明为 2.4.0）。
+
+承接 v2.4.0 首批次，把 `ISSUES.md`「待修复」区的 9 条中低危项落地
+（NEW-09 / 10 / 11 / 12 / 13 / 15 / 16 / 18 / 22；另 NEW-20 为同源残余，只做确认无需改动）。
+本批次不改变任何对外 API 签名与既有 DOM 契约，新增行为一律静默降级。
+
+**已修复**
+
+- **NEW-09 切换标签时遍历并切换全部 pane**：原实现会把所有 pane 的 `is-active` 全部重写一遍，
+  大数量 pane 时开销随规模线性增长，且切换过程存在中间态（多个 pane 同时 active）。
+  现改为只对「旧 pane」与「新 pane」两个元素做 `classList` 增删
+  （旧 pane 由切换前的 `domKey` 记录、新 pane 由目标 `domKey` 取得，切换成本与 tabs 数量无关）。
+  同时把面板内部的 `panes` / `keyMap` / `domKeySet` 由普通对象改为 `Map`，
+  消除 `__proto__` / `constructor` 等原型链键名命中原型的风险。
+- **NEW-10 `getToken()` 每次都读 `getComputedStyle`**：在高频调用路径上属于可测量的重复布局开销。
+  现增加令牌缓存，缓存键为「令牌名 + scope 标识」；缓存项记录 host 的 `className` 与内联 `style`
+  作为签名，任一变化即自动重算，避免切换主题后读到旧值。`setTheme()` 结束时主动清空缓存，
+  并新增导出 `NVUI.invalidateTokenCache()`，供宿主在外部改动样式表后手动失效。
+- **NEW-11 预览页 resize 监听未做合并**：`preview.html` 的 `resize` 回调每次都直接同步标签指示器，
+  连续拖拽窗口时会高频重算。现改为 `requestAnimationFrame` 合并，同一帧内至多执行一次。
+- **NEW-12 吐司定时器未在关闭时清理**：`dismissToast()` 摘除吐司节点后，其自动消失的 `setTimeout`
+  仍会回调到已脱离文档的节点。现将定时器 id 存在吐司节点自身的 `__toastTimer` 属性上，
+  `dismissToast()` 中显式 `clearTimeout` 并清零。
+- **NEW-13 扫光动画缺少合成层提示**：`.nvui-skeleton::after` 与 `.nvui-progress-bar::after`
+  的扫光动画只改变 `transform`，但未声明 `will-change: transform`，浏览器可能逐帧重新合成。
+  现为两条规则补上 `will-change: transform`（未新增 `!important`，不占用既有 `!important` 预算）。
+- **NEW-15 `addNode()` 传入无效标签 key 时节点落到 body**：原实现对未知 key 直接落入 body，
+  内容既不在导航语义下、也不在任何标签的可见区域内。现建立四级回退链：
+  有效 key → 当前激活 pane → 第一个 pane → body，并对未知 key 输出一次告警。
+  （报告原文建议「回退首个 pane」；此处优先回退到当前激活 pane —— 首个 pane 往往未激活、不可见，
+  内容落进去等于看不见；当前激活 pane 一定可见，且同样满足报告「绝不落 body」的真诉求。）
+- **NEW-16 `destroy()` 未关闭载体 dialog**：直接摘除节点不会触发 `dialog` 的 `close` 事件，
+  宿主若依赖该事件做清理会漏收。现改为先 `dialog.close()` 再移除节点。
+  （后续批次又补了一处残留，见下方「定版收尾」段的 NEW-16 补充说明。）
+- **NEW-18 `createPanel()` 挂载点无效时抛 TypeError**：`opts.mount` 指向不存在的元素时，
+  原实现直接 `appendChild` 抛错。现改为回退到 `document.body` 并告警；
+  若 `document.body` 也不可用则输出错误日志并返回 `null`（不抛异常）。
+- **NEW-22 模板把 `getSettings` 无条件挂到 window**：`st-extension-template/index.js` 原先在所有环境
+  把 `getSettings` 暴露到 `window.__MY_PLUGIN__`。现改为仅在本地开发环境
+  （`localhost` / `127.0.0.1` / `::1` / `file://`）暴露 `getSettings`，
+  `open` 保持全量暴露（打开面板的入口必须始终可用）。
+  已实测：本地 7 项门禁断言全过（`getSettings` 可调用并返回设置对象），
+  模拟 `example.com` 宿主时 `getSettings` 不再出现而 `open` 仍在。
+
+**确认（无需改动）**
+
+- **NEW-20 `el()` 属性白名单的同源残余**：与 NEW-01 同源，已随 NEW-01 的
+  `ALLOWED_ATTRS` / `attrAllowed()` 白名单一并收敛（拒绝 `on*` / `style` / `srcdoc` /
+  `formaction` / `href` / `src`），本批次**未做新改动**，只做了一次残余确认：
+  `el()` 的 `setAttribute` 白名单通道之外不存在动态属性名，恶意属性名进不来。
+
+**未改动**
+
+- `AI-GUIDE.md`：本批次未改变对外契约，无需同步。
+- `ISSUES.md`：由维护者统一维护，本批次不修改。
+
+**新增测试**
+
+- `test/st-template-new22-check.js`：NEW-22 本地/非本地双场景门禁实机取证脚本。
+
+## v2.4.0（2026-10-20）· 定版收尾（注释修正 + 测试断言加固 + NEW-16 残留修补）
+
+承上两个 v2.4.0 段落。本段落**不改变任何对外 API 签名与既有 DOM 契约**。
+除一处 NEW-16 残留修补外，其余改动全部落在测试脚本上（消除 flaky 判定 + 断言对齐契约）。
+
+**产品代码**
+
+- **`nvui-api.js` 注释章节号修正**：路径框的说明注释写作「与 README §7.7 完全一致」，
+  但路径框表格实际位于 README **§7.6（输入行）**（§7.7 是「标签页」章节）。现改为 §7.6。
+  纯注释改动，运行时行为零变化（文件 md5 因此变化，四方副本已同步）。
+- **NEW-16 残留修补（第二版）—— `destroy()` 的摘除时机**：
+  上一批把 `destroy()` 改成「先 `dialog.close()` 再摘节点」，但**只 close() 是不够的**：
+  `dialog.close()` 派发的 `close` 事件是**异步 task**（实测同步调用后立刻读计数为 0，
+  稍后才变 1）。而 `close()` 之后**同步** `removeChild` 摘掉了节点 ——
+  等事件真正派发时，节点已脱离文档树，而 `close` 事件不冒泡、
+  只有捕获阶段的祖先监听才能收到，节点一脱离，宿主最常见的姿势
+  `document.addEventListener('close', …, true)`（kit 自己的宿主模态 watcher 也是这个姿势）
+  依然收不到 —— **等于没修**，原修复目标（让宿主能收到 close 事件）未达成。
+
+  现改为：**把「摘除节点」推迟到 `close` 事件真正派发之后**：
+  1. 先挂一次性 `close` 监听（监听器自己摘除，不留残留）；
+  2. 调用 `dialog.close()`；
+  3. 事件派发后再让出一个 task（确保捕获 / 目标各阶段都走完）才摘除节点；
+  4. 另留 50ms 兜底定时器 —— 极端情况下 `close` 事件未派发
+     （`close()` 被拒绝 / dialog 已关闭）时也必须把载体节点摘干净，
+     **绝不让 DOM 泄漏**；`close()` 抛异常时立即摘除（不吞异常、不泄漏）。
+  5. 摘除动作幂等（`removed` 标志），事件与兜底定时器重复触发无害。
+
+  实测（真实宿主 Chrome）：`destroy()` 引发的 document 级捕获 `close` 事件由 **0 次 → 1 次**，
+  与「手动 `close()` 且元素留在 DOM」的对照组一致；元素自身监听同样 1 次；
+  destroy 后 dialog 与 overlay 均已从 DOM 移除（`isConnected === false`）；
+  `close()` 抛错与「close 事件不派发」两种极端场景下节点均被摘净、异常不穿透。
+- **NEW-18 补充 —— `mountNode.appendChild` 异常穿透**：
+  原先的「挂载点兜底」只做了**类型检查**（`opts.mount` 与 `document.body` 是否像节点），
+  挡不住「是节点但 `appendChild` 会失败」的情况 —— 此时异常会**穿透到调用方**，
+  而 `createPanel` 的契约是「失败时返回 null」。
+  现把 `mountNode.appendChild(dialog)` 包进 try/catch：失败时输出
+  **error 级**日志（`createPanel(): 面板挂载失败（mountNode.appendChild 抛错），已中止创建`）
+  并**返回 null**，异常不再穿透。
+  实测：mount 的 `appendChild` 抛错 → 返回 `null`、调用方收到 `null`（无异常）、有 error 级日志。
+
+**测试脚本**
+
+- **`test/st-live-check.js` — 「overlay 退场动画未播完就被隐藏」判定去抖**：
+  该断言原先单次采集 `animationend` 与 `hidden` 两个时刻并立即比较，
+  二者由事件循环调度先后决定，偶发出现 `hidden` 早于 `animationend` 数十毫秒到达的时序抖动
+  （实测有 `hidden` 时刻 312ms 的单次失败，随后复跑全绿）。判定逻辑现改为：
+  - 采集时同时记录 `closeAt`（发起关闭时刻）、`hiddenAt`（隐藏时刻）与 overlay 自身的退场结束事件时刻；
+  - **容差窗口**：允许 `hiddenAt` 早于退场结束事件不超过 60ms（与 `closeLayer()` 内部的
+    `animationend` 与 60ms 兜底定时器同量级的余量）；
+  - **缺失事件兜底**：若未收到 overlay 自身的 `animationend`（事件迟到或丢失），
+    改用「`closeAt` + 退场动画时长 − 容差」作为理论最早隐藏时刻判定，不再因事件缺失直接误判；
+  - **重试**：单轮判定失败则重载页面重试，最多 3 轮；**连续 3 轮都失败才判 FAIL**。
+  即：消除的是时序抖动，不是放松检查 —— 实质缺陷（退场被真正截断）仍必定被判 FAIL。
+- **`test/st-template-check.js` — 焦点归还断言对齐契约**：
+  原第 5 项断言把焦点归还目标写死为 `my_plugin_menu_btn`（触发按钮），
+  但该按钮在 ST 扩展菜单收起后其父级浮层为 `display:none`，`focus()` 会静默失败，
+  焦点按契约正确降级到 `focusFallback: '#extensionsMenuButton'`。即**行为正确、断言过时**。
+  现改为：主断言检查 `activeId === 'extensionsMenuButton'`（对齐契约），
+  并保留 `my_plugin_menu_btn` 场景的覆盖 —— 另加一条独立检查：
+  显式传 `focusFallback: '#my_plugin_menu_btn'` 时（自建面板并移除 opener 以强制走兜底分支），
+  焦点应归还到该按钮。
+  另：该脚本此前只打印 JSON、没有任何判定与退出码，现补上断言汇总与退出码
+  （失败时 `exit 1`），使它可被 CI 直接消费。
+- **`test/test-ui-kit.js` — 新增 NEW-16 残留 / NEW-18 补充的静态断言**：
+  - NEW-16：断言 `destroy()` 内存在「一次性 `close` 监听 + 派发后摘除 + 50ms 兜底
+    + `close()` 抛错时立即摘除 + 摘除幂等（`removed` 标志）」，
+    防止后续重构把「先 close 再同步摘除」退回去（那正是本条缺陷的成因）。
+  - NEW-18：断言 `mountNode.appendChild(dialog)` 被 try/catch 包裹，
+    且 catch 分支里有 error 级日志与 `return null`（异常不得穿透）。
+- **`test/st-destroy-close-check.js`（新建）**：本轮新增的实机回归脚本，
+  覆盖 lead 指定的 5 个验收点（document 级委托收到 destroy 引发的 close、
+  destroy 后载体节点数归位、mount 完全不可用 → 返回 null / 不抛异常 / 有 error 日志、
+  mount 无效但 body 可用 → 仍能创建 + warn 日志、destroy 后再 createPanel 正常可用）。
+  本脚本为工程师自建资产，**未修改 `test/st-review-*.js` 任何文件**。
+
+**未改动**
+
+- `test/st-review-*.js`（harness / repro / verify / diag / legacy-preload / host-probe）：**一行未动**。
+- `ISSUES.md`：由维护者统一维护，本段落不修改。
+
+## v2.4.0（2026-10-20）· 静态审查缺陷修复批次（12 条高危/中危 + 调试开关）
+
+对 `.workbuddy/review/AUDIT-2026-10-20.md` 的审查结论做了逐条实机验证与修复，
+所有修复均以「静默降级、不抛错、不破坏既有 DOM 契约」为原则。
+（下列条目编号沿用审查报告的 NEW-xx 编号，便于对照。）
+
+**已修复**
+
+- **NEW-24 吐司层关闭后永不重开**：吐司承载层 `dialog#nvui-api-toast-layer` 在首条吐司退场后被
+  `hidden` + `close()`，导致第二条起吐司全部不可见、不可命中。现改为承载层常驻开启
+  （`ensureToastLayer()` 命中已有层时重新 `show()` 并 `layer.hidden = false`），
+  退场只清空 toast 栈、不关承载层。
+- **NEW-04 进度条数值不一致**：`aria-valuenow` 与 `.nvui-progress-bar` 的宽度各算各的，
+  字符串 `'80'` 会得到 aria=80 但宽度 0%、`200` 会 aria=200 超界。现由
+  `normalizeProgressValue()` 统一归一化（`Number()` → 非有限归 0 → 钳制 `[0,100]`），
+  初始渲染与 `setValue` 共用同一结果，两者恒一致。
+- **NEW-05 输入类型被静默改写**：原先 10 种请求类型有 8 种被塌缩成 `text`
+  （`file`/`color`/`date` 等功能直接消失）。现改为白名单外的类型才回退 `text` 并 `warn()`；
+  `path` 是 kit 的**伪类型**：浏览器不支持 `type="path"`，写进属性会被规范化为 `text`，
+  所以 DOM 上就是 `type="text"` + `.is-path` —— 这与 `preview.html` 里手写的路径框
+  （`<input class="nvui-input is-path" type="text">`）及 README §7.6（输入行）`.nvui-input.is-path` 的既有契约完全一致，
+  **DOM 契约不变**。调用方若需要知道自己请求的是伪类型，读 **`input.dataset.nvuiType`**（值为 `'path'`），
+  由 `data-nvui-type` 属性承载。
+  **注意**：`input.type` 读出的是真实的 DOM 类型（path 场景下即 `'text'`），
+  kit **不会**把它伪装成 `'path'` —— 早期版本曾用 `Object.defineProperty` 覆盖 `type` 访问器，
+  会造成「DOM 属性是 text、JS 读出 path」的双真值（序列化 / `cloneNode` / 表单提交看到 text，
+  业务代码读到 path），且 setter 语义错乱（写 `number` 后 getter 仍返回 `'path'`），
+  同时与手写路径框行为不一致。该 hack 已在 v2.4.0 移除。
+  `number` 的 `onChange` 回传 number。
+- **NEW-02 / NEW-15 标签 key 未校验**：`tabs[].key` 会直接拼进 DOM id，空格 / 引号 / `<>`
+  会产生非法 id 并让 ARIA 的 IDREF 断链；重复 key 还会互相覆盖导致面板静默丢失。
+  现统一走 `sanitizeIdPart()` 归一化 + 重复 key 加序号去重；非法 `active` 回退首个标签。
+- **NEW-03 `focusFallback` 选择器注入面**：非法选择器会抛未捕获异常、打断焦点归还链，
+  使 `onClose` 不被调用、焦点掉到 BODY。现纯 `#id` 走 `getElementById`，
+  其余先做字符校验再 `querySelector` 并 try/catch；焦点归还链补到四级
+  （触发元素 → focusFallback → 面板容器 → 宿主首个可见可聚焦元素），保证焦点不落 BODY。
+- **NEW-01 / NEW-20 属性白名单**：`el()` 只放行语义 / 无障碍 / 表单类属性，
+  拒绝 `on*` / `style` / `srcdoc` / `formaction` / `href` / `src`；文本一律走 `textContent`。
+- **NEW-06 退场监听器累积**：`closeLayer()` 现在在结束时摘除自身的 `animationend` 监听器，
+  反复开关面板不再线性增长（实测 30 轮后监听器数 0）。
+- **NEW-07 观察面过大**：宿主模态 watcher 改为「只观察 `<dialog>` 的 `open` 属性」，
+  宿主 `<details>` 展开 / 收起不再触发任何全文档 modal 查询（实测 0 次）。
+- **NEW-14 非法 icon 抛错**：`iconNode()` 只接受字符串或真实 Node，非法值告警并返回 null。
+- **NEW-17 退场兜底时长硬编码**：`260ms` 改为从 `--nvui-duration-base` 令牌派生。
+- **NEW-19 调试开关（最小形态）**：新增 `NVUI.config = { debug: false, logger: console }`，
+  关键路径输出分级日志 —— `debug` 级仅在开关打开时输出，`warn` / `error` 级**始终输出**
+  （异常路径不静默）。
+
+**追加修复（同批 · 早期版本）**
+
+> 以下三条在首批次里做了第一版实现，随后在下方「静态审查批次二」中细化并定稿，
+> **以「静态审查批次二」一节的描述为准**（本节保留首批次当时的实现形态，便于追溯）。
+
+- **NEW-09 切 tab 全量遍历**：原实现每次 `Object.keys(panes).forEach` 逐个 `classList.toggle`，
+  现在只对「旧 pane → 新 pane」两个元素切换，切换成本与 tabs 数量无关。
+- **NEW-16 `destroy()` 漏发 close 事件**：销毁前显式 `dialog.close()`，宿主依赖 close 事件的清理逻辑不再漏收。
+- **NEW-18 挂载点不可用直接抛错**：`opts.mount` 无效时回退 `document.body` 并告警；
+  两者都不可用时报错并中止创建，不再抛 `TypeError`。
+- **原型链隔离**：`panes` / `keyMap` / `domKeySet` 改用 `Map`（无原型链），
+  `'__proto__'` / `'constructor'` 这类 key 不再命中原型链。
+  （实现先后用过 `Object.create(null)`，最终定稿为 `Map` —— 同时拿到 O(1) 查表与无原型链两个性质。）
+
+**不修（经实机证伪）**
+
+- **NEW-08 标签指示器强制同步布局**：实机帧间隔取证显示切 tab 的 p95 帧间隔与静止基线差
+  0.00ms、超预算帧 0，改写为 `getBoundingClientRect` 无收益、反而引入滚动补偿语义差异，
+  故保持原 `offset*` 读法不变。
+
+**未改动**：`README.md` / `AI-GUIDE.md` 的公开契约（DOM 结构、`--nvui-tab-ind-*` 等 CSS 变量、
+`focusFallback` 的「CSS 选择器 或元素」语义）本轮均未变更。
+
 ## v2.4.0（2026-10-20）· 浮层载体完善（宿主模态让位机制 + 3 个新 API）
 
 本轮把「浮层载体」从一个**层级档位**升级为一个**完整的宿主共存机制**。
@@ -61,6 +277,13 @@ v2.3.0 解决的是「kit 浮层被宿主**常规内容**压住」；本版解�
 
 - 规范测试新增 8 条断言（降级态 CSS 存在 / 三个 API 导出 / 三处调用点 / `:modal` 且排除自身载体 /
   版本全量对齐 2.4.0 / 模板与主目录资产一致 / 新实机脚本存在 / README §13.7 章节存在），**271 → 279 条全绿**；
+- **防模板漂移加固**：原「模板与主目录资产一致」断言只覆盖 `nvui-api.js` / `components.css` / `tokens.css`
+  三个文件（且用文本相等比对），漏掉了机器可读镜像 `tokens.json` —— 副本 `tokens.json` 一度落后到 v2.2.0
+  且缺失载体档令牌 `--nvui-z-layer`（v2.3.0 新增），整目录复制模板到插件后，AI/脚本拿到的令牌清单会说谎。
+  现改为**逐文件用 `crypto` 计算 md5 与根目录比对**（`nvui-api.js` / `components.css` / `tokens.css` / `tokens.json`），
+  失败时给出根/副本双哈希与重新对齐命令；并追加一条断言专门守护副本 `tokens.json` 的**版本号**
+  与 **`--nvui-z-layer` 载体档**齐全（该令牌只在 JSON 镜像里丢失时 CSS 侧不会报错，必须单独守护）。
+  副本 `tokens.json` 已与根目录重新对齐（v2.4.0，md5 `7d0e4166…`）。
 - 新增实机脚本 `test/st-carrier-host-modal-check.js`（18 项断言全绿，控制台零错误）：
   正常态无降级 → 宿主 `showModal()` 后自动加 `.is-host-modal`（`pointer-events:none` + `opacity:0.35`）→
   `getCarrierState()` 快照正确（`hostModalCount` / `degraded` / 各载体 `degraded`）→

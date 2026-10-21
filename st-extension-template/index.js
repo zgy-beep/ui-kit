@@ -169,8 +169,26 @@ export function init() {
     const settings = getSettings();
     if (!settings.version) settings.version = DEFAULT_SETTINGS.version;
 
-    /* 暴露只读调试视图（自动化测试用；生产环境无害） */
-    window.__MY_PLUGIN__ = { getSettings: () => ({ ...getSettings() }), open: openSettings };
+    /* 暴露只读调试视图（自动化测试用；生产环境无害）
+     *
+     * NEW-22（安全·低）：原先把 getSettings 一律挂到 window，
+     * 同宿主内任意脚本都能读到插件设置（虽是副本，但仍是可读信息）。
+     * 现在：open 保持全量暴露（业务入口，宿主需要），
+     * getSettings 只在本地开发环境（localhost / 127.0.0.1 / ::1 / file://）暴露。
+     * 自动化测试跑在 http://127.0.0.1:8000，hostname 为 127.0.0.1 → 门禁放行。 */
+    const isLocalDev = (() => {
+        try {
+            const hn = window.location.hostname;
+            return hn === 'localhost' || hn === '127.0.0.1' || hn === '::1' || hn === '[::1]'
+                || window.location.protocol === 'file:';
+        } catch (err) {
+            return false;
+        }
+    })();
+    window.__MY_PLUGIN__ = { open: openSettings };
+    if (isLocalDev) {
+        window.__MY_PLUGIN__.getSettings = () => ({ ...getSettings() });
+    }
 
     addMenuButton();
 
