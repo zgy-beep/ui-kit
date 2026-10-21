@@ -890,11 +890,14 @@ dialog.nvui-tl > .nvui-toast-stack {
     display: grid;
     grid-template-rows: 0fr;
     overflow: hidden;
-    transition: grid-template-rows var(--nvui-duration-slow) var(--nvui-ease-emphasized);
+    visibility: hidden;
+    transition: grid-template-rows var(--nvui-duration-slow) var(--nvui-ease-emphasized),
+        visibility var(--nvui-duration-slow) var(--nvui-ease-emphasized);
 }
 
 .nvui-acc.is-open .nvui-acc-body {
     grid-template-rows: 1fr;
+    visibility: visible;
 }
 
 /* 裁切层：min-height:0 让 0fr 真正塌陷，overflow:hidden 裁掉展开内容。
@@ -2295,5 +2298,14 @@ dialog.nvui-tl > .nvui-toast-stack {
         -webkit-backdrop-filter: none;
         backdrop-filter: none;
         box-shadow: none;
+    }
+
+    .nvui-btn:not([hidden]),
+    .nvui-icon-btn {
+        border: 1px solid ButtonText;
+    }
+
+    .nvui-tab.is-active {
+        border-bottom: 3px solid Highlight;
     }
 }

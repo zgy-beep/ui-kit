@@ -115,7 +115,7 @@
         'id', 'title', 'role', 'type', 'hidden', 'tabindex', 'for', 'value',
         'name', 'placeholder', 'disabled', 'checked', 'readonly', 'required',
         'multiple', 'min', 'max', 'step', 'rows', 'cols', 'span',
-        'alt', 'width', 'height', 'lang', 'dir',
+        'alt', 'width', 'height', 'lang', 'dir', 'closing',
     ];
 
     function attrAllowed(key) {
@@ -125,28 +125,44 @@
         if (lower.indexOf('on') === 0) return false;
         /* style / srcdoc 等可直接注入脚本或样式的通道一律拒绝 */
         if (lower === 'style' || lower === 'srcdoc' || lower === 'formaction') return false;
-        /* aria-* 与 data-* 是无障碍 / 自定义数据通道，放行 */
-        if (lower.indexOf('aria-') === 0) return true;
-        if (lower.indexOf('data-') === 0) return true;
+        /* NEW-38：aria-* 与 data-* 严格匹配合法命名正则，拒绝空格等非法字符引发 InvalidCharacterError */
+        if (lower.indexOf('aria-') === 0) return /^aria-[a-z0-9_-]+$/.test(lower);
+        if (lower.indexOf('data-') === 0) return /^data-[a-z0-9_-]+$/.test(lower);
         return ALLOWED_ATTRS.indexOf(lower) !== -1;
     }
 
+    var FORBIDDEN_TAGS = ['script', 'style', 'iframe', 'object', 'embed', 'meta', 'link', 'base'];
+
     function el(tag, className, attrs) {
-        var node = document.createElement(tag);
-        if (className) node.className = className;
+        var safeTag = tag;
+        /* NEW-45：危险标签名隔离（如 script/iframe） */
+        if (!safeTag || typeof safeTag !== 'string' || FORBIDDEN_TAGS.indexOf(safeTag.toLowerCase()) !== -1) {
+            warn('el(): 拒绝创建非法或危险标签 "' + tag + '"');
+            safeTag = 'div';
+        }
+        var node = document.createElement(safeTag);
+        if (className) node.className = (typeof className === 'symbol') ? '' : String(className);
         if (attrs) {
             Object.keys(attrs).forEach(function (k) {
                 var v = attrs[k];
                 if (v === null || v === undefined) return;
-                /* 只允许 textContent 通道：绝不接受原始 HTML 片段，
-                   避免调用方把用户输入塞进属性时形成 XSS 缺口。 */
-                if (k === 'text') { node.textContent = String(v); return; }
-                /* 白名单之外的属性静默丢弃（不抛错），并记一条 warn 便于排查 */
+                /* 只允许 textContent 通道：绝不接受原始 HTML 片段，防范 XSS */
+                if (k === 'text') {
+                    if (typeof v === 'symbol') v = '';
+                    node.textContent = String(v);
+                    return;
+                }
+                /* 白名单之外的属性静默丢弃并记一条 warn */
                 if (!attrAllowed(k)) {
                     warn('el(): 已丢弃白名单外的属性 "' + k + '"');
                     return;
                 }
-                node.setAttribute(k, String(v));
+                if (typeof v === 'symbol') v = '';
+                try {
+                    node.setAttribute(k, String(v));
+                } catch (err) {
+                    warn('el(): setAttribute 失败，已忽略属性 "' + k + '"');
+                }
             });
         }
         return node;
@@ -175,9 +191,19 @@
     }
 
     function append(parent, children) {
+        if (!parent || typeof parent.appendChild !== 'function') return parent;
         (Array.isArray(children) ? children : [children]).forEach(function (c) {
-            if (!c) return;
-            parent.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+            if (!c && c !== 0) return;
+            /* NEW-45：非 Node 参数安全归一化，防范原生 appendChild 抛未捕获 TypeError */
+            if (typeof c === 'string' || typeof c === 'number' || typeof c === 'boolean') {
+                parent.appendChild(document.createTextNode(String(c)));
+            } else if (typeof Node !== 'undefined' && c instanceof Node) {
+                parent.appendChild(c);
+            } else if (c && typeof c.nodeType === 'number') {
+                parent.appendChild(c);
+            } else {
+                warn('append(): 子元素不是有效 DOM 节点，已忽略');
+            }
         });
         return parent;
     }
@@ -256,8 +282,15 @@
     function isFocusable(node) {
         if (!node || !node.isConnected) return false;
         if (node.disabled) return false;
+        /* NEW-43：优先使用原生 checkVisibility 判定可见性（硬件加速且同时检查 display 与 visibility:hidden） */
+        if (typeof node.checkVisibility === 'function') {
+            try {
+                return node.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true });
+            } catch (err) { /* 回退下述检测 */ }
+        }
         var cs = window.getComputedStyle(node);
         if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+        if (node.offsetWidth === 0 && node.offsetHeight === 0) return false;
         return true;
     }
 
@@ -309,13 +342,12 @@
 
     /** 主题/实心切换：仅切类名，不写死任何颜色 */
     function setTheme(theme, options) {
-        var host = (options && options.host) || document.body;
-        if (!host) return;
-        host.classList.remove('nvui-theme-light');
-        host.classList.remove('nvui-solid');
+        var host = (options && options.host) || (isDomAvailable() ? document.body : null);
+        if (!host || !host.classList) { warn('setTheme(): 无效 host'); return; }
+        host.classList.remove('nvui-theme-light', 'nvui-solid');
         if (theme === 'light') host.classList.add('nvui-theme-light');
+        else if (theme && theme !== 'dark') warn('setTheme(): 未知主题');
         if (options && options.solid) host.classList.add('nvui-solid');
-        /* 主题类变了，作用域内的令牌值随之改变 → 缓存必须失效 */
         invalidateTokenCache();
     }
 
@@ -377,7 +409,13 @@
      */
     function openLayer(dialogEl, overlayEl) {
         if (!dialogEl || !overlayEl) return;
-        /* 打开瞬间同步一次宿主模态降级态（watcher 已覆盖动态开关，这里兜底首开） */
+        /* NEW-44：取消尚未完成的关闭定时器，防快速重开被旧定时器意外关闭 */
+        if (overlayEl.__nvuiCloseTimer) {
+            clearTimeout(overlayEl.__nvuiCloseTimer);
+            overlayEl.__nvuiCloseTimer = null;
+        }
+        overlayEl.classList.remove('is-closing');
+        /* 打开瞬间同步一次宿主模态降级态 */
         syncHostModalState();
         if (dialogEl.open) {
             overlayEl.hidden = false;
@@ -414,13 +452,16 @@
         if (overlayEl.hidden || overlayEl.classList.contains('is-closing')) return;
         overlayEl.classList.add('is-closing');
         var finished = false;
-        var fallback = null;
         function finish() {
             if (finished) return;
             finished = true;
-            if (fallback) { clearTimeout(fallback); fallback = null; }
-            /* 退场监听必须摘除：否则每次关闭都会在 overlay 上叠加一个 animationend
-               监听器，元素复用（同一 overlay 反复开合）时监听器会无限累积。 */
+            if (overlayEl.__nvuiCloseTimer) {
+                clearTimeout(overlayEl.__nvuiCloseTimer);
+                overlayEl.__nvuiCloseTimer = null;
+            }
+            /* NEW-44：若在退场期间已被重新 open，中止关闭流程 */
+            if (!overlayEl.classList.contains('is-closing')) return;
+            /* 退场监听必须摘除，防止监听器累积 */
             try { overlayEl.removeEventListener('animationend', onAnimEnd); } catch (err) { /* 忽略 */ }
             overlayEl.hidden = true;
             overlayEl.classList.remove('is-closing');
@@ -430,14 +471,12 @@
             if (typeof done === 'function') done();
         }
         function onAnimEnd(event) {
-            /* animationend 会冒泡：面板内部的子动画（如 .nvui-tabpane-in）
-               结束时会冒泡到 overlay，若不校验 target 会提前 finish，
-               把 overlay 自身的退场动画截断。 */
+            /* animationend 冒泡：只认 overlay 自身动画 */
             if (event && event.target !== overlayEl) return;
             finish();
         }
         on(overlayEl, 'animationend', onAnimEnd);
-        fallback = setTimeout(finish, animationFallbackMs(60));
+        overlayEl.__nvuiCloseTimer = setTimeout(finish, animationFallbackMs(60));
     }
 
     /* ---------------------- 标签指示器（粘连滑动） ---------------------- */
@@ -557,10 +596,9 @@
             }
         }
         if (opts.placeholder) input.placeholder = opts.placeholder;
-        /* min/max/step 只接受有限数值，避免把 NaN / 垃圾串写进 DOM 属性 */
-        if (isFinite(Number(opts.min)) && opts.min !== undefined && opts.min !== null) input.min = Number(opts.min);
-        if (isFinite(Number(opts.max)) && opts.max !== undefined && opts.max !== null) input.max = Number(opts.max);
-        if (isFinite(Number(opts.step)) && opts.step !== undefined && opts.step !== null) input.step = Number(opts.step);
+        if (opts.min !== undefined && typeof opts.min !== 'symbol' && isFinite(Number(opts.min))) input.min = opts.min;
+        if (opts.max !== undefined && typeof opts.max !== 'symbol' && isFinite(Number(opts.max))) input.max = opts.max;
+        if (opts.step !== undefined && typeof opts.step !== 'symbol' && isFinite(Number(opts.step))) input.step = opts.step;
         if (opts.disabled) input.disabled = true;
         var text = el('span', null, { text: opts.label || '' });
         row.appendChild(input);
@@ -615,6 +653,8 @@
      * 保证 aria-valuenow 与 .nvui-progress-bar 的 width 永远一致（自愈）。
      */
     function normalizeProgressValue(value) {
+        /* NEW-45：防范 Symbol 转换抛错 */
+        if (typeof value === 'symbol' || value === null || value === undefined) return 0;
         var n = Number(value);
         if (!isFinite(n)) n = 0;
         if (n < 0) n = 0;
@@ -626,16 +666,22 @@
     function progress(options) {
         var opts = options || {};
         var initial = normalizeProgressValue(opts.value);
-        /* 不确定进度按 ARIA 规范不应带 aria-valuenow（值未知），
-           其条宽由 CSS 的 40% + 扫光动画接管；确定进度才写 aria-valuenow。 */
         var trackAttrs = {
             role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100',
             'aria-valuenow': opts.indeterminate ? null : String(initial),
         };
-        /* 不确定进度按 README 契约至少要有 aria-label */
-        if (opts.indeterminate && opts.label) trackAttrs['aria-label'] = String(opts.label);
+        /* NEW-42：只要调用方提供了 label，不论确定与不确定进度均赋予 aria-label（符合 WAI-ARIA 规范） */
+        if (opts.label) trackAttrs['aria-label'] = (typeof opts.label === 'symbol') ? '' : String(opts.label);
         var track = el('div', 'nvui-progress', trackAttrs);
-        if (opts.variant) track.classList.add('is-' + opts.variant);
+        /* NEW-34：variant 类名过滤校验，防带空格字符引发未捕获 DOMException */
+        if (opts.variant) {
+            var safeVariant = sanitizeIdPart(opts.variant, '');
+            if (safeVariant) {
+                track.classList.add('is-' + safeVariant);
+            } else {
+                warn('progress(): variant 含有非法字符，已忽略');
+            }
+        }
         if (opts.indeterminate) track.classList.add('is-indeterminate');
         var bar = el('span', 'nvui-progress-bar');
 
@@ -693,6 +739,11 @@
         for (var i = escapeStack.length - 1; i >= 0; i--) {
             var entry = escapeStack[i];
             if (!entry) continue;
+            /* NEW-37：若关联宿主已脱离文档树，自动驱逐孤儿 entry，防止劫持合法可见面板 */
+            if (entry.isConnected && !entry.isConnected()) {
+                escapeStack.splice(i, 1);
+                continue;
+            }
             if (entry.isVisible && entry.isVisible()) {
                 entry.handler(event);
                 return;
@@ -700,12 +751,24 @@
         }
     }
 
-    function registerEscapeHandler(handler, isVisible) {
+    function registerEscapeHandler(handler, isVisible, isConnected) {
         if (!escapeBound) {
             document.addEventListener('keydown', onEscapeKey);
             escapeBound = true;
         }
-        var entry = { handler: handler, isVisible: isVisible || function () { return true; } };
+        /* NEW-29：支持 promote 动态将 entry 提升到栈顶；NEW-37：支持 isConnected 自动清理孤儿 */
+        var entry = {
+            handler: handler,
+            isVisible: isVisible || function () { return true; },
+            isConnected: isConnected || function () { return true; },
+            promote: function () {
+                var idx = escapeStack.indexOf(entry);
+                if (idx !== -1 && idx !== escapeStack.length - 1) {
+                    escapeStack.splice(idx, 1);
+                    escapeStack.push(entry);
+                }
+            }
+        };
         escapeStack.push(entry);
         return entry;
     }
@@ -728,11 +791,22 @@
     /** 当前文档里处于模态状态的原生 dialog 数量。
      *  浏览器支持 `:modal` 伪类时用它判定（Chrome 105+ / Edge 105+ / Safari 17.4+）；
      *  不支持时退化为「存在 open 的 dialog 且非 kit 自身载体」。 */
+    /* NEW-27：静态平台能力一次性检测缓存，避免频繁运行时重复执行 CSS.supports 解析 */
+    var isModalSelectorSupported = (function () {
+        try {
+            return typeof CSS !== 'undefined' && typeof CSS.supports === 'function'
+                && CSS.supports('selector(:modal)');
+        } catch (err) {
+            return false;
+        }
+    })();
+
+    /** 当前文档里处于模态状态的原生 dialog 数量。
+     *  浏览器支持 `:modal` 伪类时用它判定（Chrome 105+ / Edge 105+ / Safari 17.4+）；
+     *  不支持时退化为「存在 open 的 dialog 且非 kit 自身载体」。 */
     function countHostModals() {
         if (!isDomAvailable()) return 0;
-        var selectorSupported = false;
-        try { selectorSupported = CSS.supports('selector(:modal)'); } catch (err) { selectorSupported = false; }
-        if (selectorSupported) {
+        if (isModalSelectorSupported) {
             var modals = document.querySelectorAll('dialog:modal');
             var n = 0;
             for (var i = 0; i < modals.length; i++) {
@@ -760,6 +834,7 @@
      *  返回当前宿主模态数量。 */
     function syncHostModalState() {
         if (!isDomAvailable()) return 0;
+        installHostModalWatcher();
         var modalCount = countHostModals();
         var degraded = modalCount > 0;
         debug('syncHostModalState(): 宿主模态数量=' + modalCount + '，kit 载体降级=' + degraded);
@@ -783,12 +858,13 @@
     var hostModalWatcherInstalled = false;
     var hostModalOpenObserver = null;
     var hostModalScanObserver = null;
-    var observedDialogs = [];
 
     function observeDialogOpen(dialog) {
         if (!dialog || !hostModalOpenObserver) return;
-        if (observedDialogs.indexOf(dialog) !== -1) return;
-        observedDialogs.push(dialog);
+        /* NEW-25：去除全局强引用数组 observedDialogs，改用私有标记，
+           节点脱离 DOM 销毁时可被 GC 正常回收，彻底消除 Detached DOM 内存泄漏 */
+        if (dialog.__nvuiObserved) return;
+        dialog.__nvuiObserved = true;
         try {
             hostModalOpenObserver.observe(dialog, { attributes: true, attributeFilter: ['open'] });
         } catch (err) {
@@ -796,10 +872,13 @@
         }
     }
 
+    /** 递归扫描子树中的 dialog（NEW-30：返回是否发现 dialog；NEW-28：跳过纯文本内联叶子节点） */
     function scanForDialogs(root) {
-        if (!root || typeof root.querySelectorAll !== 'function') return;
+        if (!root || typeof root.querySelectorAll !== 'function') return false;
         var list = root.querySelectorAll('dialog');
+        if (!list || !list.length) return false;
         for (var i = 0; i < list.length; i++) observeDialogOpen(list[i]);
+        return true;
     }
 
     function installHostModalWatcher() {
@@ -815,7 +894,7 @@
                     }
                 }
             });
-            /* 观察器 B：只做 childList（不观察属性），用于发现宿主后续新建的 dialog */
+            /* 观察器 B：只做 childList，发现宿主新建或移除的 dialog */
             hostModalScanObserver = new MutationObserver(function (records) {
                 var sawDialog = false;
                 for (var i = 0; i < records.length; i++) {
@@ -827,14 +906,25 @@
                         if (node.tagName === 'DIALOG') {
                             observeDialogOpen(node);
                             sawDialog = true;
+                        } else if (node.children && node.children.length > 0) {
+                            /* NEW-28：快速跳过不可能包含 dialog 的纯文本内联标签 */
+                            var tn = node.tagName;
+                            if (tn !== 'SPAN' && tn !== 'P' && tn !== 'CODE' && tn !== 'EM' && tn !== 'STRONG' && tn !== 'I' && tn !== 'B') {
+                                /* NEW-30：子树中若存在 dialog，向上标记 sawDialog = true */
+                                if (scanForDialogs(node)) sawDialog = true;
+                            }
                         }
-                        scanForDialogs(node);
+                    }
+                    /* NEW-35：宿主模态直接从 DOM 移除时同步让位状态，防 kit 载体永久锁死 */
+                    var removed = records[i].removedNodes;
+                    for (var k = 0; k < removed.length; k++) {
+                        var rNode = removed[k];
+                        if (!rNode || rNode.nodeType !== 1) continue;
+                        if (rNode.tagName === 'DIALOG' || (rNode.querySelector && rNode.querySelector('dialog'))) {
+                            sawDialog = true;
+                        }
                     }
                 }
-                /* 新 dialog 常常是「先插入 DOM、紧接着 showModal()」，
-                   它的 open 属性在我们的属性观察器挂上之前就已经设好了，
-                   不会产生属性变更记录 —— 必须在这里主动同步一次，
-                   否则宿主模态已开而 kit 载体没有降级让位。 */
                 if (sawDialog) syncHostModalState();
             });
             /* 已有 dialog：逐个挂上 open 属性观察 */
@@ -846,7 +936,6 @@
             hostModalWatcherInstalled = false;
             hostModalOpenObserver = null;
             hostModalScanObserver = null;
-            observedDialogs = [];
             error('installHostModalWatcher(): 观察器不可用，已降级为手动同步', err);
         }
     }
@@ -894,6 +983,18 @@
      *   onClose       关闭后回调
      *   destroy       面板销毁后回调（destroy() 被调用时触发）
      */
+    function restoreForeignNodes(d) {
+        try {
+            if (d && d.childNodes && document.body) {
+                var list = Array.from(d.childNodes);
+                for (var i = 0; i < list.length; i++) {
+                    var n = list[i];
+                    if (n && n.id === 'toast-container') document.body.appendChild(n);
+                }
+            }
+        } catch (e) {}
+    }
+
     function createPanel(options) {
         var opts = options || {};
         /* 面板 id 会被派生出 -layer / -overlay / -title / -tab-* / -pane-* 等多个 DOM id，
@@ -908,7 +1009,9 @@
         /* 装一次监听：宿主模态动态开关时自动降级/还原 */
         installHostModalWatcher();
 
-        var dialog = el('dialog', 'nvui-tl', { id: id + '-layer', 'aria-label': (opts.title || '面板') + ' 浮层' });
+        /* NEW-36：显式设置 closing="" 与 role="presentation"，杜绝 SillyTavern fixToastrForDialogs 劫持注入 */
+        var dialogTitleStr = (typeof opts.title === 'symbol') ? '面板' : (opts.title || '面板');
+        var dialog = el('dialog', 'nvui-tl', { id: id + '-layer', closing: '', role: 'presentation', 'aria-label': dialogTitleStr + ' 浮层' });
         var overlay = el('div', 'nvui-overlay is-panel', { id: id + '-overlay', hidden: '' });
         var panel = el('div', 'nvui-panel', { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': id + '-title' });
 
@@ -996,9 +1099,34 @@
                 });
                 var ic = iconNode(t.icon);
                 if (ic) tab.appendChild(ic);
-                tab.appendChild(document.createTextNode(t.label || t.key));
+                var tabLabelStr = (typeof t.label === 'symbol' || typeof t.key === 'symbol') ? '标签' : String(t.label || t.key);
+                tab.appendChild(document.createTextNode(tabLabelStr));
                 on(tab, 'click', function () { setTabByDom(t.domKey); });
                 tabsNav.appendChild(tab);
+            });
+            /* NEW-41：符合 WAI-ARIA APG Tabs Pattern 的方向键与 Home/End 键盘导航 */
+            on(tabsNav, 'keydown', function (e) {
+                if (!tabs.length) return;
+                var curIdx = -1;
+                for (var i = 0; i < tabs.length; i++) {
+                    if (tabs[i].domKey === activeDom) { curIdx = i; break; }
+                }
+                var nextIdx = -1;
+                if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                    nextIdx = (curIdx + 1) % tabs.length;
+                } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                    nextIdx = (curIdx - 1 + tabs.length) % tabs.length;
+                } else if (e.key === 'Home') {
+                    nextIdx = 0;
+                } else if (e.key === 'End') {
+                    nextIdx = tabs.length - 1;
+                }
+                if (nextIdx !== -1 && nextIdx !== curIdx) {
+                    e.preventDefault();
+                    setTabByDom(tabs[nextIdx].domKey);
+                    var targetTab = tabsNav.querySelector('#' + id + '-tab-' + tabs[nextIdx].domKey);
+                    if (targetTab && typeof targetTab.focus === 'function') targetTab.focus();
+                }
             });
             panel.appendChild(tabsNav);
         }
@@ -1018,7 +1146,9 @@
         if (opts.footer && opts.footer.length) {
             var footer = el('div', 'nvui-panel-footer');
             opts.footer.forEach(function (b) {
-                var btn = el('button', 'nvui-btn' + (b.variant ? ' is-' + b.variant : ''), { type: 'button', text: b.label || '' });
+                if (!b) return;
+                var safeV = (typeof b.variant === 'symbol' || !b.variant) ? '' : String(b.variant);
+                var btn = el('button', 'nvui-btn' + (safeV ? ' is-' + safeV : ''), { type: 'button', text: b.label || '' });
                 on(btn, 'click', function () {
                     if (typeof b.onClick === 'function') b.onClick();
                     if (b.close) closePanel();
@@ -1137,6 +1267,10 @@
             opener = document.activeElement;
             overlay.classList.remove('is-closing');
             openLayer(dialog, overlay);
+            /* NEW-29：打开面板时提升 Esc 调度栈位置至最顶层 */
+            if (escapeEntry && typeof escapeEntry.promote === 'function') {
+                escapeEntry.promote();
+            }
             focusBody();
             if (tabsNav) {
                 setTimeout(function () { syncTabsIndicator(tabsNav, false); }, 0);
@@ -1238,7 +1372,11 @@
            document 级监听器（旧实现会导致监听器与 DOM 无限累积，
            且多面板时任一 Esc 会关闭全部可见面板）。
            调度器只把 Esc 交给「最上层可见面板」。 */
-        registerEscapeHandler(closePanel, function () { return !overlay.hidden; });
+        var escapeEntry = registerEscapeHandler(
+            closePanel,
+            function () { return overlay.isConnected && !overlay.hidden && !overlay.classList.contains('is-closing'); },
+            function () { return overlay.isConnected; }
+        );
 
         /**
          * 把节点追加到指定标签的面板。
@@ -1293,6 +1431,7 @@
          * 摘除动作本身幂等（removed 标志），重复触发无害。
          */
         function destroy() {
+            restoreForeignNodes(dialog);
             unregisterEscapeHandler(closePanel);
             var removed = false;
             var onClose = function () {
@@ -1339,21 +1478,35 @@
     /* ---------------------- 吐司 ---------------------- */
 
     function ensureToastLayer() {
+        /* NEW-31：防御 document.body 未就绪或异常挂载环境 */
+        if (!isDomAvailable() || !document.body) {
+            error('showToast(): document.body 不可用，无法创建通知层');
+            return null;
+        }
         var layer = document.getElementById(TOAST_LAYER_ID);
+        /* NEW-39：防 DOM Cloaking 伪造普通 div 节点破坏通知层 */
+        if (layer && (layer.tagName !== 'DIALOG' || !layer.classList.contains('nvui-tl'))) {
+            warn('ensureToastLayer(): 发现同名非载体节点，已重命名避让');
+            layer.id = TOAST_LAYER_ID + '-cloaked';
+            layer = null;
+        }
         if (layer) {
-            /* 载体被关掉过（dialog.close()）时必须重新 show()，
-               否则第二条及以后的吐司全都落在一个已关闭的载体里，用户完全看不到。
-               这里做幂等重开：已 open 则什么都不做。 */
             if (!layer.open) {
                 try { layer.show(); } catch (err) { layer.setAttribute('open', ''); }
             }
             layer.hidden = false;
             return layer;
         }
-        var dialog = el('dialog', 'nvui-tl nvui-tl-toast', { id: TOAST_LAYER_ID, 'aria-label': '通知层' });
+        /* NEW-36：显式增加 closing="" 与 role="presentation" */
+        var dialog = el('dialog', 'nvui-tl nvui-tl-toast', { id: TOAST_LAYER_ID, closing: '', role: 'presentation', 'aria-label': '通知层' });
         var stack = el('div', 'nvui-toast-stack');
         dialog.appendChild(stack);
-        document.body.appendChild(dialog);
+        try {
+            document.body.appendChild(dialog);
+        } catch (err) {
+            error('showToast(): 通知层挂载到 document.body 失败', err);
+            return null;
+        }
         try { dialog.show(); } catch (err) { dialog.setAttribute('open', ''); }
         return dialog;
     }
@@ -1367,10 +1520,12 @@
         var opts = options || {};
         syncGlassFallback();
         var layer = ensureToastLayer();
+        if (!layer) return { element: null, dismiss: function () {} };
         /* 吐司层可能在宿主模态之后才创建，需在其存在后同步降级态 */
         syncHostModalState();
         installHostModalWatcher();
         var stack = q('.nvui-toast-stack', layer);
+        if (!stack) return { element: null, dismiss: function () {} };
         var toast = el('div', 'nvui-toast' + (opts.type ? ' is-' + opts.type : ''), { role: 'status' });
         var ic = iconNode(opts.icon || 'fa-solid fa-circle-info');
         if (ic) toast.appendChild(ic);
@@ -1412,8 +1567,11 @@
             fallback = setTimeout(done, animationFallbackMs(60));
         }
 
+        /* NEW-32：duration 有效数值归一化防护，非有限正数安全回退默认 3200ms */
         if (opts.duration !== 0) {
-            timer = setTimeout(dismiss, typeof opts.duration === 'number' ? opts.duration : 3200);
+            var rawDur = Number(opts.duration);
+            var dur = (isFinite(rawDur) && rawDur > 0) ? rawDur : 3200;
+            timer = setTimeout(dismiss, dur);
         }
         return { element: toast, dismiss: dismiss };
     }

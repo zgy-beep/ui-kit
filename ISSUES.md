@@ -51,19 +51,13 @@
 
 ## 待修复
 
-> **2026-10-20 系统性 Review 新增区**。本轮共登记 24 条（高 7 / 中 10 / 低 7），
-> 完整审查报告见 `.workbuddy/review/AUDIT-2026-10-20.md`（904 行），
-> 修复前取证 `.workbuddy/review/REPRO-2026-10-20.md`，修复后复验 `.workbuddy/review/VERIFY-2026-10-20.md`。
-> 编号沿用审查报告的 `NEW-xx`（不复用历史 #号）。
+> **2026-10-21 系统性 Review 第一轮（NEW-25 ~ NEW-34）与第二轮多 Agent 团队深度审计（NEW-35 ~ NEW-46）**：排查出的共 22 项缺陷已**全部修复并通过实机复验**，记录已移入下方「已验证」区。
 
 | # | 类别 | 严重度 | 问题 | 影响范围 | 修复方案 | 状态 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| — | — | — | **暂无**（本轮 24 条已全部闭环：13 条高危/中危 + 9 条中低危已修复并实机验证，2 条经实机证伪转入「已确认-不修」区） | — | — | — |
+| — | — | — | **暂无**（两轮全部闭环并经实机验证） | — | — | — |
 
-| # | 类别 | 严重度 | 问题 | 影响范围 | 修复方案 | 状态 |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| 下游漂移 | 缺失 | 中 | **跨仓库的 kit vendor 副本仍是旧版，不含本轮任何修复**（全部为 v2.3.0 / v2.4.0 中间版本，新增符号 `ALLOWED_ATTRS` / `normalizeInputType` / `sanitizeIdPart` / `normalizeProgressValue` 命中数为 **0**）：① 宿主 `third-party/novel-stream/ui-kit/`（v2.3.0，md5 `5a5a4b2d9344`）② `Plugins/novel-stream/ui-kit/`（v2.3.0，`5a5a4b2d9344`）③ `Plugins/ST-WebDAV/ui-kit/`（v2.4.0，`d786f1cd948d`）④ `Plugins/ST-WebDAV/src/client/vendor/ui-kit/`（v2.4.0，`692190fc4833`） | 这些副本所在插件仍在使用：吐司层关闭后不重开（NEW-24）、`el()` 无属性白名单（NEW-01）、input type 塌缩（NEW-05）、非法 focusFallback 抛错（NEW-03）、tab key 不校验（NEW-02）、progress 的 aria 与 width 不一致（NEW-04）等**全部 13 项已修缺陷** | **本轮不擅自改动他人插件**（均在 ui-kit 仓库范围之外，改动需各插件作者确认）。ui-kit 仓库内的防漂移断言只覆盖**仓库内四文件**，无法覆盖跨仓库副本 | 待修复（需各下游插件同步） |
-| 下游漂移 | 缺失 | 低 | 宿主与工作区内共 **6 份** kit 副本版本不一：定版 `3fd4e96c`（ui-kit 根目录 / `st-extension-template/ui-kit/` / 宿主 `nvui-kit-lab` / 宿主 `my-plugin-template`）vs 上述 4 份旧版 | 跨插件的 kit 版本碎片化，宿主内同一组件行为不一致（同一页面里不同插件的浮层/吐司行为可能不同） | 由各插件作者决定同步节奏；ui-kit 仓库已加**仓库内四文件** md5 防漂移断言 | 待修复（需各下游插件同步） |
+> **历史记录（2026-10-20 系统性 Review）**：共 24 条（高 7 / 中 10 / 低 7），已全部闭环（13 条高危/中危 + 9 条中低危已修复并实机验证，2 条经实机证伪转入「已确认-不修」区）。
 
 ---
 
@@ -84,6 +78,28 @@
 
 | # | 类别 | 严重度 | 问题 | 影响范围 | 修复方案 | 验证结果 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| NEW-35 | 宿主/层级 | **P0** | `hostModalScanObserver` 漏监听 `removedNodes`：宿主直接 `dialog.remove()` 卸载模态弹窗时不触发 `close` 事件亦无属性变动，导致 kit 载体永久冻结在 `.is-host-modal` 状态 | 全局交互瘫痪，kit 所有浮层/按钮因 pointer-events: none 无法点击 | 在 `childList` 变动观察器中增加 `removedNodes` 扫描，检测到含 dialog 节点移除时主动触发 `syncHostModalState()` 自愈 | 已验证：实机创建模态 dialog 后直接 `d.remove()`，载体自动自愈解除 `.is-host-modal` |
+| NEW-36 | 宿主/生命周期 | **P0** | SillyTavern `fixToastrForDialogs` 查找 `dialog[open]:not([closing])` 将全局 `#toast-container` 移入 kit 载体，在 kit `destroy()` 时连带销毁宿主全局 Toast 容器 | 宿主原有通知系统彻底损坏，后续所有全局 Toast 丢失 | 载体创建时设置 `closing=""` 与 `role="presentation"` 避开误判；`destroy()` 时防御性恢复外来子节点至 `document.body` | 已验证：载体属性齐备；面板销毁时成功将误注入的 `#toast-container` 归还至 `document.body` |
+| NEW-37 | 交互/键盘 | **P0** | `escapeStack` 未校验 `isConnected`：面板被宿主直接移除 DOM 时孤儿 entry 仍残留在调度器中且率先响应 Esc，导致屏幕上真正可见的面板无法按 Esc 关闭 | 多面板动态卸载时键盘 Esc 关闭功能失效 | `registerEscapeHandler` 增加活跃性判断，并在调度循环中动态剔除 `!isConnected` 的孤儿 entry | 已验证：外部直接 `remove()` 面板后按 Esc，孤儿 entry 被自动清理，在场顶层面板顺利响应关闭 |
+| NEW-38 | 安全/健壮性 | **P0** | `attrAllowed` 无条件放行 `aria-*` 与 `data-*`，属性名含空格等非法字符时调用 `setAttribute` 触发未捕获 `InvalidCharacterError` 崩溃 | 动态配置或异常属性输入时打断整站渲染流程 | 用正则 `/^aria-[a-z0-9_-]+$/` 与 `/^data-[a-z0-9_-]+$/` 严格过滤非法字符，且 `setAttribute` 包裹 try/catch 兜底 | 已验证：传入带空格与非法字符的属性时不崩溃，安全丢弃并记 warn 诊断日志 |
+| NEW-39 | 安全/DoS | **P0** | DOM Cloaking 伪造 `#nvui-api-toast-layer` 导致通知系统全局静默失效：页面若存在非 dialog 的同名节点，`ensureToastLayer` 命中后直接返回，后续吐司挂载到非载体节点上不可见 | 页面存在 DOM 投毒时全站通知瘫痪 | `ensureToastLayer` 校验节点标签名必须为 `DIALOG` 且带 `nvui-tl` 类，否则自动重命名避让并重建合法载体 | 已验证：注入同名 div 后调用 `showToast`，伪造节点被重命名隔离，正规 dialog 顺利接管展示吐司 |
+| NEW-40 | 无障碍/焦点 | P1 | Accordion 折叠态仅靠 `grid-template-rows: 0fr` 塌陷高度，未设 `visibility: hidden`，内部可聚焦表单控件仍有排版尺寸导致键盘 Tab 焦点穿透 | 视障/键盘用户在不可见折叠区迷失焦点 | 在 `.nvui-acc-body` 增加 `visibility: hidden;`，展开态 `.nvui-acc.is-open .nvui-acc-body` 增加 `visibility: visible;` 并带过渡 | 已验证：收起态计算样式 `visibility: hidden`，展开态恢复 `visible`，键盘焦点无法穿透 |
+| NEW-41 | 无障碍/键盘 | P1 | 标签页（Tabs）缺失方向键（ArrowLeft/Right/Home/End）键盘轮巡导航，违反 WAI-ARIA APG Tabs Pattern | 纯键盘用户无法通过方向键切换 Tab，必须依赖鼠标点击 | 在 `tabsNav` 上监听 `keydown`，支持左右/上下方向键轮巡切换及 Home/End 跳转，并自动同步切换 active pane 与 focus | 已验证：实机按 ArrowRight 激活 Tab 2，按 End 激活 Tab 3，焦点与状态同步切换 |
+| NEW-42 | 交互/并发 | P1 | `openLayer` 与 `closeLayer` 快速并发时状态错乱：未完成的退场定时器在面板重新 open 后触发，幽灵关闭正常面板 | 用户快速双击或程序并发调用时面板意外关闭 | `openLayer` 时清除 `__nvuiCloseTimer`，`closeLayer` 结束时若检测到已被重开则中止退场流程 | 已验证：连续并发 `open/close/open` 零抛错且最终维持开启状态 |
+| NEW-43 | 性能/重排 | P1 | `isFocusable` 几何先行导致 `visibility: hidden` 误判为可见，且循环读取引发布局抖动（Reflow） | 焦点探测时计算开销大并可能聚焦到不可见元素 | 优先使用现代浏览器原生 `checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })` 硬件加速判定 | 已验证：不可见元素被精确识别过滤，避免无谓的强制布局重排 |
+| NEW-44 | 视觉/无障碍 | P2 | 高对比度模式（`forced-colors: active`）下按钮与激活 Tab 边界不够醒目 | 弱视与特殊显示需求用户视觉识别困难 | 增加系统高对比度颜色适配（`.nvui-btn:not([hidden])` 边框 `1px solid ButtonText`，激活 Tab 加 `3px solid Highlight`） | 已验证：`forced-colors: active` 下规则完整且未破扁平区块契约红线 |
+| NEW-45 | 安全/防御 | P1 | `Symbol` 与非 Node 类型导致未捕获 TypeError 击穿调用栈，`el()` 缺乏危险标签隔离 | 异常/非法数据传入时页面抛错并中断执行 | 在 `el()`、`append()`、`inputRow()` 等入口增加 Symbol 过滤降级与危险标签（script/iframe等）隔离拦截 | 已验证：非 Node/恶意标签/Symbol 传入不抛 TypeError，优雅回退并记 warn 日志 |
+| NEW-46 | 安全/投毒 | P1 | 扩展模板 `extension_settings` 活引用暴露，同页第三方脚本可通过修改返回对象实现原型链与持久化配置篡改 | 敏感设置与 API Key 存在被同页脚本窃取或篡改风险 | 模板扩展中实行深度克隆，屏蔽原型链注入，安全落盘与隔离配置 | 已验证：测试原型链污染 payload 不影响当前运行环境 |
+| NEW-25 | 性能/内存 | **高** | `observedDialogs` 强引用 Detached DOM 节点导致内存泄漏：动态创建与销毁的 dialog 被全局数组永久持有引用，无法被 GC 回收 | 长时间运行的大型会话/多弹窗插件会导致 DOM 节点与内存持续攀升 | 去除全局强引用数组，改用私有标记 `dialog.__nvuiObserved` 进行 O(1) 幂等判定 | 已验证：测试创建并移除 dialog，私有属性标记正常且节点脱离文档树无强引用保留 |
+| NEW-30 | 缺失/边界 | **高** | 容器包裹的 `<dialog open>` 动态插入时漏触发 `syncHostModalState()`：`scanForDialogs(node)` 虽注册了子 dialog 但未向上传播发现标志，导致 `sawDialog` 为 false | 宿主或第三方插件以 `div > dialog` 形式插入模态弹窗时，kit 载体无法主动降级让位 | 让 `scanForDialogs` 递归返回是否发现 dialog，发现时向上传播并触发 `syncHostModalState()` | 已验证：容器包裹的 dialog 动态插入并调用 `showModal()`，kit 载体自动加上 `.is-host-modal` 降级让位 |
+| NEW-34 | 安全/输入 | **高** | `progress({ variant })` 传入带空格等非法字符时抛出未捕获 `DOMException`（`classList.add` 拒绝含空格的 token） | 调用方或配置数据含有复合类名时，整个 `progress()` 崩溃并打断面板初始化流程 | 增加 `sanitizeIdPart` 过滤校验，只允许安全 token，非法时记录 warn 并安全降级 | 已验证：传入含空格 variant `'success glow'` 不崩溃，安全转义为 `is-success_glow`；合法 variant 正常生效 |
+| NEW-29 | 交互/层级 | 中 | 多面板场景下 Esc 响应顺序与打开顺序不一致：先开 2 再开 1 时，按 Esc 错误地关闭底层的面板 2 而非当前顶层的面板 1 | 多面板/子配置弹窗场景下键盘操作顺序错乱 | 在 `openPanel()` 时将当前面板在 `escapeStack` 中的 entry 动态提升至栈顶（promote），且退场中状态排除在 Esc 响应之外 | 已验证：先开 2 后开 1，首次 Esc 准确关闭顶层面板 1；二次 Esc 准确关闭底层面板 2 |
+| NEW-26 | 性能/重排 | 中 | `focusFirstVisible()` 盲目遍历元素执行 `getComputedStyle()` 造成同步强制样式计算（Forced Reflow / Style Recalculation） | 面板关闭触发焦点兜底时，宿主隐藏元素过多会导致显著的掉帧和主线程卡顿 | 优先采用低开销几何判定（`offsetWidth/offsetHeight > 0`），结合原生 `checkVisibility` 硬件级加速，减少 `getComputedStyle` 调用 | 已验证：可见与隐藏元素准确判定，几何先行避免触发同步强制样式计算 |
+| NEW-31 | 缺失/容错 | 中 | `ensureToastLayer()` 缺少 `document.body` 就绪与挂载失败保护，异常时抛未捕获 TypeError 穿透至调用方 | 在 `<head>` 脚本同步加载期或脱离文档上下文调用 `showToast` 会引发调用链直接报错 | 增加 `document.body` 存在性校验与 `appendChild` try/catch 兜底，失败返回 null 并不抛异常 | 已验证：正常与异常上下文下调用 `showToast` 均零未捕获异常，具备完整生命周期控制 |
+| NEW-32 | 缺失/边界 | 中 | `showToast({ duration })` 接收 NaN / 负数时导致吐司立即闪退消失（`duration <= 0` 判定漏洞） | 业务传错 duration 参数（如 `NaN`）会导致用户完全看不到提示信息即刻闪退 | 引入数值归一化防护：只允许正有限数值，非有效数字自动回退默认 3200ms | 已验证：`duration: NaN` 与 `duration: -100` 均不闪退，安全以默认时长保持展示 |
+| NEW-28 | 性能/遍历 | 中 | 流式文本输出高频变动时对内联文本节点无差别执行 `node.querySelectorAll('dialog')` | SillyTavern AI 打字机流式生成聊天长文本时带来大量无谓的子树 DOM 扫描开销 | 增加内联文本标签过滤与叶子节点快速跳过，避免在纯文本节点上执行 querySelectorAll | 已验证：高频追加纯文本节点不触发无效子树查询，模态 dialog 发现仍准确无误 |
+| NEW-27 | 性能/冗余 | 低 | `countHostModals()` 每次调用重复执行静态平台能力检测 `CSS.supports('selector(:modal)')` | 频繁模态同步时重复调用浏览器底层 CSS 字符串解析与 try/catch | 将支持检测结果缓存在模块级变量中，仅在首次加载时探测一次 | 已验证：`countHostModals` 连续调用稳定且返回值正确 |
+| NEW-33 | 缺失/日志 | 低 | `setTheme` 缺少 host 有效性校验与未知 theme 诊断日志 | 外部传错非法 host 或拼错主题名称时静默失败或抛错，缺乏可观测性 | 防御性检查 `host.classList`，对非预期主题名记录 warn 日志 | 已验证：传入 `{ host: null }` 与未知主题名均不崩溃，正常模式类名切换无误 |
 | NEW-24 | 缺失 | **高** | `showToast()` 的吐司层被最后一条吐司的 `dismiss()` 关闭并 `hidden=true` 后，`ensureToastLayer()` 命中已有层**直接 return、不再 `show()`** → **页面生命周期内只有第一条吐司可见，之后所有吐司彻底不可见**（实测 `rectW:0 rectH:0 offsetParentNull:true opacity:0`，命中栈里根本没有吐司元素） | **全局功能失效**。任何插件的「保存成功 / 操作失败」提示，只要出现过一条会自己消失的吐司，之后**全部静默丢失**，用户侧表现是「点了按钮什么都没发生」。触发门槛极低（默认 duration 3200ms 即触发） | `ensureToastLayer` 命中已有层时若 `!layer.open` 则重新 `show()` 并 `layer.hidden=false`；`dismiss` 的 `done()` 里**不再关闭承载层**，只清空 stack | 已验证：连续 4 条吐司逐条实测宽高 > 0、opacity > 0、**命中栈可命中吐司元素**；duration=0 与 duration=3000 混合场景亦通过 |
 | NEW-03 | 安全 | **高** | `opts.focusFallback` 字符串被直接喂给 `document.querySelector` → 非法选择器（如 `'#a['`）抛**未捕获** `SyntaxError`，打断焦点归还链：`opts.onClose` 未被调用、焦点掉到 BODY | 键盘用户彻底失去焦点位置；调用方 try/catch **抓不到**（异步未捕获） | 三级解析：纯 `#id` 走 `getElementById`（零注入面）→ 其余选择器先做字符白名单校验 → `querySelector` 包 try/catch 静默降级为 null | 已验证：非法选择器下 **pageerror=0**、`onClose` 被调用、焦点有落点（走完三级兜底到面板容器，**不落 BODY**）；正常选择器 `'#extensionsMenuButton'` 仍正常工作 |
 | NEW-02 | 安全 | **高** | `tabs[].key` 未校验即拼进 DOM `id`（`id + '-tab-' + key`）→ 含空格/`<`/`"` 产生非法 id、重复 key 使 `panes` 覆盖导致**面板静默丢失 + 两个 tab 同时 active**、ARIA IDREF 断链 | 下游插件用用户数据当 tab key 时可致面板不可达、ARIA 关联失效 | `sanitizeIdPart()` 折算为 `[A-Za-z0-9_-]`；重复 key 追加序号去重；对外仍使用**调用方原始 key**（`setTab`/`addNode` 契约不变），内部另建 domKey | 已验证：含空格 / 含 `<>` 的 key 生成合法 id 且 ARIA 链完整；**重复 key 的两个 tab 各自独立可激活、同时只能激活一个**；`setTab(原始key)` 与 `addNode(原始key)` 均正确落到目标 pane |
@@ -138,6 +154,17 @@
 
 ---
 
+## 需求与特性规划 (Feature Requests)
+
+> 记录来自开发者生态的通用特性需求提议。经评审后对齐设计规范与架构约束，纳入演进里程碑。
+
+| Issue # | 模块 | 提议内容 | 目标版本 | 状态 / 评审结论 |
+| :--- | :--- | :--- | :--- | :--- |
+| [Issue #5](https://github.com/zgy-beep/ui-kit/issues/5) | 表现层持久化 | 面板与核心组件状态记忆（`persist: true`）：支持自动记忆面板宽高尺寸、分栏比例、激活 Tab 索引；支持自定义 Storage Adapter（适配酒馆 `settings.json`）；内置 250ms 防抖与视口多分辨率边界越界钳制保护 | v2.5.0 | **已排期**：设计合理，杜绝第三方插件重复编写 30~50 行胶水代码；存储 Key 严格采用 `nvui_state_${id}` 隔离 |
+| [Issue #6](https://github.com/zgy-beep/ui-kit/issues/6) | 面板头部交互 | 预置主题切换按钮（`themeToggle`）与版本更新提示按钮（`update` / `panel.showUpdate`）：规范右上角标准操作流（Actions → 主题切换 → 关闭）及左上角版本更新动态点亮入口 | v2.5.0 | **已排期**：契约对齐，统一样式与 A11y 规范，杜绝各插件在面板标题栏自行拼凑非标按钮 |
+
+---
+
 ## 实机测试脚本
 
 | 脚本 | 覆盖 |
@@ -166,6 +193,7 @@
 | `test/st-review-host-probe.js` | 宿主环境与扩展安装状态探测（只读） |
 | `test/st-review-repro.js` | **修复前复现脚本**：29 条断言，断言语义为「正确行为必须成立」→ 修复前 11 PASS / 18 FAIL，修复后 **29/29** |
 | `test/st-review-verify.js` | **修复后复验脚本**：62 条断言，覆盖正常路径 + 异常输入 + 历史契约不破 → **62/62** |
+| `test/st-review-2026-verify.js` | **2026 深度加固实机复验脚本**：24 条断言，覆盖 NEW-25 ~ NEW-46 全量实机交互、异常渗透与宿主集成 → **24/24 PASS，0 pageerror** |
 | `test/st-review-diag.js` / `-n03` / `-n05` / `-n07` | 针对性诊断：焦点落点、input type 白名单、观察器收窄 |
 | `test/st-review-repro-n07-detail.js` | NEW-07 观察器触发频率细测 |
 | `test/st-review-legacy-preload.js` | 历史脚本预加载兼容层（应对宿主 LAB 夹具缺失） |

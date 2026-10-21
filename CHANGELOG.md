@@ -6,6 +6,30 @@
 - 新增组件 / 新增 token（不破坏既有 DOM 与取值）：小版本（2.x.0）
 - 重命名类 / token、删除 token、修改 DOM 契约：大版本（x.0.0）
 
+## v2.4.0（2026-10-21）· 深度加固与实机渗透修复批次（22 项缺陷）
+
+> 涵盖 2026-10-21 系统性 Review 第一轮（NEW-25 ~ NEW-34）与第二轮专家团队深度加固（NEW-35 ~ NEW-46）。
+> 同属 **v2.4.0** 维护加固，未改变对外破坏性 API，全部通过真实 SillyTavern 宿主端到端自动化复验（62/62 PASS + 24/24 PASS，0 pageerror）。
+
+**已修复**
+
+- **NEW-35 hostModalScanObserver 漏监听 removedNodes（P0·致命）**：宿主直接调用 `dialog.remove()` 卸载模态弹窗时不触发 `close` 事件亦无属性变动，导致 kit 载体永久冻结在 `.is-host-modal`。现增加 `removedNodes` 子树扫描，模态移除时主动触发 `syncHostModalState()` 自愈。
+- **NEW-36 宿主 fixToastrForDialogs 劫持与销毁全局 #toast-container（P0·致命）**：Kit 载体显式增加 `closing=""` 与 `role="presentation"` 避开宿主弹窗误判；且在 `destroy()` 时防御性恢复外来子节点至 `document.body`。
+- **NEW-37 escapeStack 未校验 isConnected 导致孤儿 entry 劫持 Esc（P0·致命）**：面板被外部移除 DOM 时孤儿 entry 仍残留在调度器中，导致屏幕在场面板无法按 Esc 关闭。现增加 `isConnected` 活跃校验并在调度中动态剔除孤儿条目。
+- **NEW-38 attrAllowed 属性白名单防御非法字符崩溃（P0·安全）**：`aria-*` 与 `data-*` 增加正则过滤（`/^aria-[a-z0-9_-]+$/`），底层 `setAttribute` 增加 try/catch 兜底，防范空格等非法字符引发 `InvalidCharacterError`。
+- **NEW-39 DOM Cloaking 伪造 Toast 载体避让（P0·安全）**：`ensureToastLayer` 校验已有载体标签名必须为 `DIALOG` 且含 `nvui-tl` 类，遇普通 div 同名伪造节点时自动更名避让并重建正规 dialog 载体。
+- **NEW-25 observedDialogs Detached DOM 强引用泄漏（高·内存）**：移除全局强引用数组，改用私有属性标记 `dialog.__nvuiObserved` 进行 O(1) 幂等判定。
+- **NEW-30 容器包裹的 dialog 漏触发模态降级（高·感知）**：`scanForDialogs` 递归返回子树是否发现 dialog，发现时向上传播并触发 `syncHostModalState()` 降级让位。
+- **NEW-34 progress({ variant }) 非法字符 DOMException 崩溃（高·安全）**：引入 `sanitizeIdPart` 转义清洗，非法空格转为下划线，杜绝未捕获异常。
+- **NEW-40 折叠面板（Accordion）收起态焦点穿透（P1·无障碍）**：`.nvui-acc-body` 增加 `visibility: hidden;`，阻隔键盘 Tab 焦点穿透进不可见折叠内容中。
+- **NEW-41 标签页（Tabs）WAI-ARIA 方向键键盘轮巡（P1·无障碍）**：`tabsNav` 监听 `ArrowLeft/Right/Home/End`，支持键盘无障碍轮巡切换 Tab 与焦点联动。
+- **NEW-42 openLayer 与 closeLayer 快速并发竞态消除（P1·交互）**：`openLayer` 取消未决退场定时器，`closeLayer` 结束前做重开校验，消除双击幽灵关闭。
+- **NEW-43 isFocusable 采用 checkVisibility 硬件加速优化（P1·性能）**：优先使用现代浏览器原生 `checkVisibility` 判定元素可见性，消除强制回流（Reflow）。
+- **NEW-44 系统高对比度模式 forced-colors: active 适配（P2·视觉）**：补齐高对比度模式下的边框与激活指示条。
+- **NEW-45 Symbol 与非 Node 参数全局异常隔离（P1·防御）**：全量 API 增加 `Symbol` 过滤降级与危险标签（script/iframe）安全拦截。
+- **NEW-46 扩展模板深拷贝防原型链与配置投毒（P1·安全）**：模板 settings 读取与持久化采用深拷贝隔离，杜绝第三方脚本篡改或窃取 API Key。
+- **NEW-26 ~ NEW-29 / NEW-31 ~ NEW-33**：焦点归还几何判定优化、`countHostModals` 平台特征检测缓存、纯文本子树扫描跳过、`showToast` duration 数值归一化防闪退等。
+
 ## v2.4.0（2026-10-20）· 静态审查批次二（9 条中低危项）
 
 > 与下方「静态审查缺陷修复批次（12 条高危/中危 + 调试开关）」同属 **v2.4.0**，

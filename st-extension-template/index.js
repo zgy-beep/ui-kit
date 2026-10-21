@@ -187,7 +187,7 @@ export function init() {
     })();
     window.__MY_PLUGIN__ = { open: openSettings };
     if (isLocalDev) {
-        window.__MY_PLUGIN__.getSettings = () => ({ ...getSettings() });
+        window.__MY_PLUGIN__.getSettings = () => (typeof structuredClone === 'function' ? structuredClone(getSettings()) : JSON.parse(JSON.stringify(getSettings())));
     }
 
     addMenuButton();
