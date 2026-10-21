@@ -308,6 +308,15 @@ JS 只需三件事：非模态 `show()`/关闭收尾（README §2.3）、tabs �
 
 ## 6. 版本与反馈
 
+### 6.1 SemVer 语义化版本分级准则（面向 AI 助手）
+
+- **PATCH（补丁版本 · 2.4.X）**：仅用于向下兼容的缺陷修复（内存泄漏、未捕获异常、防御性代码加固、checkVisibility 硬件加速性能优化、高对比度微调）。**严禁**修改任何公开 API 签名或增删 Token。
+- **MINOR（小版本 · 2.X.0）**：用于向下兼容的新能力（新增 Token 如 `--nvui-z-layer`、新增可选 API 如 `countHostModals`、在 `createPanel` 中新增可选参数如 `persist`/`themeToggle`、新增实例方法如 `showUpdate`）。**必须保持 100% 向后兼容**，既有插件直接覆盖无感升级。
+- **MAJOR（大版本 · X.0.0）**：仅用于破坏性变更（重命名/删除 Token、修改核心 CSS 类名、改变公开 API 必需参数签名、破坏 DOM 必需层级）。必须向用户明确告知破坏性影响并提供迁移指南。
+- **发版检查红线（六处对齐）**：版本变更时必须同时原子更新 6 处声明（package.json / tokens.json / tokens.css / components.css / nvui-api.js / README），且 4 资产文件与 `st-extension-template/ui-kit/` 保持 MD5 逐字节一致，`npm test` 必须全绿。
+
+### 6.2 历史版本与兼容基准
+
 - 当前：**v2.4.0**（浮层载体完善：宿主模态让位机制 `.is-host-modal` + 3 个宿主模态 API；110 令牌不变，无破坏性变更）。
 - 上一版：**v2.3.0**（浮层载体层级修复：新增 `--nvui-z-layer: 1000000` 载体档位）。
 - Kit 变更遵循语义化版本；升级前先跑 `node test/test-ui-kit.js`，并对照 README §10.3–§10.9 的迁移说明。

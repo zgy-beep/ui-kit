@@ -1486,9 +1486,41 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API；**
 
 ---
 
-## 11. 版本管理
+## 11. 版本管理与 SemVer 规范（Major / Minor / Patch）
 
-- 当前 **v2.4.0**（2026-10-20）：**浮层载体完善**——宿主 `showModal()` 模态会给整页加 `inert`（`inert` 不参与命中测试），kit 浮层**无法**压过它（`popover=manual` 亦然，实测证伪）；改为**主动让位**：新增 `.is-host-modal` 降级态（不可点 + 压暗）与 3 个宿主模态 API（`countHostModals` / `syncHostModalState` / `getCarrierState`），宿主模态开关时自动降级/还原；110 令牌 / 47 浅色 / 78 类 / 16 关键帧，无破坏性变更（小版本）。
+SillyTavern UI Kit 严格遵循 [Semantic Versioning 2.0.0 (SemVer)](https://semver.org/) 规范，版本号格式统一为：
+`MAJOR.MINOR.PATCH`（主版本号 . 次版本号 / 小版本号 . 修订版本号 / 补丁版本号）。
+
+### 11.1 版本分级与触发准则
+
+| 级别 | 格式 | 变更性质 | 触发条件与具体场景 | 升级与兼容性影响 |
+| :--- | :--- | :--- | :--- | :--- |
+| **MAJOR**<br/>(主版本号 / 大版本) | `X.0.0` | **破坏性变更**<br/>(Breaking Changes) | 1. **删除或重命名设计令牌**（Token）；<br/>2. **重命名核心 CSS 类名**或删除既有组件类；<br/>3. **破坏性修改 DOM 契约**（如改变必需的父子嵌套结构、移除关键挂载点）；<br/>4. **修改或删除公开导出 API 签名**（如 `createPanel`、`showToast` 等删除必填参数或改变核心返回值结构）；<br/>5. **重构层叠上下文体系**（如改变 `--nvui-z-layer` 基础契约）。 | **向下不兼容**。<br/>下游插件无法仅通过文件覆盖升级，需对照 README 迁移表（Migration Guide）调整业务代码与 DOM 结构。 |
+| **MINOR**<br/>(次版本号 / 小版本) | `2.X.0` | **向下兼容的新功能**<br/>(New Features / Additions) | 1. **新增设计令牌**（如 v2.3.0 新增 `--nvui-z-layer`）；<br/>2. **新增组件族、子组件或状态修饰类**（如 v2.1.0 新增 `.nvui-panel`，v2.5.0 新增状态持久化与头部控件）；<br/>3. **新增公开导出 API 或实例方法**（如 `NVUI.countHostModals`、`panel.showUpdate`）；<br/>4. **在现有 API 中增加可选配置项（Opt-in）**（如 `createPanel({ persist, themeToggle })`）；<br/>5. **扩展模板功能或新增官方离线沙箱能力**。 | **100% 向下兼容**。<br/>既有插件直接覆盖 `ui-kit/` 目录即可无缝完成升级，原有 DOM 与 API 完全不受影响，新能力按需（Opt-in）引入。 |
+| **PATCH**<br/>(修订版本号 / 补丁版本) | `2.4.X` | **向下兼容的缺陷修复**<br/>(Bug Fixes / Hardening) | 1. **修复逻辑缺陷与内存泄漏**（如消除 Detached DOM 强引用、自愈 `removedNodes` 模态让位）；<br/>2. **防御性编程与健壮性加固**（如 `Symbol` / 非 Node 拦截、属性白名单正则过滤、DOM Cloaking 避让）；<br/>3. **底层性能与重绘优化**（如引入 `checkVisibility` 硬件加速、250ms 防抖、`will-change` 合成层提示）；<br/>4. **可访问性细节修复**（如高对比度模式微调、折叠面板 `visibility: hidden` 隔离）；<br/>5. **文档修缮与内部重构**（不改变对外契约）。 | **零升级心智负担**。<br/>无任何 API 签名变更，覆盖文件即享稳定性修复。 |
+
+### 11.2 六处版本声明一致性红线（Six-Point Consistency）
+
+为防止版本号在不同载体中发生漂移，任何版本发布必须同时原子更新以下 6 处版本声明：
+1. `package.json`（`"version": "X.Y.Z"`）
+2. `tokens.json`（`"version": "X.Y.Z"`）
+3. `tokens.css`（文件头注释 `/* SillyTavern UI Kit vX.Y.Z */`）
+4. `components.css`（文件头注释 `/* SillyTavern UI Kit vX.Y.Z */`）
+5. `nvui-api.js`（导出对象属性 `NVUI.version = 'X.Y.Z'` 与 `NVUI.VERSION = 'X.Y.Z'`）
+6. `README.md`、`AI-GUIDE.md` 与 `CHANGELOG.md` 最新发布条目
+
+此外，`st-extension-template/ui-kit/` 下的 4 个资产文件（`nvui-api.js`、`components.css`、`tokens.css`、`tokens.json`）必须与仓库根目录保持 **MD5 逐字节一致**。
+
+### 11.3 Git Tags 与 GitHub Releases 发布标准
+
+1. **Tag 命名标准**：统一采用 `vX.Y.Z` 规范前缀（如 `v2.4.0`、`v2.5.0`，禁止裸数字 `2.4.0` 或大写 `V2.4.0`）。
+2. **附注标签（Annotated Tags）**：发布必须使用附注标签（`git tag -a vX.Y.Z -m "..."`），包含清晰的版本概要，严禁轻量标签。
+3. **Release Notes 结构化标准**：每个 GitHub Release 必须同步发布，包含版本定位、核心更新/缺陷明细（关联 Issue 编号）、兼容性说明与自动化实测数据。
+
+### 11.4 历史变更记录（倒序）
+
+- 当前 **v2.4.0**（2026-10-21）：**全链路深度加固与宿主模态让位**——宿主 `showModal()` 模态会给整页加 `inert`（`inert` 不参与命中测试），kit 浮层**无法**压过它（`popover=manual` 亦然，实测证伪）；改为**主动让位**：新增 `.is-host-modal` 降级态（不可点 + 压暗）与 3 个宿主模态 API（`countHostModals` / `syncHostModalState` / `getCarrierState`），宿主模态开关时自动降级/还原；NEW-25 ~ NEW-46 全量 22 项深度渗透加固；110 令牌 / 47 浅色 / 78 类 / 16 关键帧，无破坏性变更（小版本）。
+- 上一版 **v2.3.0**（2026-10-20）：**浮层载体完善**——宿主 `showModal()` 模态会给整页加 `inert`（`inert` 不参与命中测试），kit 浮层**无法**压过它（`popover=manual` 亦然，实测证伪）；改为**主动让位**：新增 `.is-host-modal` 降级态（不可点 + 压暗）与 3 个宿主模态 API（`countHostModals` / `syncHostModalState` / `getCarrierState`），宿主模态开关时自动降级/还原；110 令牌 / 47 浅色 / 78 类 / 16 关键帧，无破坏性变更（小版本）。
 - 上一版 **v2.3.0**（2026-10-20）：**浮层载体层级修复**——非模态 `dialog.show()` 实测不进浏览器 top layer（只有 `showModal()` 进，但其 `inert` 会废掉宿主交互），载体此前无 z-index，会被宿主正 z-index 表面（酒馆 `#sheld` z-index:30，聊天非空时）整块盖住；新增 `--nvui-z-layer: 1000000` 载体档位并修正文档中「dialog 提升渲染层级」的错误论断；110 令牌 / 47 浅色 / 78 类 / 16 关键帧，无破坏性变更（小版本）。
 - 变更记录（倒序）：
   - **v2.4.0**：新增 `.is-host-modal` 宿主模态降级态（`pointer-events:none` + `opacity:0.35` + `grayscale(0.6)`，子浮层一并让位）；`nvui-api.js` 新增 `countHostModals()` / `syncHostModalState()` / `getCarrierState()` 三个 API，并在 `createPanel()` / `showToast()` / `openLayer()` 中同步降级态；装幂等 watcher（`MutationObserver` 监听 `dialog[open]` + 捕获 `close` 事件）实现宿主模态动态开关的自动降级/还原；README 新增 §13.7 与 §10.9；实测脚本 `test/st-carrier-host-modal-check.js`（18 项断言）；CHANGELOG / package.json / tokens.json 升 2.4.0（令牌数不变）。**另含两批静态审查缺陷修复**（见 CHANGELOG「静态审查缺陷修复批次」与「静态审查批次二」两节）：前者修吐司层不重开 / 输入类型塌缩 / 焦点归还断链 / 属性白名单等 12 条，后者修令牌缓存 / 切 tab 全量遍历 / 吐司定时器泄漏 / 挂载点抛错等 9 条中低危项 —— 均为非破坏性修复，DOM 契约不变，详见 CHANGELOG。
