@@ -1,6 +1,6 @@
 # AI 协作设计指南 · 用 SillyTavern NVUI Kit 规范设计面板
 
-> 版本：**v2.7.0**（候选未发布） · 适用对象：SillyTavern 插件开发者、其它软件项目、以及被要求「按规范生成/修改界面」的 AI 编码助手。
+> 版本：**v2.7.0**（已打 tag） · 适用对象：SillyTavern 插件开发者、其它软件项目、以及被要求「按规范生成/修改界面」的 AI 编码助手。
 > 配套文件：[tokens.css](tokens.css)（设计令牌）、[components.css](components.css)（组件样式）、[README.md](README.md)（完整规范）、[nvui-api.js](nvui-api.js)（零依赖运行时 API）、[tokens.json](tokens.json)（令牌机器可读镜像）、[test/test-ui-kit.js](test/test-ui-kit.js)（规范守护测试）。
 
 本文档回答两个问题：
@@ -121,7 +121,7 @@ var panel = NVUI.createPanel({
 - `destroy`：面板销毁时的清理回调（解绑业务监听、清理定时器）。
 - 面板需彻底移除时调用 `panel.destroy()`：移除 DOM、注销全局 Esc 监听、触发 `destroy` 回调。
 
-> **单文件 / 酒馆助手脚本提示**：若是单文件用户脚本（不能拷贝本地文件夹），可通过 CDN 动态加载样式与 JS API（`https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.5.0/nvui-api.js`，完整配方见 `README.md` §2.1.3），然后同样使用 `NVUI.createPanel` 生成。v2.7.0 **尚未发布 tag**，CDN 示例暂锁已存在的 v2.5.0；需要 `.nvui-form-scope` 等新能力时请使用仓库源码资产。
+> **单文件 / 酒馆助手脚本提示**：若是单文件用户脚本（不能拷贝本地文件夹），可通过 CDN 动态加载样式与 JS API（`https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.7.0/nvui-api.js`，完整配方见 `README.md` §2.1.3），然后同样使用 `NVUI.createPanel` 生成。令牌、样式与运行时应锁定同一个 `v2.7.0` tag。
 
 > **ST 扩展直接开箱用**：`st-extension-template/` 是一份已在本机真实 ST 宿主验证过的扩展骨架
 > （`manifest.json` / `index.js` / `style.css` + `ui-kit/`）。复制到
@@ -525,7 +525,7 @@ async function checkGitHubRelease() {
 
 ### 6.2 历史版本与兼容基准
 
-- 当前：**v2.7.0**（候选未发布；opt-in `.nvui-form-scope` 表单作用域，并修复 GitHub #12 的默认载体 `optgroup` 配色、#13 的焦点管理、#14 的宿主模态 Esc；`!important` 预算仍 14，token 取值与公开 API 不变；组件类 80；0 破坏性变更）。
+- 当前：**v2.7.0**（已打 tag；opt-in `.nvui-form-scope` 表单作用域，并修复 GitHub #12 的默认载体 `optgroup` 配色、#13 的焦点管理、#14 的宿主模态 Esc；`!important` 预算仍 14，token 取值与公开 API 不变；组件类 80；0 破坏性变更）。
 - 上一版：**v2.6.0**（独立复选框 `.nvui-checkbox` + 宿主表单控件隔离层 + 折叠条接管入口；组件类 79；0 破坏性变更，100% 向后兼容）。
 - 上一版：**v2.5.0**（表现层布局持久化 + 面板头部标准化 + 720px 黄金尺寸；0 破坏性变更，100% 向后兼容）。
 - 上一版：**v2.4.0**（浮层载体完善：宿主模态让位机制 `.is-host-modal` + 3 个宿主模态 API；110 令牌不变，无破坏性变更）。

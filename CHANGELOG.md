@@ -6,9 +6,9 @@
 - 新增组件 / 新增 token（不破坏既有 DOM 与取值）：小版本（2.x.0）
 - 重命名类 / token、删除 token、修改 DOM 契约：大版本（x.0.0）
 
-## v2.7.0（2026-10-23）· [2.7.0] - 2026-10-23 opt-in 表单作用域与 GitHub #12–#14 修复（候选，未发布）
+## v2.7.0（2026-10-23）· [2.7.0] - 2026-10-23 opt-in 表单作用域与 GitHub #12–#14 修复
 
-> 本版本为 SemVer 小版本（MINOR），保持既有公开 API、状态格式与 token 取值不变；尚未打 tag / 发布。静态、本地浏览器及无宿主 E2E 回归已通过，真实 SillyTavern 宿主的 6 项用例尚未执行。
+> 本版本为 SemVer 小版本（MINOR），保持既有公开 API、状态格式与 token 取值不变；已打 `v2.7.0` tag，未创建 GitHub Release。静态、本地浏览器及无宿主 E2E 回归已通过，真实 SillyTavern 宿主的 6 项用例尚未执行。
 
 ### 新增：opt-in `.nvui-form-scope`（GitHub #9 延伸）
 - 自定义普通容器**显式**加 `.nvui-form-scope` 后，容器内既有 `.nvui-input` 的 input / select / textarea / option 共享 `components.css` §7.1 既有 7 条宿主表单隔离 `!important`；
@@ -27,7 +27,7 @@
 - README §2.2 / §7.6.1 / §8 / §9 / §11.4 补充用法与边界；AI-GUIDE 硬约束、生成流程、验收清单与版本记录同步；
 - `preview.html` 第 07 节新增自定义容器表单示例（input / select / textarea，复用既有类与 token，无新皮肤）；版本徽标与组件类统计同步；
 - `package.json` / `tokens.json` / `tokens.css` / `nvui-api.js` 版本声明升 2.7.0；`nvui-api.js` 同时包含 #13 / #14 的运行时修复；
-- CDN 可运行示例统一锁仓库已存在的 v2.5.0，并说明 v2.7.0 尚未发布 tag、新能力使用仓库源码资产；
+- CDN 可运行示例统一锁定 `v2.7.0` tag 的令牌、样式和运行时；
 - `package.json` 新增 `test:browser`（依次运行 #9–#14 的四份浏览器回归）与 `test:e2e`，`scripts.test` 保持不变；
 - E2E 版本断言改为从 `package.json` 读取期望版本；宿主不可达的 6 条用例显式 SKIP，摘要分列 passed / failed / skipped；新增 `test/test-e2e-reporting.js` 回归，锁定用例数、SKIP 统计与版本一致性。
 
@@ -36,7 +36,7 @@
 - `.nvui-form-scope` 为显式 opt-in；#12–#14 是默认载体及运行时的有界修复，未加类的自定义表单容器仍不受影响；
 - 根目录 4 资产已逐字节同步至 `st-extension-template/ui-kit/`（MD5 4/4 一致），未改模板其他文件；
 - 独立验证（模板同步后）：静态 362/362、forms 455/455、accordion 18/18、#12 217/217、#13/#14 13/13、reporting 31/31、E2E --no-host 52 PASS / 0 FAIL / 6 SKIP；preview 桌面 1440 深色 / 手机 390 浅色截图 0 pageerror、无横向溢出；
-- tag / Release 未执行。
+- 已创建 `v2.7.0` 附注 tag；GitHub Release 未创建。
 
 ## v2.6.0（2026-10-21）· [2.6.0] - 2026-10-21 独立复选框、宿主表单隔离与折叠条接管入口
 

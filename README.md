@@ -2,7 +2,7 @@
 
 > 版本：**v2.7.0**（语义化版本；破坏性改名/删 token 升大版本，新增组件/新增 token 升小版本，调 token 取值/动效打磨/反馈修复升补丁版本）
 > 来源：从 novel-stream 扩展（另一个 SillyTavern 插件）的浮动 UI（设置弹窗 / 悬浮入口 / 图片预览 / 提示层）中提炼，已在实际酒馆宿主（深/浅主题、桌面/手机）上验证；**v2.0.0 起升级为「Flat Glass（扁平玻璃）」设计语言**（扁平化 + 玻璃拟态 + 动效体系 + 能力降级）；**v2.0.1 玻璃更透、浮层描边更柔和、动效补强（16 关键帧）**；**v2.1.0 新增「SillyTavern 插件面板布局标准（桌面 / 手机）」（第 12 章）**；**v2.1.1 描边再减弱、焦点环单圈 1.5px、面板固定尺寸、隐藏滚动条**；**v2.2.0 描边精致化（圆角玻璃去外框 1px 描边，改柔光+阴影成形；ghost/空态/指示器去圆角描边；焦点环回到单圈 2px 整数像素）并新增可选 `nvui-api.js` 设计调用 API、`tokens.json` 机器可读令牌镜像与 `AI-GUIDE.md` AI 协作指南（第 13 章）**；**v2.3.0 修复浮层载体层级 bug——非模态 `dialog.show()` 实测不进浏览器 top layer，新增 `--nvui-z-layer: 1000000` 载体档位，否则会被宿主正 z-index 表面（酒馆 `#sheld` z-index:30）整块盖住**。**v2.4.0 完善浮层载体与宿主模态的共存——宿主 `showModal()` 模态会给整页加 `inert`（`inert` 元素不参与命中测试），kit 浮层**无法**压过它（`popover=manual` 亦然），故改为**主动让位**：新增 `.is-host-modal` 降级态（不可点 + 压暗）与三个宿主模态 API（`countHostModals` / `syncHostModalState` / `getCarrierState`），宿主模态关闭后自动还原（见 §13.7）**。**v2.5.0 实施表现层布局持久化（Issue #5，persist / StorageAdapter / 250ms 防抖 / 跨屏视口越界钳制 / clearLayoutState）与面板头部标准化（Issue #6，themeToggle 平滑切换 / 标题区 update 胶囊 / panel.showUpdate 动态点亮 / WAI-ARIA 与无描边红线），电脑端面板宽度优化为 720px 黄金尺寸，提供标准扩展 ESM 与酒馆助手单文件双模式调用与平滑升级指南**。
-> v2.7.0（2026-10-23，候选未发布）：新增 opt-in `.nvui-form-scope` 显式表单作用域，并修复 GitHub #12（`optgroup` 配色）、#13（折叠与非首 tab 焦点）、#14（宿主模态期间的 Esc）。公开 API 和 token 取值不变；组件类 79 → 80，`!important` 预算仍为 14。
+> v2.7.0（2026-10-23，已打 tag）：新增 opt-in `.nvui-form-scope` 显式表单作用域，并修复 GitHub #12（`optgroup` 配色）、#13（折叠与非首 tab 焦点）、#14（宿主模态期间的 Esc）。公开 API 和 token 取值不变；组件类 79 → 80，`!important` 预算仍为 14。
 > v2.6.0（2026-10-21）：**独立复选框 `.nvui-checkbox` + 宿主表单控件隔离层（GitHub #9）+ 折叠条接管入口 `panel.trackAccordion` / `panel.adoptAccordions`（GitHub #11）**；`!important` 预算由 8 调整为 **14 条有界规则**（新增 7 条全部落在双载体表单隔离块）；组件类 78 → 79；100% 向后兼容（小版本）。
 > 定位：**独立项目 + SillyTavern 插件自有的 body 级浮动 UI**。本目录自带 `package.json` / `LICENSE` / `CHANGELOG` / `test/`，**不依赖任何外部仓库或父目录，可整目录复制/移动到任意文件夹或仓库**。不接管聊天区、原生抽屉等宿主区域（那些区域必须沿用酒馆主题变量）。
 > 演示：**[在线组件预览（GitHub Pages）](https://zgy-beep.github.io/ui-kit/preview.html)**（免下载直接体验；可切换深/浅主题与实心/玻璃模式、演示面板布局）。
@@ -22,7 +22,7 @@
 | [`package.json`](package.json) | 独立项目元信息与 `npm test` 入口（零依赖，无需 `npm install`） |
 | [`LICENSE`](LICENSE) | MIT 许可 |
 | [`CHANGELOG.md`](CHANGELOG.md) | 变更记录（遵循语义化版本） |
-| [`RELEASE_PLAN_v2.7.0.md`](RELEASE_PLAN_v2.7.0.md) | v2.7.0 发布计划与 #12–#14 追补验收（候选，未发布） |
+| [`RELEASE_PLAN_v2.7.0.md`](RELEASE_PLAN_v2.7.0.md) | v2.7.0 发布计划与 #12–#14 追补验收（已打 tag，未创建 GitHub Release） |
 | `README.md` | 本规范（配色语义、组件用法、宿主兼容红线、命名约定、迁移对照） |
 
 目录
@@ -158,14 +158,14 @@ panel.open();
 
 ```html
 <!-- 设计令牌与组件样式 -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.5.0/tokens.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.5.0/components.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.7.0/tokens.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.7.0/components.css">
 
 <!-- 可选运行时 API -->
-<script src="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.5.0/nvui-api.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.7.0/nvui-api.js"></script>
 ```
 
-> **CDN 版本说明**：v2.7.0 **尚未发布 `v2.7.0` tag**，因此以上可运行示例统一锁定仓库中已存在的 `v2.5.0`。需要使用 `.nvui-form-scope` 等新能力时，请使用仓库源码资产（同目录 `tokens.css` / `components.css` / `nvui-api.js`）；待正式发布 tag 后再升级 CDN 地址。
+> **CDN 版本说明**：以上三份资源统一锁定 `v2.7.0` tag，可使用 `.nvui-form-scope` 及 #12–#14 修复。缓存刷新可能略晚于 tag 推送；需要立即验证时可使用仓库源码资产。
 
 #### 2.1.3 方式 C：酒馆助手（Tavern Helper）单文件脚本引入
 
@@ -176,8 +176,8 @@ panel.open();
 async function ensureNVUI() {
     const W = window.parent || window, D = W.document;
     if (W.NVUI) return W.NVUI;
-    // v2.7.0 尚未发布 tag；可运行示例锁 v2.5.0，新能力请用仓库源码资产
-    const CDN = 'https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.5.0';
+    // 三份资源必须锁定同一个 tag，避免 token、样式与运行时版本漂移
+    const CDN = 'https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.7.0';
     if (!D.getElementById('nvui-css-tokens')) {
         const link = D.createElement('link'); link.id = 'nvui-css-tokens'; link.rel = 'stylesheet'; link.href = `${CDN}/tokens.css`; D.head.appendChild(link);
     }
@@ -1715,13 +1715,13 @@ SillyTavern UI Kit 严格遵循 [Semantic Versioning 2.0.0 (SemVer)](https://sem
 
 ### 11.4 历史变更记录（倒序）
 
-- 当前 **v2.7.0**（2026-10-23，候选未发布）：新增 opt-in `.nvui-form-scope` 显式表单作用域；追补 #12 的默认载体 `optgroup` 主题皮肤、#13 的焦点管理与 #14 的宿主模态 Esc 让位。公开 API、状态格式与 token 取值不变；`!important` 预算仍 14，组件类 79 → 80。根目录与模板副本已同步并通过本地浏览器回归；尚未打 tag / 发布。
+- 当前 **v2.7.0**（2026-10-23，已打 tag）：新增 opt-in `.nvui-form-scope` 显式表单作用域；追补 #12 的默认载体 `optgroup` 主题皮肤、#13 的焦点管理与 #14 的宿主模态 Esc 让位。公开 API、状态格式与 token 取值不变；`!important` 预算仍 14，组件类 79 → 80。根目录与模板副本已同步并通过本地浏览器回归。
 - 上一版 **v2.6.0**（2026-10-21）：**独立复选框 + 宿主表单隔离 + 折叠条接管入口**——新增 `.nvui-checkbox`（16px 小方块、`:checked` / `:indeterminate`、复用既有 `::before` 压制、不新增 `!important`），组件类 78 → 79；新增宿主表单控件隔离层（GitHub #9：只在 `dialog.nvui-tl` / `.nvui-panel` 双载体、7 条 `!important` 有界规则，修复浅色主题「深底深字」）；新增 `panel.trackAccordion` / `panel.adoptAccordions`（GitHub #11：`innerHTML` 注入的折叠条也可持久化，默认不接管点击、`{ bind: true }` 按需开启）；`!important` 预算 8 → 14；100% 向后兼容（小版本）。
 - 上一版 **v2.5.0**（2026-10-21）：**布局状态持久化与头部标准化**——createPanel 支持声明式 `persist: true` 或精细化对象，记忆宽高尺寸、最大化状态、当前激活 Tab Key 与折叠开合；支持可插拔 StorageAdapter（默认 localStorage 沙箱键 `nvui_state_${id}`），内置 250ms 写入防抖与 Viewport Clamping 跨屏视口越界安全钳制；面板头部右上角标准化预置 `themeToggle` 平滑主题切换按钮，标题区支持 `update` 选项与 `panel.showUpdate()` 动态点亮接口；电脑端面板默认宽度优化为 720px 黄金尺寸（`--nvui-panel-width: 720px`）；提供双载体完整调用范式与平滑升级指南；100% 向后兼容（小版本）。
 - 上一版 **v2.4.0**（2026-10-21）：**全链路深度加固与宿主模态让位**——宿主 `showModal()` 模态会给整页加 `inert`（`inert` 不参与命中测试），kit 浮层**无法**压过它（`popover=manual` 亦然，实测证伪）；改为**主动让位**：新增 `.is-host-modal` 降级态（不可点 + 压暗）与 3 个宿主模态 API（`countHostModals` / `syncHostModalState` / `getCarrierState`），宿主模态开关时自动降级/还原；NEW-25 ~ NEW-46 全量 22 项深度渗透加固；110 令牌 / 47 浅色 / 78 类 / 16 关键帧，无破坏性变更（小版本）。
 - 上一版 **v2.3.0**（2026-10-20）：**浮层载体层级修复**——非模态 `dialog.show()` 实测不进浏览器 top layer（只有 `showModal()` 进，但其 `inert` 会废掉宿主交互），载体此前无 z-index，会被宿主正 z-index 表面（酒馆 `#sheld` z-index:30，聊天非空时）整块盖住；新增 `--nvui-z-layer: 1000000` 载体档位并修正文档中「dialog 提升渲染层级」的错误论断；110 令牌 / 47 浅色 / 78 类 / 16 关键帧，无破坏性变更（小版本）。
 - 变更记录（倒序）：
-  - **v2.7.0**（候选未发布）：新增 opt-in `.nvui-form-scope`；自定义容器显式加类后，既有 `.nvui-input` 共享宿主表单隔离，不新增 `!important`。同时修复 #12 的 `optgroup`、#13 的焦点管理和 #14 的宿主模态 Esc；公开 API 与 token 取值不变，组件类 79 → 80，根目录与模板副本同步。
+  - **v2.7.0**（已打 tag）：新增 opt-in `.nvui-form-scope`；自定义容器显式加类后，既有 `.nvui-input` 共享宿主表单隔离，不新增 `!important`。同时修复 #12 的 `optgroup`、#13 的焦点管理和 #14 的宿主模态 Esc；公开 API 与 token 取值不变，组件类 79 → 80，根目录与模板副本同步。
   - **v2.6.0**：新增独立复选框 `.nvui-checkbox`（组件类 78 → 79，复用 `.nvui-switch-row` 的 `::before` 压制，不新增 `!important`）；新增宿主表单控件隔离层（GitHub #9，`dialog.nvui-tl` + `.nvui-panel` 双载体共 7 条 `!important`，含 `:hover` 与 `select option` 皮肤）；新增折叠条接管入口 `panel.trackAccordion` / `panel.adoptAccordions`（GitHub #11，默认不接管点击、`{ bind: true }` 显式开启、稳定键与幂等、跨面板边界、`destroy()` 解绑）；`!important` 预算 8 → 14；100% 向后兼容。
   - **v2.5.0**：新增布局持久化引擎（`persist` / StorageAdapter / 250ms 防抖 / 视口越界钳制 / `NVUI.clearLayoutState` / `panel.clearLayoutState`）；新增面板头部标准化操作流（`themeToggle` 平滑主题切换 / 标题区 `update` 胶囊 / `panel.showUpdate` 动态点亮）；电脑端面板优化为 720px 黄金尺寸；新增双载体调用范式与平滑升级指南；100% 向后兼容。
   - **v2.4.0**：新增 `.is-host-modal` 宿主模态降级态（`pointer-events:none` + `opacity:0.35` + `grayscale(0.6)`，子浮层一并让位）；`nvui-api.js` 新增 `countHostModals()` / `syncHostModalState()` / `getCarrierState()` 三个 API，并在 `createPanel()` / `showToast()` / `openLayer()` 中同步降级态；装幂等 watcher（`MutationObserver` 监听 `dialog[open]` + 捕获 `close` 事件）实现宿主模态动态开关的自动降级/还原；README 新增 §13.7 与 §10.9；实测脚本 `test/st-carrier-host-modal-check.js`（18 项断言）；CHANGELOG / package.json / tokens.json 升 2.4.0（令牌数不变）。**另含两批静态审查缺陷修复**（见 CHANGELOG「静态审查缺陷修复批次」与「静态审查批次二」两节）：前者修吐司层不重开 / 输入类型塌缩 / 焦点归还断链 / 属性白名单等 12 条，后者修令牌缓存 / 切 tab 全量遍历 / 吐司定时器泄漏 / 挂载点抛错等 9 条中低危项 —— 均为非破坏性修复，DOM 契约不变，详见 CHANGELOG。
