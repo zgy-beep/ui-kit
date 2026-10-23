@@ -1,4 +1,8 @@
-# TEST_READY: SillyTavern UI Kit v2.5.0 E2E Test Suite
+# TEST_READY: SillyTavern UI Kit E2E Test Suite
+
+> **Current status (as of `package.json` v2.7.0):** the 58 cases below remain the declared suite. `T1-R3-04` now reads the expected version from `package.json` instead of the literal `2.5.0`. `--no-host` executes 52 cases and records the 6 live-host cases (`T1-R4-01..05`, `T4-SC-05`) as explicit `SKIP` with a reason. Static guard: `npm test`. Reporting/skip/version regression: `node test/test-e2e-reporting.js`.
+>
+> **Historical note:** the baseline/pending columns in §3 are the v2.4.0 -> v2.5.0 implementation record, not the current pass/fail state.
 
 ## 1. Readiness Declaration
 
@@ -27,12 +31,18 @@ node test/test-e2e-v250.js --tier=4
 node test/test-e2e-v250.js --filter=themeToggle
 node test/test-e2e-v250.js --filter=clamping
 
-# Run in offline/isolated mode (skips live ST host tests)
+# No-host mode: 52 cases execute; 6 live-host cases are recorded as explicit SKIP
 node test/test-e2e-v250.js --no-host
 
 # Verbose output with full payload logging
 node test/test-e2e-v250.js --verbose
+
+# Offline static guard (no browser, no host) and reporting regression (no browser)
+npm test
+node test/test-e2e-reporting.js
 ```
+
+The summary reports `Declared / Selected / Passed / Failed / Skipped / Not selected` plus the reason for every skipped case. Skips do not fail the run; only `Failed > 0` exits with code 1. If the host is unreachable in a normal run, the same 6 host cases are recorded as `SKIP` after a 3s probe instead of being silently omitted.
 
 ---
 
@@ -48,6 +58,8 @@ node test/test-e2e-v250.js --verbose
 | **Tier 3** | Cross-Feature Combinations (Pairwise) | 6 | 3 | 3 (Awaiting M1/M2) |
 | **Tier 4** | Real-World Application Scenarios | 5 | 3 | 2 (Awaiting M1/M2) |
 | **TOTAL** | **Full E2E Suite** | **58** | **24** | **34** |
+
+With `--no-host`, 52 of the 58 cases execute and the 6 live-host cases (`T1-R4-01..05`, `T4-SC-05`) are reported as `SKIP`. The static `npm test` guard is a separate suite and does not run the browser tests.
 
 ---
 
@@ -88,7 +100,7 @@ node test/test-e2e-v250.js --verbose
   - `T1-R3-01`: SillyTavern ESM calling paradigm conforms to module contracts.
   - `T1-R3-02`: Tavern Helper IIFE calling paradigm operates zero-build.
   - `T1-R3-03`: Backward compatibility: panel without v2.5 options retains 100% v2.4 behavior.
-  - `T1-R3-04`: 6-place version alignment verified for `2.5.0`.
+  - `T1-R3-04`: 6-place version alignment verified against the current `package.json` version (tokens.json / tokens.css / components.css / nvui-api.js source + runtime / README / AI-GUIDE must agree).
   - `T1-R3-05`: Template 4-asset MD5 parity verified with repository root.
 
 - **R4: Live SillyTavern Host & Zero Pageerrors (5 tests)**:
@@ -128,9 +140,9 @@ node test/test-e2e-v250.js --verbose
 
 ---
 
-## 5. Next Steps for Implementation & Verification Tracks
+## 5. Next Steps for Implementation & Verification Tracks (historical v2.5.0 record)
 
 1. **Worker M1** (`worker_m1`): Implement R1 layout state persistence, StorageAdapter, 250ms debounce, and Viewport Clamping in `nvui-api.js` and `components.css`. Run `node test/test-e2e-v250.js --tier=1` to verify R1 tests turn green.
 2. **Worker M2**: Implement R2 standardized header actions, `themeToggle` button & transitions, `onThemeChange`, update pill, and `panel.showUpdate`. Run `node test/test-e2e-v250.js --tier=1` to verify R2 tests turn green.
-3. **Worker M3**: Align 6 version declarations to `2.5.0`, sync template assets (MD5 parity), and write calling and migration guides. Verify R3 tests turn green.
-4. **Worker M4**: Run full verification `node test/test-e2e-v250.js` to ensure 58/58 tests pass (100% PASS), and run `node test/test-ui-kit.js` for contract guards.
+3. **Worker M3**: Align the version declarations (now resolved dynamically from `package.json`), sync template assets (MD5 parity), and write calling and migration guides. Verify R3 tests turn green.
+4. **Worker M4**: Run full verification `node test/test-e2e-v250.js` to ensure 58/58 when the host is reachable, or 52/52 executed + 6 explicit SKIP under `--no-host`; also run `node test/test-ui-kit.js` for contract guards.

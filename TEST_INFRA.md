@@ -1,8 +1,8 @@
-# Test Infrastructure Specification: SillyTavern UI Kit v2.6.0
+# Test Infrastructure Specification: SillyTavern UI Kit v2.7.0
 
 ## 1. Test Philosophy
 
-The testing infrastructure for SillyTavern UI Kit v2.6.0 adheres to the following principles:
+The testing infrastructure for SillyTavern UI Kit v2.7.0 adheres to the following principles:
 
 1. **Opaque-Box Verification**: Tests interact strictly with public API surfaces (`NVUI.createPanel`, `NVUI.setTheme`, `NVUI.clearLayoutState`, `panel.open`, `panel.close`, `panel.destroy`, `panel.showUpdate`, `panel.clearLayoutState`), observable DOM elements (`.nvui-panel`, `.nvui-theme-toggle`, `.nvui-update-pill`), storage artifacts (`localStorage` keys `nvui_state_${id}`), and HTTP/browser runtime events. Internal implementation details are never asserted directly unless mandated by static security and structural contracts.
 2. **Requirement-Driven Derivation**: Every test case directly derives from `ORIGINAL_REQUEST.md`, `PROJECT.md`, and `ISSUES.md` (#5 and #6).
@@ -16,13 +16,28 @@ The testing infrastructure for SillyTavern UI Kit v2.6.0 adheres to the followin
 
 ### 2.1 Execution Command
 ```bash
+# Offline static contract guard (no browser, no host)
+npm test
+
+# Full E2E: 58 declared cases; needs local Chrome and a reachable host
 node test/test-e2e-v250.js
+
+# No-host run: the 6 live-host cases are reported as SKIP, 52 cases execute
+node test/test-e2e-v250.js --no-host
+
+# Reporting / skip-accounting / version-assertion regression (pure Node)
+node test/test-e2e-reporting.js
+
+# All local issue browser regressions (#9–#14)
+npm run test:browser
 ```
 Options supported:
 - `--tier=1|2|3|4`: Run only the specified test tier.
 - `--filter=<regex>`: Filter tests by pattern in test name.
-- `--no-host`: Skip live SillyTavern host tests (running purely in local browser contexts).
+- `--no-host`: Skip live SillyTavern host tests (running purely in local browser contexts). The skipped cases are still recorded explicitly as `SKIP` with a reason.
 - `--verbose`: Echo detailed console logs and diagnostic payloads.
+
+When the host does not answer within 3s, a normal run also records the 6 host cases as `SKIP` (reason includes the connection error) instead of silently dropping them. A `--no-host` run selects 58 declared cases: 52 execute and 6 are skipped; `--tier` / `--filter` may reduce the selected subset and are reported as `Not selected`.
 
 ### 2.2 Automation Toolchain
 - **Runtime**: Node.js v24+
@@ -36,11 +51,15 @@ Options supported:
 ```bash
 node test/test-issues-9-10-forms.js
 node test/test-issue-11-accordion.js
+node test/issue-12-optgroup-dark-theme.spec.js
+node test/issue-13-14-focus-escape.spec.js
 ```
 
-- Both scripts run against local pages (static DOM / ephemeral HTTP server); no active SillyTavern service is required.
+- These scripts run against local pages (static DOM / ephemeral HTTP server); no active SillyTavern service is required.
 - `test-issues-9-10-forms.js` (#9 / #10) reads `tokens.css` / `components.css` directly. Optional env: `CHROME_PATH` (Chrome/Edge executable), `PLAYWRIGHT_MODULE_PATH` (`playwright-core` directory).
 - `test-issue-11-accordion.js` (#11) starts its own ephemeral server. Optional env: `ST_CHROME` (Chrome executable); `playwright-core` resolves via `NODE_PATH` or the built-in fallback.
+- `issue-12-optgroup-dark-theme.spec.js` (#12) checks both asset copies, theme variants, Kit carrier bounds and computed `optgroup` colors; the native popup's pixels still require manual Windows Chrome inspection.
+- `issue-13-14-focus-escape.spec.js` (#13 / #14) sends real Tab, Shift+Tab and Escape keys against both asset copies, including a host modal that prevents its own `cancel`.
 
 ---
 
@@ -61,7 +80,7 @@ node test/test-issue-11-accordion.js
 | F-11 | SillyTavern ESM calling paradigm | R3 | M3 | T1-R3-01 ~ 03 | T2-BC-13 | T3-CB-02 | T4-SC-01 |
 | F-12 | Tavern Helper single-file IIFE paradigm | R3 | M3 | T1-R3-04 ~ 06 | T2-BC-14 | T3-CB-01 | T4-SC-02 |
 | F-13 | Safe migration & FAQ compliance | R3 | M3 | T1-R3-07 ~ 09 | T2-BC-15 | T3-CB-05 | T4-SC-01, 02 |
-| F-14 | 6-place version alignment to 2.5.0 | R3 | M3 | T1-R3-10 ~ 13 | T2-BC-16 | N/A | T4-SC-05 |
+| F-14 | 6-place version alignment to the current `package.json` version | R3 | M3 | T1-R3-10 ~ 13 | T2-BC-16 | N/A | T4-SC-05 |
 | F-15 | Live SillyTavern Host & Zero Pageerror | R4 | M4 | T1-R4-01 ~ 05 | T2-BC-17 | T3-CB-06 | T4-SC-05 |
 | F-16 | Host form-control isolation (`dialog.nvui-tl` / `.nvui-panel`, 7 bounded `!important`) | Issue #9 | v2.6.0 | local `test/test-issues-9-10-forms.js` | — | — | browser context matrix (carrier × theme) |
 | F-17 | Independent `.nvui-checkbox` (16px, `:checked` / `:indeterminate`, host `::before` suppression) | Issue #10 | v2.6.0 | local `test/test-issues-9-10-forms.js` | — | — | browser context matrix |
@@ -108,7 +127,7 @@ node test/test-issue-11-accordion.js
 - **T1-R3-01**: SillyTavern ESM calling paradigm: `extension_settings` mock storage adapter properly reads and writes.
 - **T1-R3-02**: Tavern Helper IIFE calling paradigm: works zero-build with direct script inclusion and default `localStorage`.
 - **T1-R3-03**: Safe migration: existing v2.4.0 panels created without `persist` or `themeToggle` behave identically without regression.
-- **T1-R3-04**: 6-place version alignment: `package.json`, `tokens.json`, `tokens.css`, `nvui-api.js`/`components.css`, `README.md`, `AI-GUIDE.md` all declare version `2.5.0`.
+- **T1-R3-04**: 6-place version alignment: the expected version is read from `package.json`; `tokens.json`, `tokens.css`, `components.css`, `nvui-api.js` (source `VERSION`, header, and runtime `NVUI.version`), `README.md`, and `AI-GUIDE.md` must all declare that same version. A single drifting declaration fails the case with a per-file diagnostic.
 - **T1-R3-05**: Template parity: `st-extension-template/ui-kit/` assets match repository root assets.
 
 #### R4: Live SillyTavern Host & Zero Pageerrors
@@ -200,7 +219,7 @@ node test/test-issue-11-accordion.js
 - **T4-SC-05: Scenario 5 — Full Host E2E Probe on Live SillyTavern**
   - Executes directly on `http://127.0.0.1:8000`:
     1. Connects to live SillyTavern instance.
-    2. Injects UI Kit v2.5.0.
+    2. Injects the current UI Kit version.
     3. Opens panel alongside native ST elements (`#chat`, `#top-settings-holder`).
     4. Interacts with theme toggle and confirms zero console errors or `pageerror` events.
 
@@ -209,11 +228,18 @@ node test/test-issue-11-accordion.js
 ## 5. Test Output & Assertion Reporting Protocol
 
 The test runner `node test/test-e2e-v250.js` outputs:
-- Real-time formatted test logs: `[PASS] <test_id>: <description>` or `[FAIL] <test_id>: <description> -> <diagnostic>`.
-- Aggregated summary table:
-  - Total tests executed
+- Real-time formatted test logs:
+  - `[PASS] [T<n>] <test_id>: <description>`
+  - `[FAIL] [T<n>] <test_id>: <description> -> <diagnostic>`
+  - `[SKIP] [T<n>] <test_id>: <description> -> <reason>`
+- Aggregated summary:
+  - Declared (58), Selected (after `--tier` / `--filter`)
   - Passed count
   - Failed count
-  - Skipped / Pending count
+  - Skipped count
+  - Not selected count (only when a filter/tier is active)
   - Duration in ms
-- Exit Code: `0` if all tests pass; `1` if any test fails.
+- A full reason list for every skipped case (e.g. `--no-host`, host unreachable with the connection error, 3000ms timeout).
+- Exit Code: `0` when `Failed = 0` (skips do not fail the run); `1` when any case fails.
+
+The expected version for `T1-R3-04` is read from `package.json`; the case then compares `tokens.json`, `tokens.css`, `components.css`, `nvui-api.js` (source `VERSION`, header, and runtime `NVUI.version`), `README.md`, and `AI-GUIDE.md`. `node test/test-e2e-reporting.js` locks this version logic, the declared-case count, and the host-skip accounting without launching a browser.

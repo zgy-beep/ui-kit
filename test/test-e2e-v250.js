@@ -1,5 +1,5 @@
 /**
- * NVUI Kit v2.5.0 · Comprehensive E2E Automated Test Suite
+ * NVUI Kit · Comprehensive E2E Automated Test Suite (current kit version)
  * -------------------------------------------------------------------------
  * Features Covered:
  *   - Tier 1: Feature Coverage (R1 Persistence, R2 Header, R3 Calling/Versions, R4 Live Host)
@@ -15,6 +15,10 @@
  *   node test/test-e2e-v250.js --tier=4
  *   node test/test-e2e-v250.js --no-host
  *   node test/test-e2e-v250.js --filter=<pattern>
+ *
+ * --no-host (or an unreachable host) does not silently drop tests: the six
+ * live-host cases (T1-R4-01..05, T4-SC-05) are recorded as SKIP with an
+ * explicit reason, and the summary reports passed/failed/skipped separately.
  */
 'use strict';
 
@@ -38,8 +42,6 @@ function resolvePlaywright() {
     }
 }
 
-const { chromium } = resolvePlaywright();
-
 const KIT_ROOT = path.resolve(__dirname, '..');
 const CHROME_PATH = process.env.ST_CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const HOST_URL = process.env.ST_HOST_URL || 'http://127.0.0.1:8000/';
@@ -56,6 +58,9 @@ const PATHS = {
     preview: path.join(KIT_ROOT, 'preview.html'),
     templateDir: path.join(KIT_ROOT, 'st-extension-template', 'ui-kit'),
 };
+
+// Single source of truth for the expected version: the project's package.json.
+const KIT_VERSION = JSON.parse(fs.readFileSync(PATHS.packageJson, 'utf8')).version;
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -82,33 +87,158 @@ for (const arg of args) {
 
 const results = [];
 
-function recordTest(id, tier, name, pass, detail, durationMs) {
+function recordResult(id, tier, name, status, detail, durationMs) {
     const entry = {
         id,
         tier,
         name,
-        pass: !!pass,
+        status,
+        pass: status === 'PASS',
         detail: detail === undefined ? '' : String(detail),
         durationMs: durationMs || 0,
     };
     results.push(entry);
 
-    const tag = entry.pass ? '\x1b[32m[PASS]\x1b[0m' : '\x1b[31m[FAIL]\x1b[0m';
+    const colors = { PASS: '\x1b[32m', FAIL: '\x1b[31m', SKIP: '\x1b[33m' };
+    const tag = `${colors[status] || ''}[${status}]\x1b[0m`;
     const tierTag = `\x1b[36m[T${tier}]\x1b[0m`;
-    const durTag = durationMs !== undefined ? `\x1b[90m(${durationMs}ms)\x1b[0m` : '';
+    const durTag = durationMs ? `\x1b[90m(${durationMs}ms)\x1b[0m` : '';
     console.log(`${tag} ${tierTag} ${id}: ${name} ${durTag}`);
-    if (!entry.pass && entry.detail) {
+    if (status === 'FAIL' && entry.detail) {
         console.log(`       \x1b[33m└─ Diagnostic: ${entry.detail}\x1b[0m`);
+    } else if (status === 'SKIP' && entry.detail) {
+        console.log(`       \x1b[90m└─ Reason: ${entry.detail}\x1b[0m`);
     } else if (options.verbose && entry.detail) {
         console.log(`       \x1b[90m└─ Info: ${entry.detail}\x1b[0m`);
     }
-    return entry.pass;
+    return status === 'PASS';
+}
+
+function recordTest(id, tier, name, pass, detail, durationMs) {
+    return recordResult(id, tier, name, pass ? 'PASS' : 'FAIL', detail, durationMs);
+}
+
+function skipTest(id, tier, name, reason) {
+    return recordResult(id, tier, name, 'SKIP', reason, 0);
 }
 
 function shouldRunTest(tier, name) {
     if (options.tier && options.tier !== tier) return false;
     if (options.filter && !options.filter.test(name)) return false;
     return true;
+}
+
+/* ---------- pure reporting/version helpers (exported for the regression) ---------- */
+
+const HOST_TESTS = Object.freeze([
+    { id: 'T1-R4-01', tier: 1, name: 'Live SillyTavern host is reachable on http://127.0.0.1:8000' },
+    { id: 'T1-R4-02', tier: 1, name: 'UI Kit injected into live SillyTavern host without error' },
+    { id: 'T1-R4-03', tier: 1, name: 'Panel open/tab/close lifecycle executes in live SillyTavern host' },
+    { id: 'T1-R4-04', tier: 1, name: 'Theme toggle operates safely within live SillyTavern DOM' },
+    { id: 'T1-R4-05', tier: 1, name: 'Zero pageerrors recorded during live SillyTavern host execution' },
+    { id: 'T4-SC-05', tier: 4, name: 'Scenario 5: Full Host E2E Probe on Live SillyTavern with zero pageerror' },
+]);
+
+// Derive the declared count from the quoted test ids in this file so the number
+// cannot drift away from the suite it describes.
+const DECLARED_TEST_COUNT = (() => {
+    const src = fs.readFileSync(__filename, 'utf8');
+    const ids = new Set();
+    const re = /\b(T[1-4]-(?:R[1-4]|BC|CB|SC)-\d{2})\b/g;
+    let match;
+    while ((match = re.exec(src))) ids.add(match[1]);
+    return ids.size;
+})();
+
+function planHostSkip(reason, tier) {
+    return HOST_TESTS
+        .filter((t) => tier === undefined || t.tier === tier)
+        .map((t) => ({ ...t, status: 'SKIP', reason }));
+}
+
+function summarizeResults(list) {
+    const passed = list.filter((r) => r.status === 'PASS').length;
+    const failed = list.filter((r) => r.status === 'FAIL').length;
+    const skipped = list.filter((r) => r.status === 'SKIP').length;
+    const selected = passed + failed + skipped;
+    return {
+        declared: DECLARED_TEST_COUNT,
+        selected,
+        passed,
+        failed,
+        skipped,
+        notSelected: Math.max(0, DECLARED_TEST_COUNT - selected),
+    };
+}
+
+function exitCodeFor(summary) {
+    return summary.failed > 0 ? 1 : 0;
+}
+
+function readDeclaredVersion(text, pattern) {
+    const match = pattern.exec(text || '');
+    return match ? match[1] : null;
+}
+
+function versionReport(version, sources) {
+    const tokensCssVersion = readDeclaredVersion(sources.tokensCss, /ui-kit v(\d+\.\d+\.\d+)/);
+    const componentsCssVersion = readDeclaredVersion(sources.componentsCss, /ui-kit v(\d+\.\d+\.\d+)/);
+    const apiHeaderVersion = readDeclaredVersion(sources.nvuiApi, /ui-kit v(\d+\.\d+\.\d+)/);
+    const apiConstVersion = readDeclaredVersion(sources.nvuiApi, /VERSION\s*=\s*['"](\d+\.\d+\.\d+)['"]/);
+    const readmeVersion = readDeclaredVersion(sources.readme, />\s*版本：\*\*v(\d+\.\d+\.\d+)\*\*/);
+    const aiGuideVersion = readDeclaredVersion(sources.aiGuide, />\s*版本：\*\*v(\d+\.\d+\.\d+)\*\*/);
+
+    const checks = [
+        { file: 'package.json', ok: sources.packageVersion === version, actual: sources.packageVersion },
+        { file: 'tokens.json', ok: sources.tokensJsonVersion === version, actual: sources.tokensJsonVersion },
+        { file: 'tokens.css', ok: tokensCssVersion === version, actual: tokensCssVersion },
+        { file: 'components.css', ok: componentsCssVersion === version, actual: componentsCssVersion },
+        { file: 'nvui-api.js (VERSION)', ok: apiConstVersion === version, actual: apiConstVersion },
+        { file: 'nvui-api.js (header)', ok: apiHeaderVersion === version, actual: apiHeaderVersion },
+        { file: 'README.md', ok: readmeVersion === version, actual: readmeVersion },
+        { file: 'AI-GUIDE.md', ok: aiGuideVersion === version, actual: aiGuideVersion },
+    ];
+    if (sources.apiRuntimeVersion !== undefined) {
+        checks.push({
+            file: 'nvui-api.js (runtime NVUI.version)',
+            ok: sources.apiRuntimeVersion === version,
+            actual: sources.apiRuntimeVersion,
+        });
+    }
+    const mismatches = checks.filter((c) => !c.ok);
+    return { ok: mismatches.length === 0, version, checks, mismatches };
+}
+
+async function probeHost() {
+    if (options.noHost) {
+        return { available: false, reason: '--no-host：按 CLI 参数跳过全部宿主用例（不访问真实宿主）' };
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+    try {
+        const res = await fetch(HOST_URL, { signal: controller.signal });
+        if (res.status !== 200) {
+            return { available: false, reason: `宿主不可达：${HOST_URL} 返回 HTTP ${res.status}` };
+        }
+        return { available: true, reason: '' };
+    } catch (err) {
+        const detail = err && err.name === 'AbortError' ? '请求超时 3000ms' : (err && err.message) || String(err);
+        return { available: false, reason: `宿主不可达：${HOST_URL}（${detail}）` };
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+if (require.main !== module) {
+    module.exports = {
+        KIT_VERSION,
+        HOST_TESTS,
+        DECLARED_TEST_COUNT,
+        planHostSkip,
+        summarizeResults,
+        exitCodeFor,
+        versionReport,
+    };
 }
 
 /* ==================== 3. Ephemeral Server for Sandboxed Browser Testing ==================== */
@@ -130,7 +260,7 @@ function startEphemeralServer() {
 </head>
 <body class="nvui-scope">
     <div id="sandbox-root">
-        <h1>NVUI Kit v2.5.0 E2E Verification Environment</h1>
+        <h1>NVUI Kit v${KIT_VERSION} E2E Verification Environment</h1>
         <div id="test-anchor"></div>
     </div>
     <script src="/nvui-api.js"></script>
@@ -175,10 +305,11 @@ function startEphemeralServer() {
 
 /* ==================== 4. Test Runner Core ==================== */
 
-(async () => {
+async function main() {
+    const { chromium } = resolvePlaywright();
     const startTime = Date.now();
     console.log('\x1b[1m\x1b[35m============================================================\x1b[0m');
-    console.log('\x1b[1m\x1b[35m  SillyTavern UI Kit v2.5.0 · Comprehensive E2E Test Suite  \x1b[0m');
+    console.log(`\x1b[1m\x1b[35m  SillyTavern UI Kit v${KIT_VERSION} · Comprehensive E2E Test Suite  \x1b[0m`);
     console.log('\x1b[1m\x1b[35m============================================================\x1b[0m\n');
 
     // Strip proxy settings to ensure seamless localhost connectivity
@@ -888,7 +1019,7 @@ function startEphemeralServer() {
         };
     });
 
-    if (shouldRunTest(1, '6-place version alignment to 2.5.0')) {
+    if (shouldRunTest(1, `6-place version alignment to v${KIT_VERSION}`)) {
         const t0 = Date.now();
         const pkg = JSON.parse(fs.readFileSync(PATHS.packageJson, 'utf8'));
         const tokensJson = JSON.parse(fs.readFileSync(PATHS.tokensJson, 'utf8'));
@@ -897,19 +1028,27 @@ function startEphemeralServer() {
         const nvuiApi = fs.readFileSync(PATHS.nvuiApi, 'utf8');
         const readme = fs.readFileSync(PATHS.readme, 'utf8');
         const aiGuide = fs.readFileSync(PATHS.aiGuide, 'utf8');
+        const apiRuntime = require(PATHS.nvuiApi);
 
-        const checks = {
-            'package.json': pkg.version === '2.5.0',
-            'tokens.json': tokensJson.version === '2.5.0',
-            'tokens.css': tokensCss.includes('ui-kit v2.5.0'),
-            'components.css': componentsCss.includes('ui-kit v2.5.0'),
-            'nvui-api.js': nvuiApi.includes("VERSION = '2.5.0'") || nvuiApi.includes('ui-kit v2.5.0'),
-            'README.md': readme.includes('版本：**v2.5.0**') || readme.includes('v2.5.0'),
-            'AI-GUIDE.md': aiGuide.includes('版本：**v2.5.0**') || aiGuide.includes('v2.5.0'),
-        };
+        // Expected version comes from package.json; every other declaration
+        // (JSON / CSS / API source + runtime / docs) must agree with it.
+        const report = versionReport(KIT_VERSION, {
+            packageVersion: pkg.version,
+            tokensJsonVersion: tokensJson.version,
+            tokensCss,
+            componentsCss,
+            nvuiApi,
+            readme,
+            aiGuide,
+            apiRuntimeVersion: apiRuntime && apiRuntime.version,
+        });
 
-        const mismatches = Object.entries(checks).filter(([, ok]) => !ok).map(([k]) => k);
-        recordTest('T1-R3-04', 1, '6-place version alignment verified for v2.5.0', mismatches.length === 0, mismatches.length === 0 ? 'All 6 version points match 2.5.0' : `Mismatches in: ${mismatches.join(', ')}`, Date.now() - t0);
+        const detail = report.ok
+            ? `All version points match ${KIT_VERSION} (expected from package.json)`
+            : report.mismatches
+                .map((m) => `${m.file}: expected ${KIT_VERSION}, found ${m.actual === null || m.actual === undefined ? 'missing' : m.actual}`)
+                .join('; ');
+        recordTest('T1-R3-04', 1, `6-place version alignment verified for v${KIT_VERSION}`, report.ok, detail, Date.now() - t0);
     }
 
     if (shouldRunTest(1, 'Template asset parity with root files')) {
@@ -933,19 +1072,24 @@ function startEphemeralServer() {
     }
 
     // T1-R4: Live SillyTavern Host & Zero Pageerror
-    if (!options.noHost && shouldRunTest(1, 'Live SillyTavern Host tests')) {
-        const t0 = Date.now();
-        let hostReachable = false;
-        try {
-            const res = await fetch(HOST_URL);
-            hostReachable = res.status === 200;
-        } catch {
-            hostReachable = false;
-        }
+    let hostStatePromise = null;
+    const getHostState = () => {
+        if (!hostStatePromise) hostStatePromise = probeHost();
+        return hostStatePromise;
+    };
 
-        recordTest('T1-R4-01', 1, 'Live SillyTavern host is reachable on http://127.0.0.1:8000', hostReachable, hostReachable ? 'HTTP 200 OK' : 'Failed to reach host', Date.now() - t0);
+    if (shouldRunTest(1, 'Live SillyTavern Host tests')) {
+        const hostState = await getHostState();
+        if (!hostState.available) {
+            // Explicit SKIP (never a silent omission): keep the declared ids,
+            // names and the concrete reason in the report.
+            for (const item of planHostSkip(hostState.reason, 1)) {
+                skipTest(item.id, item.tier, item.name, item.reason);
+            }
+        } else {
+            const t0 = Date.now();
+            recordTest('T1-R4-01', 1, HOST_TESTS[0].name, true, 'HTTP 200 OK', Date.now() - t0);
 
-        if (hostReachable) {
             const hostCtx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
             const hostPage = await hostCtx.newPage();
             const hostPageErrors = [];
@@ -1625,46 +1769,52 @@ function startEphemeralServer() {
         };
     });
 
-    if (!options.noHost && shouldRunTest(4, 'Scenario 5: Full Host E2E Probe on http://127.0.0.1:8000')) {
-        const t0 = Date.now();
-        let pass = false;
-        let detail = '';
-        try {
-            const hostCtx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-            const hostPage = await hostCtx.newPage();
-            const errors = [];
-            hostPage.on('pageerror', (e) => errors.push(e.message));
+    if (shouldRunTest(4, 'Scenario 5: Full Host E2E Probe on http://127.0.0.1:8000')) {
+        const hostState = await getHostState();
+        if (!hostState.available) {
+            const item = planHostSkip(hostState.reason, 4)[0];
+            skipTest(item.id, item.tier, item.name, item.reason);
+        } else {
+            const t0 = Date.now();
+            let pass = false;
+            let detail = '';
+            try {
+                const hostCtx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+                const hostPage = await hostCtx.newPage();
+                const errors = [];
+                hostPage.on('pageerror', (e) => errors.push(e.message));
 
-            await hostPage.goto(HOST_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
-            await hostPage.waitForTimeout(3000);
+                await hostPage.goto(HOST_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
+                await hostPage.waitForTimeout(3000);
 
-            await hostPage.addStyleTag({ path: PATHS.tokensCss });
-            await hostPage.addStyleTag({ path: PATHS.componentsCss });
-            await hostPage.addScriptTag({ path: PATHS.nvuiApi });
+                await hostPage.addStyleTag({ path: PATHS.tokensCss });
+                await hostPage.addStyleTag({ path: PATHS.componentsCss });
+                await hostPage.addScriptTag({ path: PATHS.nvuiApi });
 
-            const probeResult = await hostPage.evaluate(() => {
-                const hasChat = !!document.getElementById('chat');
-                const p = window.NVUI.createPanel({
-                    id: 'st_probe_scenario_5',
-                    title: 'Full Host Probe',
-                    themeToggle: true,
-                    persist: true,
+                const probeResult = await hostPage.evaluate(() => {
+                    const hasChat = !!document.getElementById('chat');
+                    const p = window.NVUI.createPanel({
+                        id: 'st_probe_scenario_5',
+                        title: 'Full Host Probe',
+                        themeToggle: true,
+                        persist: true,
+                    });
+                    p.open();
+                    const isOpen = !p.dialog.hidden && p.dialog.open;
+                    p.close();
+                    p.destroy();
+                    return { hasChat, isOpen };
                 });
-                p.open();
-                const isOpen = !p.dialog.hidden && p.dialog.open;
-                p.close();
-                p.destroy();
-                return { hasChat, isOpen };
-            });
 
-            pass = probeResult.hasChat && probeResult.isOpen && errors.length === 0;
-            detail = `hasChat=${probeResult.hasChat}, isOpen=${probeResult.isOpen}, errors=${errors.length}`;
-            await hostCtx.close();
-        } catch (e) {
-            pass = false;
-            detail = 'Scenario 5 probe failed: ' + e.message;
+                pass = probeResult.hasChat && probeResult.isOpen && errors.length === 0;
+                detail = `hasChat=${probeResult.hasChat}, isOpen=${probeResult.isOpen}, errors=${errors.length}`;
+                await hostCtx.close();
+            } catch (e) {
+                pass = false;
+                detail = 'Scenario 5 probe failed: ' + e.message;
+            }
+            recordTest('T4-SC-05', 4, HOST_TESTS[5].name, pass, detail, Date.now() - t0);
         }
-        recordTest('T4-SC-05', 4, 'Scenario 5: Full Host E2E Probe on Live SillyTavern with zero pageerror', pass, detail, Date.now() - t0);
     }
 
     /* ==================== 5. Teardown & Summary ==================== */
@@ -1673,30 +1823,52 @@ function startEphemeralServer() {
     await new Promise((resolve) => sandbox.server.close(resolve));
 
     const durationTotal = Date.now() - startTime;
-    const passedCount = results.filter(r => r.pass).length;
-    const failedCount = results.filter(r => !r.pass).length;
-    const totalCount = results.length;
+    const summary = summarizeResults(results);
 
     console.log('\n\x1b[1m\x1b[35m============================================================\x1b[0m');
     console.log('\x1b[1m\x1b[35m                E2E Test Execution Summary                  \x1b[0m');
     console.log('\x1b[1m\x1b[35m============================================================\x1b[0m');
-    console.log(`Total Executed : \x1b[1m${totalCount}\x1b[0m`);
-    console.log(`Passed         : \x1b[32m\x1b[1m${passedCount}\x1b[0m`);
-    console.log(`Failed         : \x1b[31m\x1b[1m${failedCount}\x1b[0m`);
+    console.log(`Declared       : \x1b[1m${summary.declared}\x1b[0m`);
+    console.log(`Selected       : \x1b[1m${summary.selected}\x1b[0m`);
+    console.log(`Passed         : \x1b[32m\x1b[1m${summary.passed}\x1b[0m`);
+    console.log(`Failed         : \x1b[31m\x1b[1m${summary.failed}\x1b[0m`);
+    console.log(`Skipped        : \x1b[33m\x1b[1m${summary.skipped}\x1b[0m`);
+    if (summary.notSelected > 0) {
+        console.log(`Not selected   : \x1b[90m${summary.notSelected}（--tier / --filter）\x1b[0m`);
+    }
     console.log(`Duration       : \x1b[36m${(durationTotal / 1000).toFixed(2)}s\x1b[0m\n`);
 
-    if (failedCount > 0) {
+    if (summary.skipped > 0) {
+        console.log('\x1b[33m\x1b[1m--- Skipped Tests (explicit reason) ---\x1b[0m');
+        results.filter((r) => r.status === 'SKIP').forEach((r) => {
+            console.log(`\x1b[33m- [T${r.tier}] ${r.id}: ${r.name}\x1b[0m`);
+            console.log(`  \x1b[90m└─ ${r.detail}\x1b[0m`);
+        });
+        console.log('');
+    }
+
+    if (summary.failed > 0) {
         console.log('\x1b[31m\x1b[1m--- Failed Tests Diagnostics ---\x1b[0m');
-        results.filter(r => !r.pass).forEach(r => {
+        results.filter((r) => r.status === 'FAIL').forEach((r) => {
             console.log(`\x1b[31m✖ [T${r.tier}] ${r.id}: ${r.name}\x1b[0m`);
             if (r.detail) {
                 console.log(`  \x1b[33m└─ ${r.detail}\x1b[0m`);
             }
         });
         console.log('');
-        process.exit(1);
     } else {
-        console.log('\x1b[32m\x1b[1m✔ All executed E2E tests passed cleanly!\x1b[0m\n');
-        process.exit(0);
+        const skipNote = summary.skipped > 0
+            ? ` (${summary.skipped} skipped with explicit reason)`
+            : '';
+        console.log(`\x1b[32m\x1b[1m✔ No failed E2E tests${skipNote}\x1b[0m\n`);
     }
-})();
+
+    process.exit(exitCodeFor(summary));
+}
+
+if (require.main === module) {
+    main().catch((err) => {
+        console.error('\x1b[31m[FATAL]\x1b[0m', err && err.stack ? err.stack : err);
+        process.exit(1);
+    });
+}

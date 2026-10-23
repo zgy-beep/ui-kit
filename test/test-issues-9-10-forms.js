@@ -3,10 +3,12 @@
  * -------------------------------------------------------------------------
  * 覆盖：
  *   #9  宿主主题用「元素选择器 + !important」重写表单控件后，
- *       dialog.nvui-tl 与 .nvui-panel 两个载体内的
- *       input / textarea / select / option 仍恢复 kit token；
+ *       dialog.nvui-tl / .nvui-panel 两个载体以及 v2.7.0 显式 opt-in 的
+ *       .nvui-form-scope 容器内的 input / textarea / select / option 仍恢复 kit token；
  *       hover / focus-visible / disabled 行为保持；
- *       载体外控件保持宿主样式（证明隔离有界）。
+ *       载体 / scope 外控件保持宿主样式（证明隔离有界）；
+ *       嵌套的非 kit input / select / textarea 不被 scope 误伤；
+ *       .nvui-form-scope 自身不产生定位 / 遮罩 / 模态等副作用。
  *   #10 input.nvui-checkbox 的 16px 方框：
  *       unchecked / checked / indeterminate / disabled 四种状态；
  *       Space 可切换；Tab 后 focus-visible 焦点环；
@@ -119,6 +121,7 @@ function summary(title) {
 const HOST_BG = 'rgb(46, 46, 52)';
 const HOST_FG = 'rgb(31, 36, 48)';
 const HOST_SELECT_FG = 'rgb(230, 230, 230)';
+const HOST_LINE = 'rgb(84, 84, 96)';
 
 const HOST_CSS = `
 /* 模拟第三方酒馆主题：元素选择器 + !important 重写全局表单控件 */
@@ -236,6 +239,13 @@ body { padding: 24px; font-family: sans-serif; }
     max-width: 560px;
 }
 .test-panel-host { padding: 16px; }
+.test-nested-plain {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 8px;
+}
 .test-inline-fixture {
     /* 普通块级容器：checkbox 保持 inline-block，用于验证组件自身 display 契约。
        不要放进 flex 容器——flex item 会按 CSS Display 规范把 inline-block blockify。 */
@@ -258,6 +268,13 @@ const CONTROLS = `
         <option id="kit-option" selected>Kit option</option>
         <option>Other option</option>
     </select>
+    <div class="test-nested-plain">
+        <input id="nested-plain-input" type="text" value="plain input">
+        <textarea id="nested-plain-textarea">plain textarea</textarea>
+        <select id="nested-plain-select">
+            <option id="nested-plain-option" selected>Plain option</option>
+        </select>
+    </div>
     <input class="nvui-input" id="kit-text-disabled" type="text" value="disabled" disabled>
     <label class="test-check-row">
         <input type="checkbox" class="nvui-checkbox" id="cb-unchecked">
@@ -284,15 +301,21 @@ const CONTROLS = `
 
 function buildHtml(carrier, theme) {
     const themeClass = theme === 'light' ? ' nvui-theme-light' : '';
-    const carrierMarkup = carrier === 'dialog'
-        ? `<dialog class="nvui-tl${themeClass}" id="carrier" open>${CONTROLS}</dialog>`
-        : `<div class="test-panel-host"><div class="nvui-panel${themeClass}" id="carrier">${CONTROLS}</div></div>`;
+    let carrierMarkup;
+    if (carrier === 'dialog') {
+        carrierMarkup = `<dialog class="nvui-tl${themeClass}" id="carrier" open>${CONTROLS}</dialog>`;
+    } else if (carrier === 'scope') {
+        /* v2.7.0：显式 opt-in 的普通容器，不带任何 nvui-panel / dialog 语义 */
+        carrierMarkup = `<div class="nvui-form-scope${themeClass}" id="carrier">${CONTROLS}</div>`;
+    } else {
+        carrierMarkup = `<div class="test-panel-host"><div class="nvui-panel${themeClass}" id="carrier">${CONTROLS}</div></div>`;
+    }
 
     return `<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<title>NVUI Kit Issues #9/#10 regression</title>
+<title>NVUI Kit Issues #9/#10 + v2.7 form-scope regression</title>
 <style>${TOKENS_CSS}</style>
 <style>${COMPONENTS_CSS}</style>
 <style>${HOST_CSS}</style>
@@ -309,12 +332,6 @@ function buildHtml(carrier, theme) {
     <div class="test-inline-fixture">
         <input type="checkbox" class="nvui-checkbox" id="cb-inline" checked>
     </div>
-    <script>
-    (function () {
-        var indeterminate = document.getElementById('cb-indeterminate');
-        if (indeterminate) indeterminate.indeterminate = true;
-    })();
-    </script>
 </body>
 </html>`;
 }
@@ -422,9 +439,35 @@ function readCarrierState() {
         };
     };
 
+    const nestedPlain = {
+        input: snapshot('nested-plain-input'),
+        textarea: snapshot('nested-plain-textarea'),
+        select: snapshot('nested-plain-select'),
+        option: snapshot('nested-plain-option'),
+    };
+
+    const carrierStyle = getComputedStyle(carrier);
+    const scopeChrome = {
+        position: carrierStyle.position,
+        display: carrierStyle.display,
+        backgroundColor: carrierStyle.backgroundColor,
+        borderTopWidth: carrierStyle.borderTopWidth,
+        zIndex: carrierStyle.zIndex,
+        pointerEvents: carrierStyle.pointerEvents,
+        overflow: carrierStyle.overflow,
+        beforeContent: getComputedStyle(carrier, '::before').content,
+        roleAttr: carrier.getAttribute('role'),
+        ariaModalAttr: carrier.getAttribute('aria-modal'),
+        overlayCount: document.querySelectorAll('.nvui-overlay, .nvui-modal, dialog.nvui-tl').length,
+        dialogCount: document.querySelectorAll('dialog').length,
+        ariaModalCount: document.querySelectorAll('[aria-modal="true"]').length,
+    };
+
     return {
         tokens,
         outsideTokens,
+        nestedPlain,
+        scopeChrome,
         text: snapshot('kit-text'),
         textarea: snapshot('kit-textarea'),
         select: snapshot('kit-select'),
@@ -453,7 +496,8 @@ function readCarrierState() {
     const cleanCss = COMPONENTS_CSS.replace(/\/\*[\s\S]*?\*\//g, '');
     const importantCount = (cleanCss.match(/!important/g) || []).length;
     console.log(`[INFO] components.css 当前 !important = ${importantCount} 处`
-        + '（v2.6.0 共享门禁预算 14 = checkbox ::before 2 + reduced-motion 5 + 宿主表单隔离 7）');
+        + '（v2.7.0 共享门禁预算仍 14 = checkbox ::before 2 + reduced-motion 5 + 宿主表单隔离 7；'
+        + '隔离 7 条含显式 .nvui-form-scope）');
 
     let browser = null;
     let page = null;
@@ -476,11 +520,19 @@ function readCarrierState() {
             { carrier: 'dialog', theme: 'light', label: 'dialog.nvui-tl / light' },
             { carrier: 'panel', theme: 'dark', label: '.nvui-panel / dark' },
             { carrier: 'panel', theme: 'light', label: '.nvui-panel / light' },
+            { carrier: 'scope', theme: 'dark', label: '.nvui-form-scope / dark' },
+            { carrier: 'scope', theme: 'light', label: '.nvui-form-scope / light' },
         ];
 
         for (const scenario of scenarios) {
             const { carrier, theme, label } = scenario;
             await page.setContent(buildHtml(carrier, theme), { waitUntil: 'load' });
+            /* 确定性 fixture：显式设置半选态，避免依赖 setContent 对内联脚本的执行时序；
+               不改变断言语义。 */
+            await page.evaluate(() => {
+                const indeterminate = document.getElementById('cb-indeterminate');
+                if (indeterminate) indeterminate.indeterminate = true;
+            });
             await page.waitForTimeout(250);
 
             const data = await page.evaluate(readCarrierState);
@@ -515,6 +567,58 @@ function readCarrierState() {
                 data.outside.backgroundColor, HOST_BG);
             expectEq(`${label} 载体外 input 保持宿主文字色`,
                 data.outside.color, HOST_FG);
+
+            if (carrier === 'scope') {
+                /* v2.7.0：scope 内嵌套的非 kit 控件不得被隔离规则误伤 */
+                expectEq(`${label} 嵌套非 kit input 保持宿主背景`,
+                    data.nestedPlain.input.backgroundColor, HOST_BG);
+                expectEq(`${label} 嵌套非 kit input 保持宿主文字色`,
+                    data.nestedPlain.input.color, HOST_FG);
+                expectEq(`${label} 嵌套非 kit input 保持宿主描边`,
+                    data.nestedPlain.input.borderTopWidth, '1px');
+                expectEq(`${label} 嵌套非 kit input 保持宿主描边色`,
+                    data.nestedPlain.input.borderTopColor, HOST_LINE);
+                expectEq(`${label} 嵌套非 kit textarea 保持宿主背景`,
+                    data.nestedPlain.textarea.backgroundColor, HOST_BG);
+                expectEq(`${label} 嵌套非 kit textarea 保持宿主文字色`,
+                    data.nestedPlain.textarea.color, HOST_FG);
+                expectEq(`${label} 嵌套非 kit select 保持宿主背景`,
+                    data.nestedPlain.select.backgroundColor, HOST_BG);
+                expectEq(`${label} 嵌套非 kit select 保持宿主文字色`,
+                    data.nestedPlain.select.color, HOST_SELECT_FG);
+                expectEq(`${label} 嵌套非 kit select 保持宿主 margin-top`,
+                    data.nestedPlain.select.marginTop, '9px');
+                expectEq(`${label} 嵌套非 kit option 保持宿主背景`,
+                    data.nestedPlain.option.backgroundColor, HOST_BG);
+                expectEq(`${label} 嵌套非 kit option 保持宿主文字色`,
+                    data.nestedPlain.option.color, HOST_SELECT_FG);
+
+                /* v2.7.0：scope 只做隔离标记，不得产生定位/遮罩/模态等副作用 */
+                expectEq(`${label} scope 自身 position = static`,
+                    data.scopeChrome.position, 'static');
+                expectEq(`${label} scope 自身 display = block`,
+                    data.scopeChrome.display, 'block');
+                expectEq(`${label} scope 自身无背景`,
+                    data.scopeChrome.backgroundColor, 'rgba(0, 0, 0, 0)');
+                expectEq(`${label} scope 自身无边框`,
+                    data.scopeChrome.borderTopWidth, '0px');
+                expectEq(`${label} scope 自身无 z-index`,
+                    data.scopeChrome.zIndex, 'auto');
+                expectEq(`${label} scope 自身 pointer-events = auto`,
+                    data.scopeChrome.pointerEvents, 'auto');
+                expectEq(`${label} scope 自身不创建 ::before`,
+                    data.scopeChrome.beforeContent, 'none');
+                expectEq(`${label} scope 自身无 role 属性`,
+                    data.scopeChrome.roleAttr, null);
+                expectEq(`${label} scope 自身无 aria-modal 属性`,
+                    data.scopeChrome.ariaModalAttr, null);
+                expectEq(`${label} scope 不创建遮罩/模态载体`,
+                    data.scopeChrome.overlayCount, 0);
+                expectEq(`${label} scope 不创建 dialog`,
+                    data.scopeChrome.dialogCount, 0);
+                expectEq(`${label} scope 不创建 aria-modal 节点`,
+                    data.scopeChrome.ariaModalCount, 0);
+            }
 
             /* ---- #9：hover / focus-visible / disabled 仍正常 ---- */
             await page.hover('#kit-text');
@@ -733,6 +837,6 @@ function readCarrierState() {
         }
     }
 
-    const ok = summary('Issues #9 / #10 浏览器回归');
+    const ok = summary('Issues #9 / #10 + v2.7 .nvui-form-scope 浏览器回归');
     if (!ok) process.exitCode = 1;
 })();

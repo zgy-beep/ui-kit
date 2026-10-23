@@ -1,7 +1,7 @@
 /**
  * SillyTavern 插件通用 UI Kit · 组件样式
  * ------------------------------------------------------------------
- * 版本：ui-kit v2.6.0；依赖：tokens.css（必须先引入或先拼进来）
+ * 版本：ui-kit v2.7.0；依赖：tokens.css（必须先引入或先拼进来）
  *
  * 本目录是独立项目（自带 package.json / LICENSE / CHANGELOG / test/），
  * 可整目录复制/移动到任意文件夹或仓库，不依赖任何外部文件。
@@ -18,7 +18,8 @@
  *      避免污染酒馆宿主与同页其它扩展；
  *   2. 颜色一律走 token（禁止硬编码 #hex / rgb()），换主题只改 tokens.css；
  *   3. !important 只允许出现在「对抗宿主全局 checkbox / 表单控件样式」的隔离规则与
- *      prefers-reduced-motion 降级块里；全文件合计 14 条（原有 7 + 宿主表单隔离 7）。
+ *      prefers-reduced-motion 降级块里；全文件合计 14 条（原有 7 + 宿主表单隔离 7；
+ *      v2.7.0 仅把既有 7 条扩展到 opt-in 的 .nvui-form-scope，不新增声明）。
  *
  * 组件清单（预览：ui-kit/preview.html；规范：ui-kit/README.md）：
  *   作用域 / top-layer 载体 / 浮层与弹窗（玻璃 + 进出场）/ 图标按钮 / 按钮与按钮组 /
@@ -764,21 +765,29 @@ dialog.nvui-tl > .nvui-toast-stack {
  * --------------------------------------------------------------------------
  * 宿主主题常用「元素选择器 + !important」重写 input / select / textarea，
  * 裸类 .nvui-input（0,1,0）即使作用域再深也赢不过 !important 声明。
- * 这里只在 kit 的真实载体 dialog.nvui-tl / .nvui-panel 内夺回 token 皮肤；
- * 载体外不接管宿主控件，保持隔离有界。
+ * 这里在 kit 的两个真实载体 dialog.nvui-tl / .nvui-panel，以及显式 opt-in 的
+ * .nvui-form-scope 容器内夺回 token 皮肤；三者之外不接管宿主控件，保持隔离有界。
+ *
+ * v2.7.0：新增 .nvui-form-scope（显式放在任意自定义容器上才生效）。
+ * 只在既有 7 条声明里追加同一组有界选择器；dialog.nvui-tl / .nvui-panel 的选择器与
+ * specificity 保持原样，不新增声明、不新增 !important、不引入隐式作用域或全局重置。
+ * .nvui-form-scope 自身没有任何布局/定位/遮罩/模态规则，只作为隔离根的显式标记。
  *
  * !important 只给被宿主 !important 夺走的 4 类属性，共 7 条声明：
  *   background / color / border（基础态 3）+ margin（select 1）+ hover background（1）
- *   + option 的 background / color（2）。圆角等用更高特异性恢复，不占 !important 预算。
+ *   + option / optgroup 的 background / color（2）。圆角等用更高特异性恢复，不占 !important 预算。
  * hover 的 background 必须同作用域 + !important 还原，否则会被基础态压掉。
- * option 是宿主下拉列表的最终渲染层，必须单独给底色与文字色。
+ * option / optgroup 是宿主下拉列表的最终渲染层，必须单独给底色与文字色。
  * -------------------------------------------------------------------------- */
 dialog.nvui-tl input.nvui-input,
 dialog.nvui-tl select.nvui-input,
 dialog.nvui-tl textarea.nvui-input,
 .nvui-panel input.nvui-input,
 .nvui-panel select.nvui-input,
-.nvui-panel textarea.nvui-input {
+.nvui-panel textarea.nvui-input,
+.nvui-form-scope input.nvui-input,
+.nvui-form-scope select.nvui-input,
+.nvui-form-scope textarea.nvui-input {
     background: var(--nvui-input-bg) !important;
     color: var(--nvui-text) !important;
     border: none !important;
@@ -787,7 +796,8 @@ dialog.nvui-tl textarea.nvui-input,
 
 /* 宿主 select 常见 margin: ... 0 !important；只对 select 还原，避免无谓扩大 */
 dialog.nvui-tl select.nvui-input,
-.nvui-panel select.nvui-input {
+.nvui-panel select.nvui-input,
+.nvui-form-scope select.nvui-input {
     margin: 0 !important;
 }
 
@@ -797,15 +807,39 @@ dialog.nvui-tl select.nvui-input:hover,
 dialog.nvui-tl textarea.nvui-input:hover,
 .nvui-panel input.nvui-input:hover,
 .nvui-panel select.nvui-input:hover,
-.nvui-panel textarea.nvui-input:hover {
+.nvui-panel textarea.nvui-input:hover,
+.nvui-form-scope input.nvui-input:hover,
+.nvui-form-scope select.nvui-input:hover,
+.nvui-form-scope textarea.nvui-input:hover {
     background: var(--nvui-block-bg) !important;
 }
 
-/* option 皮肤：宿主 select option 的 !important 底色会直接带进下拉列表 */
+/* option / optgroup 皮肤：宿主 select option 的 !important 底色会直接带进下拉列表。
+ * ISSUES #12：optgroup 行同样需要 token 底色；否则 Windows Chrome 原生弹层会把
+ * group 行画在浅色默认底上，与 --nvui-text 形成白底浅字。
+ * 复用本规则已有的 2 条 !important 声明，不新增声明、不扩大 !important 预算；
+ * .nvui-form-scope 仅复用既有 option 选择器，不另起规则（门禁见 test-ui-kit.js）。 */
 dialog.nvui-tl select.nvui-input option,
-.nvui-panel select.nvui-input option {
+dialog.nvui-tl select.nvui-input optgroup,
+.nvui-panel select.nvui-input option,
+.nvui-panel select.nvui-input optgroup,
+.nvui-form-scope select.nvui-input option {
     background: var(--nvui-bg-2) !important;
     color: var(--nvui-text) !important;
+}
+
+/* ISSUES #12：原生 select 弹层跟随 Kit 主题。只作用于两个真实载体，载体外保持
+ * 宿主 color-scheme；浅色主题类可放在祖先或载体自身上。 */
+dialog.nvui-tl select.nvui-input,
+.nvui-panel select.nvui-input {
+    color-scheme: dark;
+}
+
+.nvui-theme-light dialog.nvui-tl select.nvui-input,
+.nvui-theme-light .nvui-panel select.nvui-input,
+dialog.nvui-tl.nvui-theme-light select.nvui-input,
+.nvui-panel.nvui-theme-light select.nvui-input {
+    color-scheme: light;
 }
 
 /* ==========================================================================

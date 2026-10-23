@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SillyTavern UI Kit v2.6.0 · Flat Glass 组件预览</title>
+<title>SillyTavern UI Kit v2.7.0 · Flat Glass 组件预览</title>
 <!--
-  SillyTavern 插件通用 UI Kit v2.6.0「Flat Glass」组件预览页
+  SillyTavern 插件通用 UI Kit v2.7.0「Flat Glass」组件预览页
   ------------------------------------------------------------------
   v2.5.0 新增（2026-10-21）：
   ① 表现层布局状态持久化（R1 · Issue #5）：createPanel 支持 persist: true，自动记忆
@@ -1127,7 +1127,7 @@
         <div class="pv-hero-main">
             <h1>
                 <span>SillyTavern UI Kit</span>
-                <span class="nvui-badge is-accent">v2.6.0</span>
+                <span class="nvui-badge is-accent">v2.7.0</span>
                 <span class="nvui-badge">Flat Glass</span>
             </h1>
             <p class="nvui-hint pv-hero-sub">
@@ -1137,7 +1137,7 @@
             </p>
             <div class="pv-hero-meta">
                 <span class="nvui-badge">110 个设计令牌</span>
-                <span class="nvui-badge">79 个组件类</span>
+                <span class="nvui-badge">80 个组件类</span>
                 <span class="nvui-badge">16 个关键帧</span>
                 <span class="nvui-badge is-accent">AA 安全玻璃</span>
             </div>
@@ -1798,6 +1798,36 @@
                         不再叠加 inset 内圈描边。
                         v2.0.1：数字输入框隐藏浏览器原生步进按钮（暗色下不再出现白色小箭头），
                         键盘 ↑/↓ 与滚轮仍可调值，需要可见步进器请自建 .nvui-icon-btn。
+                    </p>
+                </div>
+                <div class="pv-demo pv-mt-2">
+                    <h3 class="nvui-section-title">自定义容器表单：显式 opt-in .nvui-form-scope（v2.7.0）</h3>
+                    <p class="nvui-hint">
+                        只有给自定义普通容器显式加 .nvui-form-scope，容器内既有 .nvui-input 的
+                        input / select / textarea / option 才共享 7 条宿主表单隔离；
+                        不加类的容器行为不变，作用域内非 kit 控件不接管，也不会创建定位 / 遮罩 / 模态。
+                    </p>
+                    <div class="nvui-form-scope nvui-stack"
+                         style="padding: var(--nvui-space-4); background: var(--nvui-block-bg); border-radius: var(--nvui-radius);">
+                        <label class="nvui-stack" style="gap: var(--nvui-space-1);">
+                            <span class="nvui-hint">input · .nvui-input</span>
+                            <input class="nvui-input" type="text" value="自定义容器内的输入框" style="width: 100%;">
+                        </label>
+                        <label class="nvui-stack" style="gap: var(--nvui-space-1);">
+                            <span class="nvui-hint">select · .nvui-input</span>
+                            <select class="nvui-input" style="width: 100%;">
+                                <option>选项 A（option 共享隔离）</option>
+                                <option>选项 B</option>
+                            </select>
+                        </label>
+                        <label class="nvui-stack" style="gap: var(--nvui-space-1);">
+                            <span class="nvui-hint">textarea · .nvui-input</span>
+                            <textarea class="nvui-input" rows="2" style="width: 100%;">多行文本同样复用既有 .nvui-input 与 token。</textarea>
+                        </label>
+                    </div>
+                    <p class="nvui-hint pv-mt-2">
+                        边界：该标记只作表单隔离根，不替代 .nvui-scope；默认的双载体与 token 取值、运行时 API 均不变，
+                        !important 预算仍为 14。
                     </p>
                 </div>
             </div>
@@ -2745,8 +2775,8 @@ panel.showUpdate({ version: 'v2.5.0', label: '新版本 v2.5.0 可用', url: 'ht
     </main>
 
     <footer class="pv-footer">
-        <div>SillyTavern UI Kit v2.6.0 · Flat Glass · 单文件离线预览（无外链 / 无 CDN / 无 emoji）</div>
-        <div>文件：tokens.css + components.css · 规范：README.md · 令牌：110 个 · 组件类：79 个 · 关键帧：16 个</div>
+        <div>SillyTavern UI Kit v2.7.0 · Flat Glass · 单文件离线预览（无外链 / 无 CDN / 无 emoji）</div>
+        <div>文件：tokens.css + components.css · 规范：README.md · 令牌：110 个 · 组件类：80 个 · 关键帧：16 个</div>
     </footer>
 </div>
 

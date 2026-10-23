@@ -1,7 +1,7 @@
 /**
  * SillyTavern NVUI Kit · 可选运行时 API（零依赖）
  * ------------------------------------------------------------------
- * 版本：ui-kit v2.6.0（与 package.json / tokens.css / components.css 版本号保持一致）
+ * 版本：ui-kit v2.7.0（与 package.json / tokens.css / components.css 版本号保持一致）
  * 用途：给插件/其它软件一个「可调用的设计接口」——用函数创建符合本 Kit 规范的面板、
  *       标签页、折叠分组、开关行、输入行、进度条、吐司，自动带上布局标准、无障碍属性、
  *       动效降级与焦点管理，避免每个插件各写一套 DOM。
@@ -52,7 +52,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this), function () {
     'use strict';
 
-    var VERSION = '2.6.0';
+    var VERSION = '2.7.0';
     var PANEL_CLASS = 'nvui-panel';
     var TOAST_LAYER_ID = 'nvui-api-toast-layer';
 
@@ -305,6 +305,48 @@
         if (cs.display === 'none' || cs.visibility === 'hidden') return false;
         if (node.offsetWidth === 0 && node.offsetHeight === 0) return false;
         return true;
+    }
+
+    /**
+     * 节点是否位于「当前收起的折叠体」内部（Issue #13）。
+     * `.nvui-acc-body` 收起时是 visibility:hidden + 0fr（宽度仍在），
+     * 因此不能只靠 offsetWidth 判断。折叠体的 visibility 会被显式设为
+     * visible，若只用继承可见性判断，嵌套在收起折叠体里的展开折叠体仍会
+     * 被误判为可见 —— 这里沿 .nvui-acc-body 祖先链逐层检查。
+     */
+    function isInsideCollapsedAccordion(node) {
+        if (!node || typeof node.closest !== 'function') return false;
+        var body = node.closest('.nvui-acc-body');
+        while (body) {
+            var acc = body.parentElement;
+            if (acc && acc.classList && acc.classList.contains('nvui-acc')
+                && !acc.classList.contains('is-open')) {
+                return true;
+            }
+            body = (acc && typeof acc.closest === 'function') ? acc.closest('.nvui-acc-body') : null;
+        }
+        return false;
+    }
+
+    /**
+     * 焦点陷阱专用可聚焦判定（Issue #13）：在 isFocusable 的基础上再排除
+     * inert 子树和收起折叠体里的控件，保证 Tab 边界只由真正可见的控件组成。
+     */
+    function isTrapFocusable(node) {
+        if (!isFocusable(node)) return false;
+        if (isInsideCollapsedAccordion(node)) return false;
+        if (typeof node.closest === 'function' && node.closest('[inert]')) return false;
+        return true;
+    }
+
+    /** 收起折叠体时，若焦点在即将隐藏的正文里，把焦点交还折叠触发器（Issue #13）。 */
+    function restoreFocusFromCollapsedAccordion(accNode) {
+        if (!accNode || typeof accNode.contains !== 'function') return;
+        var active = document.activeElement;
+        if (!active || active === accNode || !accNode.contains(active)) return;
+        var head = accNode.head || (accNode.querySelector ? accNode.querySelector('.nvui-acc-head') : null);
+        if (!head || active === head || typeof head.focus !== 'function') return;
+        head.focus();
     }
 
     /* ---------------------- 设计令牌读取（含缓存） ---------------------- */
@@ -655,6 +697,9 @@
         root.setOpen = function (v) {
             root.classList.toggle('is-open', !!v);
             head.setAttribute('aria-expanded', v ? 'true' : 'false');
+            /* Issue #13：收起时焦点若在正文里会随 visibility:hidden 一起失踪，
+               先把焦点还给仍然可见的折叠触发器。 */
+            if (!v) restoreFocusFromCollapsedAccordion(root);
         };
         root.setSummary = function (text) { summary.textContent = text || ''; };
         return root;
@@ -749,6 +794,12 @@
 
     function onEscapeKey(event) {
         if (event.key !== 'Escape') return;
+        /* Issue #14：宿主用 dialog.showModal() 打开原生模态时，宿主处于 top layer，
+           Esc 属于最上层宿主。Kit 只做视觉/指针让位（.is-host-modal）不够，
+           键盘调度也必须暂停；这里不调用 preventDefault，宿主 cancel 的默认行为
+           保持原样。已被别处处理（defaultPrevented）的 Esc 同样让行。 */
+        if (event.defaultPrevented) return;
+        if (countHostModals() > 0) return;
         for (var i = escapeStack.length - 1; i >= 0; i--) {
             var entry = escapeStack[i];
             if (!entry) continue;
@@ -1863,6 +1914,7 @@
                 if (h && typeof h.setAttribute === 'function') {
                     h.setAttribute('aria-expanded', open ? 'true' : 'false');
                 }
+                if (!open) restoreFocusFromCollapsedAccordion(accNode);
             };
             if (bindClick === true) {
                 bindAccordionEvent(accordionHeadOf(accNode), 'click', function () {
@@ -1966,6 +2018,8 @@
             var baseSetOpen = accNode.setOpen;
             var wrappedSetOpen = function (v) {
                 baseSetOpen.call(accNode, v);
+                /* 调用方自带的 setOpen 未必处理焦点回收，这里统一兜底（Issue #13）。 */
+                if (!v) restoreFocusFromCollapsedAccordion(accNode);
                 if (persistConfig && persistConfig.accordion && !isRestoring && !disposed) {
                     schedulePersistSave();
                 }
@@ -2233,11 +2287,50 @@
             setTabByDom(domKey);
         }
 
-        function focusBody() {
-            var target = q('.nvui-btn.is-primary', panel) || closeBtn;
-            if (target && typeof target.focus === 'function') {
-                requestAnimationFrame(function () { target.focus(); });
+        /** 在 scope 内取第一个「焦点陷阱认可」的可聚焦元素 */
+        function firstTrapFocusable(scope) {
+            if (!scope || typeof scope.querySelectorAll !== 'function') return null;
+            var list = scope.querySelectorAll(FOCUSABLE);
+            for (var i = 0; i < list.length; i++) {
+                if (isTrapFocusable(list[i])) return list[i];
             }
+            return null;
+        }
+
+        /**
+         * 打开面板后的初始焦点（Issue #13）。
+         * 只在**当前激活 pane** 里选目标：持久化恢复到非首 tab 时，
+         * 不能在整块 panel 里找 .is-primary —— 那会命中隐藏 pane，
+         * focus() 静默失败后焦点停在 Kit 载体上。
+         * 回退链：当前 pane 的 primary → 当前 pane 首个可见控件 →
+         * 当前 tab 按钮 → panel 内其它 primary → 关闭按钮 → 面板容器。
+         */
+        function focusBody() {
+            requestAnimationFrame(function () {
+                var pane = activeDom ? panes.get(activeDom) : null;
+                var target = null;
+                if (pane) {
+                    var primary = q('.nvui-btn.is-primary', pane);
+                    if (primary && isTrapFocusable(primary)) target = primary;
+                    if (!target) target = firstTrapFocusable(pane);
+                }
+                if (!target && activeDom) {
+                    var tabBtn = document.getElementById(id + '-tab-' + activeDom);
+                    if (tabBtn && isTrapFocusable(tabBtn)) target = tabBtn;
+                }
+                if (!target) {
+                    var anyPrimary = q('.nvui-btn.is-primary', panel);
+                    if (anyPrimary && isTrapFocusable(anyPrimary)) target = anyPrimary;
+                }
+                if (!target && closeBtn && isTrapFocusable(closeBtn)) target = closeBtn;
+                if (target && typeof target.focus === 'function') {
+                    target.focus();
+                    if (document.activeElement === target) return;
+                }
+                /* 末级兜底：面板容器本身，确保焦点不留在 Kit 载体 / BODY */
+                if (!panel.hasAttribute('tabindex')) panel.setAttribute('tabindex', '-1');
+                if (typeof panel.focus === 'function' && isFocusable(panel)) panel.focus();
+            });
         }
 
         function openPanel() {
@@ -2340,9 +2433,7 @@
             if (event.key !== 'Tab' || overlay.hidden) return;
             var items = Array.prototype.filter.call(
                 panel.querySelectorAll(FOCUSABLE),
-                function (node) {
-                    return node.offsetWidth > 0 || node.offsetHeight > 0 || node === document.activeElement;
-                }
+                isTrapFocusable
             );
             if (!items.length) return;
             var first = items[0];

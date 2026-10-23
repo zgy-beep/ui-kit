@@ -1,6 +1,6 @@
 # AI 协作设计指南 · 用 SillyTavern NVUI Kit 规范设计面板
 
-> 版本：**v2.6.0** · 适用对象：SillyTavern 插件开发者、其它软件项目、以及被要求「按规范生成/修改界面」的 AI 编码助手。
+> 版本：**v2.7.0**（候选未发布） · 适用对象：SillyTavern 插件开发者、其它软件项目、以及被要求「按规范生成/修改界面」的 AI 编码助手。
 > 配套文件：[tokens.css](tokens.css)（设计令牌）、[components.css](components.css)（组件样式）、[README.md](README.md)（完整规范）、[nvui-api.js](nvui-api.js)（零依赖运行时 API）、[tokens.json](tokens.json)（令牌机器可读镜像）、[test/test-ui-kit.js](test/test-ui-kit.js)（规范守护测试）。
 
 本文档回答两个问题：
@@ -13,7 +13,7 @@
 ## 0. 给 AI 的硬约束（先读，违反即不合格）
 
 1. **只用 Kit 的类名与令牌**：所有类名 `nvui-` 前缀、状态类 `is-` 前缀；颜色/圆角/间距/动效一律用 `var(--nvui-*)`，禁止 `#hex`、`rgb()`、`hsl()` 字面量。
-2. **不污染宿主**：禁止裸元素选择器（`button {}`、`input {}`）、禁止全局重置、禁止 `!important`。Kit 只在三类**有界**规则里使用（合计 14 条）：① 宿主 checkbox `::before` 压制（2 条，`.nvui-checkbox` / `.nvui-switch-row` 共用）；② `prefers-reduced-motion` 降级（5 条）；③ 宿主表单控件隔离（7 条，仅 `dialog.nvui-tl` + `.nvui-panel` 双载体，值只能是指定 token 或 `border: none` / `margin: 0` 这类明确 reset）。**不要**把 `background` / `color` / `margin` 当通用放行证。
+2. **不污染宿主**：禁止裸元素选择器（`button {}`、`input {}`）、禁止全局重置、禁止 `!important`。Kit 只在三类**有界**规则里使用（合计 14 条）：① 宿主 checkbox `::before` 压制（2 条，`.nvui-checkbox` / `.nvui-switch-row` 共用）；② `prefers-reduced-motion` 降级（5 条）；③ 宿主表单控件隔离（7 条，作用域为 `dialog.nvui-tl` + `.nvui-panel` 两个默认载体，以及显式加 `.nvui-form-scope` 的自定义普通容器；值只能是指定 token 或 `border: none` / `margin: 0` 这类明确 reset）。**不要**把 `background` / `color` / `margin` 当通用放行证；`.nvui-form-scope` 只接管容器内 `.nvui-input`，不接管非 kit 控件，也不创建定位 / 遮罩 / 模态。
 3. **SillyTavern 浮层必须进 `<dialog class="nvui-tl">` 载体**：非模态 `dialog.show()`（禁止 `showModal()`——会给文档加 `inert`；也**不要**以为非模态能靠浏览器 top layer 提层——实测它不进 top layer）、禁止裸 `position: fixed` 挂 body（宿主 `html` 有 transform，手机端会被顶出屏幕）。
    - **载体必须自带 z-index**（Kit 已内置 `z-index: var(--nvui-z-layer)`）。实测：非模态 `dialog.show()` 不会进入浏览器 top layer（只有 `showModal()` 会，而它会加 `inert`）。载体是 `position:fixed`，会创建层叠上下文，内部子元素的 z-index 只在载体内部生效 —— 载体自身若为 `z-index:auto`，浮层整体只相当于 z-index 0，会被酒馆 `#sheld`（z-index:30）压住，表现为「面板被酒馆窗口压在后面」。
    - 吐司载体请加 `.nvui-tl-toast`（`NVUI.showToast` 已内置），使其层级（`--nvui-z-tooltip`）高于面板载体（`--nvui-z-layer`）。
@@ -48,8 +48,11 @@
 | 操作反馈 | `NVUI.showToast` / `.nvui-toast`（放在 `dialog.nvui-tl` 载体内） |
 | 常驻入口/小工具窗 | `.nvui-floating`（drag 逻辑业务侧实现） |
 | 表单设置项 | `.nvui-switch-row` / `.nvui-input-row` / `.nvui-acc` 折叠分组 |
+| 自定义普通容器表单 | 容器显式加 `.nvui-form-scope`（v2.7.0 opt-in），内部继续用 `.nvui-input`；不加类则默认行为不变 |
 
 **一个面板只允许一套分区导航**：电脑显示顶部 `.nvui-tabs`、手机显示 `.nvui-bottom-nav`（CSS 断点 600px 自动互斥）。不要用 JS 让两套同时显示，也不要把底部导航改成 `position: fixed`。
+
+**自定义普通容器的表单（v2.7.0 opt-in）**：只有显式给容器加 `.nvui-form-scope`，容器内既有 `.nvui-input` 的 input / select / textarea / option 才共享既有的 7 条宿主表单隔离；不加类时行为完全不变。该标记不会接管容器内非 kit 控件，也不会创建定位、遮罩或模态，不能替代 `.nvui-scope` 的排版与主题职责。
 
 ### 2.2 推荐：用 API 生成（少写 DOM、自动满足规范）
 
@@ -118,7 +121,7 @@ var panel = NVUI.createPanel({
 - `destroy`：面板销毁时的清理回调（解绑业务监听、清理定时器）。
 - 面板需彻底移除时调用 `panel.destroy()`：移除 DOM、注销全局 Esc 监听、触发 `destroy` 回调。
 
-> **单文件 / 酒馆助手脚本提示**：若是单文件用户脚本（不能拷贝本地文件夹），可通过 CDN 动态加载样式与 JS API（`https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.5.0/nvui-api.js`，完整配方见 `README.md` §2.1.3），然后同样使用 `NVUI.createPanel` 生成，全自动满足规范。
+> **单文件 / 酒馆助手脚本提示**：若是单文件用户脚本（不能拷贝本地文件夹），可通过 CDN 动态加载样式与 JS API（`https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.5.0/nvui-api.js`，完整配方见 `README.md` §2.1.3），然后同样使用 `NVUI.createPanel` 生成。v2.7.0 **尚未发布 tag**，CDN 示例暂锁已存在的 v2.5.0；需要 `.nvui-form-scope` 等新能力时请使用仓库源码资产。
 
 > **ST 扩展直接开箱用**：`st-extension-template/` 是一份已在本机真实 ST 宿主验证过的扩展骨架
 > （`manifest.json` / `index.js` / `style.css` + `ui-kit/`）。复制到
@@ -436,7 +439,8 @@ async function checkGitHubRelease() {
 - [ ] 面板/弹窗可用键盘完整操作：Tab 循环、Esc 关闭、关闭后焦点归还；
 - [ ] 颜色全部走 token，无 `#hex`/`rgb()`；无 emoji；无外链资源；
 - [ ] 动效在系统「减少动态效果」下自动降级（不丢失信息）；
-- [ ] 玻璃在 `--nvui-solid` / 减少透明度 / 不支持 `backdrop-filter` 时回退为不透明表面。
+- [ ] 玻璃在 `--nvui-solid` / 减少透明度 / 不支持 `backdrop-filter` 时回退为不透明表面；
+- [ ] 自定义普通容器只有需要宿主表单隔离时才显式加 `.nvui-form-scope`；作用域内只接管 `.nvui-input`，不接管非 kit 控件，不新增定位 / 遮罩 / 模态。
 
 ---
 
@@ -463,7 +467,7 @@ async function checkGitHubRelease() {
 ### 4.2 审查/修改现有界面
 
 ```text
-请按「SillyTavern NVUI Kit v2.5.0」规范审查下面的插件界面代码：
+请按「SillyTavern NVUI Kit v2.7.0」规范审查下面的插件界面代码：
 - 列出违反项（类名/token/宿主红线/a11y/动效降级/布局标准），按 README 章节标注依据；
 - 给出最小 diff 修复（不要整体重写），保持既有功能；
 - 特别检查：是否用了 showModal/裸 fixed、是否双导航/双滚动层、是否有硬编码颜色或 emoji、折叠展开是否改变面板外框、标签页是否重建 DOM；
@@ -473,7 +477,7 @@ async function checkGitHubRelease() {
 ### 4.3 迁移其它软件
 
 ```text
-把项目 X 的界面迁移到 SillyTavern NVUI Kit v2.5.0：
+把项目 X 的界面迁移到 SillyTavern NVUI Kit v2.7.0：
 - 复制 tokens.css / components.css / nvui-api.js / tokens.json；
 - 将品牌色映射到 --nvui-accent*（只改 token，不改组件规则）；
 - 按「面板布局标准」重组设置页（电脑居中 / 手机底部抽屉）；
@@ -487,7 +491,7 @@ async function checkGitHubRelease() {
 
 | API | 说明 |
 | :--- | :--- |
-| `NVUI.version` | Kit/API 版本（2.6.0） |
+| `NVUI.version` | Kit/API 版本（2.7.0） |
 | `NVUI.getToken(name)` | 读取当前作用域的设计令牌值 |
 | `NVUI.setTheme('light'|'dark', { solid })` | 切换浅色 / 实心扁平模式（只切类名） |
 | `NVUI.clearLayoutState(id, storageAdapter)` | 清理指定面板在持久化存储中的尺寸/位置/状态记忆 |
@@ -521,7 +525,8 @@ async function checkGitHubRelease() {
 
 ### 6.2 历史版本与兼容基准
 
-- 当前：**v2.6.0**（独立复选框 `.nvui-checkbox` + 宿主表单控件隔离层 + 折叠条接管入口；组件类 79；0 破坏性变更，100% 向后兼容）。
+- 当前：**v2.7.0**（候选未发布；opt-in `.nvui-form-scope` 表单作用域，并修复 GitHub #12 的默认载体 `optgroup` 配色、#13 的焦点管理、#14 的宿主模态 Esc；`!important` 预算仍 14，token 取值与公开 API 不变；组件类 80；0 破坏性变更）。
+- 上一版：**v2.6.0**（独立复选框 `.nvui-checkbox` + 宿主表单控件隔离层 + 折叠条接管入口；组件类 79；0 破坏性变更，100% 向后兼容）。
 - 上一版：**v2.5.0**（表现层布局持久化 + 面板头部标准化 + 720px 黄金尺寸；0 破坏性变更，100% 向后兼容）。
 - 上一版：**v2.4.0**（浮层载体完善：宿主模态让位机制 `.is-host-modal` + 3 个宿主模态 API；110 令牌不变，无破坏性变更）。
 - 历史版本：**v2.3.0**（浮层载体层级修复：新增 `--nvui-z-layer: 1000000` 载体档位）。

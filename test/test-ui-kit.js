@@ -1,18 +1,18 @@
 /**
- * SillyTavern UI Kit v2.3.0「Flat Glass」· 规范守护测试（独立项目）
+ * SillyTavern UI Kit v2.7.0「Flat Glass」· 规范守护测试（独立项目）
  * 运行方式（在本目录下）: node test/test-ui-kit.js（或 npm test）
  *
  * 本文件只读取本项目内的文件，不依赖任何外部仓库/父目录，因此
  * 整个 ui-kit 目录可以被任意移动后直接运行。
  *
  * 覆盖：
- *  0) 项目文件结构、package.json 版本/元数据（2.3.0 + Flat Glass）；
+ *  0) 项目文件结构、package.json 版本/元数据（2.7.0 + Flat Glass）；
  *  1) token 完整性：CORE_TOKENS 显式登记 tokens.css 全部令牌（防漏登记/防幽灵/防僵尸），
  *     深色 110 / 浅色覆盖 47，命名合法，README 全覆盖；
  *  2) 配色规范：组件禁用硬编码颜色、颜色声明走 token、深/浅主题 WCAG AA、
  *     核心 token 金标准逐值锁定，以及 v2 新增的「玻璃 AA 合成对比度」验算
  *     （sRGB 逐通道 blend：宿主最坏情况 -> overlay-bg -> glass-bg / glass-bg-strong）；
- *  3) 组件清单：components.css / preview.html / README.md 三方覆盖（79 个类名）；
+ *  3) 组件清单：components.css / preview.html / README.md 三方覆盖（80 个类名）；
  *  4) 关键实现红线：top-layer、宿主 checkbox 隔离、玻璃（backdrop-filter + -webkit- 前缀）、
  *     能力降级（@supports / .nvui-solid / prefers-reduced-transparency / forced-colors / 窄屏）、
  *     动效体系（16 个关键帧全部被引用且只改合成友好属性）、reduced-motion（含 animation-delay）、
@@ -361,8 +361,8 @@ for (const [name, p] of Object.entries(REQUIRED_FILES)) {
     check(`独立项目文件存在：${name}`, fs.existsSync(p) && fs.statSync(p).size > 10, p);
 }
 const KIT_VERSION = pkg.version;
-check('package.json 版本为合法 semver（2.6.0）',
-    /^2\.6\.0$/.test(String(KIT_VERSION)), String(KIT_VERSION));
+check('package.json 版本为合法 semver（2.7.0）',
+    /^2\.7\.0$/.test(String(KIT_VERSION)), String(KIT_VERSION));
 check('package.json 声明 MIT 许可且与 LICENSE 文件一致',
     pkg.license === 'MIT' && /^MIT License/.test(license));
 check('package.json scripts.test 指向项目内测试（可 npm test）',
@@ -754,7 +754,7 @@ check('玻璃 AA 实算值与契约 §13.2 参考值一致（±0.02）',
 // ==================== 3. 组件清单三方覆盖 ====================
 console.log('\n=== 3. 组件清单（样式/预览/文档三方覆盖） ===');
 const COMPONENT_CLASSES = [
-    'nvui-scope', 'nvui-sr-only', 'nvui-overlay', 'nvui-modal', 'nvui-modal-header',
+    'nvui-scope', 'nvui-form-scope', 'nvui-sr-only', 'nvui-overlay', 'nvui-modal', 'nvui-modal-header',
     'nvui-modal-title', 'nvui-modal-ver', 'nvui-modal-actions', 'nvui-modal-body', 'nvui-modal-footer',
     'nvui-icon-btn', 'nvui-btn', 'nvui-btn-row', 'nvui-switch-row', 'nvui-checkbox', 'nvui-input-row', 'nvui-input',
     'nvui-tabs', 'nvui-tab', 'nvui-tabpane', 'nvui-tabs-indicator', 'nvui-acc', 'nvui-acc-head', 'nvui-acc-title',
@@ -773,8 +773,8 @@ const COMPONENT_CLASSES = [
     'nvui-panel', 'nvui-panel-header', 'nvui-panel-title', 'nvui-panel-actions', 'nvui-panel-body',
     'nvui-panel-footer', 'nvui-panel-heading', 'nvui-sheet-handle', 'nvui-bottom-nav', 'nvui-bottom-nav-item',
 ];
-check('COMPONENT_CLASSES 清单为 v2.6.0 的 79 个类名（53 保留 + 14 v2 新增 + 1 粘连指示器 + 10 面板布局 + 1 独立复选框）',
-    COMPONENT_CLASSES.length === 79 && new Set(COMPONENT_CLASSES).size === 79,
+check('COMPONENT_CLASSES 清单为 v2.7.0 的 80 个类名（53 保留 + 14 v2 新增 + 1 粘连指示器 + 10 面板布局 + 1 独立复选框 + 1 表单作用域）',
+    COMPONENT_CLASSES.length === 80 && new Set(COMPONENT_CLASSES).size === 80,
     `实际 ${COMPONENT_CLASSES.length} 个 / 去重 ${new Set(COMPONENT_CLASSES).size} 个`);
 const kitAllSources = [tokensClean, componentsClean, previewClean].join('\n');
 const missingInCss = COMPONENT_CLASSES.filter((c) => !containsExact(kitAllSources, '.' + c));
@@ -1381,9 +1381,12 @@ check('组件选择器中的类名只允许 nvui-* 与 is-* 状态类', badClass
     badClassTokens.join(', '));
 
 /* v2.6.0：!important 预算 8 → 14，并收紧为「三类有界规则 + 精确属性值」。
+ * v2.7.0：表单隔离追加显式 opt-in .nvui-form-scope；只扩既有 7 条声明的选择器，
+ *         预算仍为 14，不新增声明/隐式作用域/全局重置。
  * 14 = ① checkbox 宿主 ::before 压制 2（.nvui-checkbox 与 .nvui-switch-row 共用）
  *      + ② reduced-motion 降级 5
- *      + ③ 宿主表单控件隔离 7（GitHub #9；只在 dialog.nvui-tl / .nvui-panel 双载体里）
+ *      + ③ 宿主表单控件隔离 7（GitHub #9；dialog.nvui-tl / .nvui-panel 双载体
+ *          + v2.7.0 显式 .nvui-form-scope）
  * 只放行下面这张清单里的「属性: 值」，不接受任意 background/color/margin，
  * 防止预算被当成通用放行证而后门式增长。 */
 const IMPORTANT_BUDGET = 14;
@@ -1440,10 +1443,34 @@ check('宿主表单隔离的 7 条 !important 只允许清单内的 token / 明�
     && Object.keys(impFormDeclCounts).length === Object.keys(FORM_IMPORTANT_ALLOW).length
     && Object.keys(FORM_IMPORTANT_ALLOW).every((k) => impFormDeclCounts[k] === FORM_IMPORTANT_ALLOW[k]),
     JSON.stringify(impFormDeclCounts));
-check('宿主表单隔离只落在 dialog.nvui-tl + .nvui-panel 双载体选择器内（不外溢到全局）',
+check('宿主表单隔离仍以 dialog.nvui-tl + .nvui-panel 为基线选择器（v2.7.0 追加显式 .nvui-form-scope）',
     impFormRules.length > 0
     && impFormRules.every((r) => /dialog\.nvui-tl/.test(r.selector) && /\.nvui-panel/.test(r.selector)),
     impFormRules.map((r) => r.selector.replace(/\s+/g, ' ')).join(' | '));
+
+/* v2.7.0：opt-in .nvui-form-scope 只复用上面 7 条声明。
+ * 断言：4 条规则都含 scope；共 8 个 scope 选择器（7 个唯一串，select 基础态在
+ * 基础块与 margin 块各出现一次）；每个串必须精确等于允许清单；除这 4 条规则外，
+ * components.css 不得再出现任何 .nvui-form-scope 规则（防定位/遮罩/模态副作用）。 */
+const scopeFormSelectors = impFormRules
+    .flatMap((r) => r.selector.split(',').map((s) => s.trim()))
+    .filter((s) => /\.nvui-form-scope\b/.test(s));
+const FORM_SCOPE_ALLOWED = [
+    '.nvui-form-scope input.nvui-input',
+    '.nvui-form-scope select.nvui-input',
+    '.nvui-form-scope textarea.nvui-input',
+    '.nvui-form-scope input.nvui-input:hover',
+    '.nvui-form-scope select.nvui-input:hover',
+    '.nvui-form-scope textarea.nvui-input:hover',
+    '.nvui-form-scope select.nvui-input option',
+];
+check('v2.7.0 .nvui-form-scope 只复用 7 条有界隔离声明（8 个精确选择器，无独立规则/副作用）',
+    impFormRules.every((r) => /\.nvui-form-scope\b/.test(r.selector))
+    && scopeFormSelectors.length === 8
+    && [...new Set(scopeFormSelectors)].length === 7
+    && scopeFormSelectors.every((s) => FORM_SCOPE_ALLOWED.includes(s))
+    && componentRules.every((r) => !/\.nvui-form-scope\b/.test(r.selector) || impFormRules.includes(r)),
+    `scope selector=${scopeFormSelectors.length} / ${[...new Set(scopeFormSelectors)].join(' | ')}`);
 
 check('kit CSS/预览页不残留旧 --nv- / novel- 命名（仅 README 迁移表允许）',
     !/--nv-(?!ui)/.test(tokensClean + componentsClean + previewClean)
@@ -1684,11 +1711,11 @@ check('nvui-api 在 createPanel / showToast / openLayer 中同步宿主模态降
 check('宿主模态降级态不依赖 :modal 之外的选择器，且排除 kit 自身载体（不自我降级）',
     /dialog:modal/.test(apiSrc)
     && /classList\.contains\('nvui-tl'\)\)\s*continue/.test(apiSrc));
-check('版本号全量对齐 v2.6.0（package.json / tokens.json / tokens.css / components.css）',
-    pkg.version === '2.6.0'
-    && tokensJson.version === '2.6.0'
-    && /ui-kit v2\.6\.0/.test(tokensCss)
-    && /ui-kit v2\.6\.0/.test(componentsCss));
+check('版本号全量对齐 v2.7.0（package.json / tokens.json / tokens.css / components.css）',
+    pkg.version === '2.7.0'
+    && tokensJson.version === '2.7.0'
+    && /ui-kit v2\.7\.0/.test(tokensCss)
+    && /ui-kit v2\.7\.0/.test(componentsCss));
 // ---- 防模板漂移：st-extension-template/ui-kit/ 下每个资产文件都必须与根目录**逐文件**一致 ----
 // 历史教训：早期只校验了 nvui-api.js / components.css / tokens.css 三个文件，
 // 漏掉 tokens.json（机器可读镜像），导致副本版本号落后两版、且缺失 --nvui-z-layer
