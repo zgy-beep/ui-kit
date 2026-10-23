@@ -1,12 +1,12 @@
 /**
- * SillyTavern UI Kit v2.7.0「Flat Glass」· 规范守护测试（独立项目）
+ * SillyTavern UI Kit v2.7.1「Flat Glass」· 规范守护测试（独立项目）
  * 运行方式（在本目录下）: node test/test-ui-kit.js（或 npm test）
  *
  * 本文件只读取本项目内的文件，不依赖任何外部仓库/父目录，因此
  * 整个 ui-kit 目录可以被任意移动后直接运行。
  *
  * 覆盖：
- *  0) 项目文件结构、package.json 版本/元数据（2.7.0 + Flat Glass）；
+ *  0) 项目文件结构、package.json 版本/元数据（2.7.1 + Flat Glass）；
  *  1) token 完整性：CORE_TOKENS 显式登记 tokens.css 全部令牌（防漏登记/防幽灵/防僵尸），
  *     深色 110 / 浅色覆盖 47，命名合法，README 全覆盖；
  *  2) 配色规范：组件禁用硬编码颜色、颜色声明走 token、深/浅主题 WCAG AA、
@@ -361,8 +361,8 @@ for (const [name, p] of Object.entries(REQUIRED_FILES)) {
     check(`独立项目文件存在：${name}`, fs.existsSync(p) && fs.statSync(p).size > 10, p);
 }
 const KIT_VERSION = pkg.version;
-check('package.json 版本为合法 semver（2.7.0）',
-    /^2\.7\.0$/.test(String(KIT_VERSION)), String(KIT_VERSION));
+check('package.json 版本为合法 semver（2.7.1）',
+    /^2\.7\.1$/.test(String(KIT_VERSION)), String(KIT_VERSION));
 check('package.json 声明 MIT 许可且与 LICENSE 文件一致',
     pkg.license === 'MIT' && /^MIT License/.test(license));
 check('package.json scripts.test 指向项目内测试（可 npm test）',
@@ -1711,11 +1711,11 @@ check('nvui-api 在 createPanel / showToast / openLayer 中同步宿主模态降
 check('宿主模态降级态不依赖 :modal 之外的选择器，且排除 kit 自身载体（不自我降级）',
     /dialog:modal/.test(apiSrc)
     && /classList\.contains\('nvui-tl'\)\)\s*continue/.test(apiSrc));
-check('版本号全量对齐 v2.7.0（package.json / tokens.json / tokens.css / components.css）',
-    pkg.version === '2.7.0'
-    && tokensJson.version === '2.7.0'
-    && /ui-kit v2\.7\.0/.test(tokensCss)
-    && /ui-kit v2\.7\.0/.test(componentsCss));
+check('版本号全量对齐 v2.7.1（package.json / tokens.json / tokens.css / components.css）',
+    pkg.version === '2.7.1'
+    && tokensJson.version === '2.7.1'
+    && /ui-kit v2\.7\.1/.test(tokensCss)
+    && /ui-kit v2\.7\.1/.test(componentsCss));
 // ---- 防模板漂移：st-extension-template/ui-kit/ 下每个资产文件都必须与根目录**逐文件**一致 ----
 // 历史教训：早期只校验了 nvui-api.js / components.css / tokens.css 三个文件，
 // 漏掉 tokens.json（机器可读镜像），导致副本版本号落后两版、且缺失 --nvui-z-layer

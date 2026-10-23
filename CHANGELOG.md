@@ -6,6 +6,12 @@
 - 新增组件 / 新增 token（不破坏既有 DOM 与取值）：小版本（2.x.0）
 - 重命名类 / token、删除 token、修改 DOM 契约：大版本（x.0.0）
 
+## v2.7.1（2026-10-23）· GitHub #15 浏览器回归稳定性修复
+
+- 表单浏览器回归在设置半选 checkbox 后等待背景色与横杠透明度达到最终计算值，取代固定 250ms 延时；原有最终样式断言仍保留，超时会暴露真实回归。
+- 同步 `package.json`、`tokens.json`、CSS 文件头、`NVUI.version`、预览和模板副本到 2.7.1。组件 CSS 的规则与 token 取值不变，公开 API、DOM 契约与组件行为不变。
+- CDN 示例统一锁定 `v2.7.1` tag；发布时创建附注 tag 与 GitHub Release。
+
 ## v2.7.0（2026-10-23）· [2.7.0] - 2026-10-23 opt-in 表单作用域与 GitHub #12–#14 修复
 
 > 本版本为 SemVer 小版本（MINOR），保持既有公开 API、状态格式与 token 取值不变；已打 `v2.7.0` tag，未创建 GitHub Release。静态、本地浏览器及无宿主 E2E 回归已通过，真实 SillyTavern 宿主的 6 项用例尚未执行。

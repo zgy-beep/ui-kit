@@ -533,7 +533,19 @@ function readCarrierState() {
                 const indeterminate = document.getElementById('cb-indeterminate');
                 if (indeterminate) indeterminate.indeterminate = true;
             });
-            await page.waitForTimeout(250);
+            /* #15：等半选态的实际计算样式走完 transition，避免并行浏览器任务
+               使固定 250ms 落在过渡中间帧。超时仍按真实样式回归失败。 */
+            await page.waitForFunction(() => {
+                const checkbox = document.getElementById('cb-indeterminate');
+                if (!checkbox || !checkbox.indeterminate) return false;
+                const probe = document.createElement('span');
+                probe.style.backgroundColor = 'var(--nvui-accent)';
+                checkbox.parentElement.appendChild(probe);
+                const accent = getComputedStyle(probe).backgroundColor;
+                probe.remove();
+                return getComputedStyle(checkbox).backgroundColor === accent
+                    && getComputedStyle(checkbox, '::after').opacity === '1';
+            }, null, { timeout: 3000 });
 
             const data = await page.evaluate(readCarrierState);
 
