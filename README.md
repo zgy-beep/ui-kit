@@ -398,7 +398,8 @@ function trapFocus(modal, e) {
 ### 2.4 玻璃与降级
 
 - 玻璃只用于浮层：`.nvui-overlay` / `.nvui-modal` / `.nvui-panel` / `.nvui-floating` / `.nvui-tooltip` / `.nvui-toast` / `.nvui-glass`。
-- **玻璃态 = 透明面板 + 面板背后的模糊（v2.7.2）**：`.nvui-panel` 自身带 `backdrop-filter: blur(20px) saturate(150%)`，面板底色半透明（`--nvui-glass-bg`）；面板背后的聊天内容会被面板模糊（不可读），同时遮罩 `.nvui-overlay` 的 `blur(12px)` 负责整页磨砂与压暗。**不是**「只给遮罩加模糊、面板本体去掉 backdrop-filter」——那样面板只是半透明压暗，不是玻璃。宿主禁用 blur（Fast UI）时两者都会被宿主 `!important` 关闭，此时进入 97% 近不透明回退。
+- **玻璃态 = 透明面板 + 面板背后的强模糊（v2.7.2 增强）**：面板态（`.nvui-overlay.is-panel`）单独使用更透的玻璃：遮罩为 `color-mix(--nvui-bg 20%)` + `blur(24px)`，面板为 `color-mix(--nvui-bg 30%)` + 顶部 token 柔光 + `blur(48px) saturate(190%) brightness(1.12)`；浅色主题面板提高到 62% 不透明底。面板背后的聊天内容会明显可见但被强模糊，这才是玻璃效果。面板/遮罩的玻璃规则同时提升到 `dialog.nvui-tl` 作用域，避免真实 ST 中其它扩展内嵌的旧版 kit CSS 按加载顺序覆盖。
+  > 面板态是**视觉优先档**：在纯白/极亮宿主下不承诺 text-2 的 AA（正文仍建议深色宿主使用）；需要严格 AA 或完全可读时用 `.nvui-solid` 或减少透明度降级。宿主禁用 blur（Fast UI）时仍进入 97% 近不透明回退，见后文。
 - 弹窗级用 `--nvui-glass-bg`（`rgba(22, 26, 36, 0.64)`，背后有遮罩压暗，正文与次要文字双 AA）；直接叠在宿主上的 popover 级用 `--nvui-glass-bg-strong`（`rgba(22, 26, 36, 0.8)`，**只承诺正文 `--nvui-text` 的 AA**）。口径见 [§4.4](#44-aa-安全玻璃与合成对比度验算)。
 - 圆角玻璃表面（弹窗 / 面板 / 悬浮面板 / 工具提示 / 吐司 / `.nvui-glass`）**不画 1px 外框描边**：圆角处的 1px 半透明描边在缩放时会出现亚像素锯齿，改用「柔和顶部受光（`--nvui-glass-highlight`）+ 阴影」成形。header / footer / 导航底边这类直线分隔保留 1px（`--nvui-glass-line`）。
 - 五层降级链（`components.css` 已内置，业务无需处理）：
@@ -741,6 +742,7 @@ head.addEventListener('click', () => {
 3. 需要「正文 + 次要说明」都达 AA 时，把内容放进弹窗（遮罩后），或改用实心表面（`.nvui-solid` 与能力降级路径）。
 4. `--nvui-text-3` 只做非关键装饰提示，任何玻璃表面都不用它承载信息。
 5. 改完令牌要同步维护 `tokens.json` 镜像（它由 `tokens.css` 生成，不是手写第二份），否则文档、JSON 与 CSS 会三方不一致。
+6. **面板态高透明档（v2.7.2）**：面板态使用遮罩 20% + 面板 30% 的双层透明与更强 blur，属于**视觉优先档**；纯白/极亮宿主下不承诺 `text-2` 的 4.5:1。需要严格 AA 时用 `.nvui-solid` 或让系统「减少透明度」降级。
 
 改动任何玻璃、遮罩或文字取值后，必须重跑 `test/test-ui-kit.js` 的玻璃合成对比度检查，并同步更新本表与 `CHANGELOG.md`；表格里的数字是测试断言的一部分，不是说明性估算。测试按上表逐项比对，容差为 ±0.02，因此小数位也要保持一致。
 
@@ -1867,7 +1869,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 1. **同一份 DOM 自适应**：桌面顶部 tabs 与手机底部导航是同一份面板 DOM 的两种呈现，CSS 断点自动切换，不需要为两端写两套 HTML。
 2. **固定尺寸、不跳变**：面板外框尺寸固定——宽 `min(var(--nvui-panel-width), 100%)`（默认 720px 上限，支持 `opts.width` 自定义与视口越界钳制）、桌面高 `var(--nvui-panel-max-h)`（88vh）、手机高 `92dvh`；折叠/展开只改变 `.nvui-panel-body` 内部滚动内容。
 3. **单一滚动层、隐藏滚动条**：只有 `.nvui-panel-body` 滚动（`overflow-y: auto`），滚动条隐藏但**滚动能力保留**，避免嵌套滚动与滚动穿透。
-4. **玻璃 + 扁平**：面板本体用玻璃（`--nvui-glass-bg` + 模糊 + 柔和顶部受光 + 圆角），内部列表/折叠/开关保持扁平色阶。
+4. **玻璃 + 扁平**：面板态玻璃 = 透明面板（`color-mix(--nvui-bg 30%)`）+ 背后强模糊（`blur(48px)`）+ token 柔光/受光 + 圆角；内部列表/折叠/开关保持扁平色阶。
 5. **可访问性内建**：`role="dialog"` + `aria-modal="true"` + `aria-labelledby`；焦点管理沿用 [§2.3](#23-弹窗骨架含浮层载体)；底部导航用 `aria-current="page"`。
 6. **可组合**：分区内容直接复用第 7 章组件（tabs / tabpane / switch-row / acc / badge / alert / progress / toast 等），不新增内容组件。
 
@@ -1876,7 +1878,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 | 区域 | 结构 | 说明 |
 | :--- | :--- | :--- |
 | 遮罩 | `.nvui-overlay.is-panel` | 全屏压暗 + 磨砂，flex 居中，`padding: var(--nvui-space-4)` |
-| 面板 | `.nvui-panel` | `min(720px, 100%)` × 固定 88vh；圆角 `--nvui-radius-xl`；玻璃 + `--nvui-shadow-modal` |
+| 面板 | `.nvui-panel` | `min(720px, 100%)` × 固定 88vh；圆角 `--nvui-radius-xl`；面板态透明玻璃（30% 底 + 48px 背后模糊）+ `--nvui-shadow-modal` |
 | 标题栏 | `.nvui-panel-header` | 左标题 `.nvui-panel-title`（单行省略），右 `.nvui-panel-actions`（更多 / 关闭）；底部直线分隔 |
 | 分区导航 | `.nvui-tabs` | 桌面常显的顶部 tabs（切换的是 `.nvui-tabpane`，不是页面跳转）；可用 `.nvui-tabs-indicator` 粘连指示器 |
 | 内容区 | `.nvui-panel-body` | 唯一滚动层：`flex:1; min-height:0; overflow-y:auto`；顶部可放 `.nvui-panel-heading`（分区标题 + 版本徽标） |
@@ -1902,7 +1904,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 
 | 类名 | 说明 |
 | :--- | :--- |
-| `.nvui-panel` | 面板本体：`display:flex; flex-direction:column`；`width: min(var(--nvui-panel-width), 100%)`；**固定高** `var(--nvui-panel-max-h)`；`min-height:0; overflow:hidden`；**玻璃态（透明 + 背后模糊）**：`--nvui-glass-bg` 半透明底 + 自身 `backdrop-filter: blur(20px) saturate(150%)`（窄屏降为 `blur-sm`）+ `--nvui-radius-xl` + `--nvui-shadow-modal` |
+| `.nvui-panel` | 面板本体：`display:flex; flex-direction:column`；`width: min(var(--nvui-panel-width), 100%)`；**固定高** `var(--nvui-panel-max-h)`；`min-height:0; overflow:hidden`；**玻璃态（透明 + 背后强模糊）**：`color-mix(--nvui-bg 30%)` + token 柔光 + `blur(48px) saturate(190%) brightness(1.12)`（浅色主题 62% 底；窄屏 `blur-sm*1.6`）+ `--nvui-radius-xl` + `--nvui-shadow-modal`；规则提升到 `dialog.nvui-tl` 作用域 |
 | `.nvui-panel-header` | 标题栏：标题 + 右侧操作区，`justify-content:space-between`，底部直线分隔，`flex-shrink:0` |
 | `.nvui-panel-title` | 面板标题：`--nvui-fs-2xl` 粗体、单行省略；`aria-labelledby` 指向它 |
 | `.nvui-panel-actions` | 右侧操作区（`.nvui-icon-btn` 组，含关闭按钮），`flex-shrink:0` |

@@ -1292,7 +1292,8 @@ const panelBaseBodies = plainRuleBodies('.nvui-panel').join('\n');
 const panelTopLevelBodies = joinedBodies(componentRules.filter((r) => r.context.length === 0
     && r.selector.split(',').some((sel) => sel.trim() === '.nvui-panel')));
 const panelStructureMissing = [];
-if (!/background(?:-color)?\s*:[^;]*var\(--nvui-glass-bg\)/.test(panelBaseBodies)) panelStructureMissing.push('玻璃底 --nvui-glass-bg');
+/* 面板玻璃底色可由 --nvui-glass-bg 或 token 派生的 color-mix(--nvui-bg) 提供 */
+if (!/var\(--nvui-glass-bg\)|color-mix\(in srgb,\s*var\(--nvui-bg\)/.test(panelBaseBodies)) panelStructureMissing.push('玻璃底（--nvui-glass-bg 或 color-mix --nvui-bg）');
 /* v2.7.2：玻璃态必须由面板自身的 backdrop-filter 提供（透明面板 + 背后模糊） */
 if (!/backdrop-filter\s*:/.test(panelTopLevelBodies)) panelStructureMissing.push('面板自身 backdrop-filter（背后模糊）');
 if (!/display:\s*flex/.test(panelBaseBodies)) panelStructureMissing.push('display:flex');
@@ -1301,6 +1302,12 @@ if (!/width:\s*min\(var\(--nvui-panel-width\),\s*100%\)/.test(panelBaseBodies)) 
 if (!/max-height:\s*var\(--nvui-panel-max-h\)/.test(panelBaseBodies)) panelStructureMissing.push('max-height:--nvui-panel-max-h');
 check('.nvui-panel 面板容器：玻璃底 + 面板自身 backdrop-filter（背后模糊）+ flex 列 + 固定宽高',
     panelStructureMissing.length === 0, `缺少/违规: ${panelStructureMissing.join(', ')}`);
+/* v2.7.2：面板玻璃规则必须提升到 dialog.nvui-tl 作用域，才能在真实 ST 中压过其它扩展内嵌的旧版 kit CSS */
+const carrierGlassRule = componentRules.find((r) => /dialog\.nvui-tl\s+\.nvui-panel/.test(r.selector)
+    && /color-mix\(in srgb,\s*var\(--nvui-bg\)/.test(r.body)
+    && /backdrop-filter\s*:[^;]*blur\(calc\(var\(--nvui-glass-blur\)/.test(r.body));
+check('面板玻璃作用域提升（dialog.nvui-tl .nvui-panel：透明底 + 强背后模糊，压过旧扩展副本）',
+    !!carrierGlassRule, carrierGlassRule ? '' : '未找到载体作用域的面板玻璃规则');
 
 const PANEL_PARTS = ['.nvui-panel-header', '.nvui-panel-title', '.nvui-panel-actions',
     '.nvui-panel-body', '.nvui-panel-footer', '.nvui-panel-heading'];
