@@ -934,8 +934,9 @@ check('玻璃自动回退改为半透明类 .nvui-glass-fallback（不再把 .nv
     && /function syncGlassFallback[\s\S]{0,900}applyGlassFallback/.test(apiSrc)
     && !/function syncGlassFallback[\s\S]{0,900}classList\.add\(['"]nvui-solid['"]\)/.test(apiSrc));
 const glassFallbackBodies = (componentsClean.match(/\.nvui-glass-fallback[^{]*\{[^}]*\}/g) || []).join('\n');
-check('CSS 半透明回退使用 --nvui-glass-bg-strong（AA 安全）且位于 .nvui-solid 之前（用户实心优先）',
+check('CSS 半透明回退使用 token 派生 97% 档（color-mix，AA 安全）且位于 .nvui-solid 之前（用户实心优先）',
     /var\(--nvui-glass-bg-strong\)/.test(glassFallbackBodies)
+    && /color-mix\(in srgb,\s*var\(--nvui-bg-2\)\s*97%,\s*transparent\)/.test(glassFallbackBodies)
     && /backdrop-filter\s*:\s*none/.test(glassFallbackBodies)
     && componentsClean.indexOf('.nvui-glass-fallback .nvui-overlay') >= 0
     && componentsClean.indexOf('.nvui-glass-fallback .nvui-overlay') < componentsClean.indexOf('.nvui-solid .nvui-overlay'));

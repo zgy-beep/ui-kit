@@ -408,11 +408,11 @@ function trapFocus(modal, e) {
 | 浏览器不支持 `backdrop-filter` | `@supports not (...)` 回退为不透明表面 |
 | 用户系统开启「减少透明度」 | `prefers-reduced-transparency: reduce` 回退为不透明表面 |
 | 强制颜色 / 高对比模式 | `forced-colors: active` 用系统色 `CanvasText` 描边，去阴影与模糊 |
-| **宿主全局禁用模糊**（如酒馆 Fast UI 默认 `body.no-blur`） | 运行时读实际计算值后给根节点加 `.nvui-glass-fallback`：改用 `--nvui-glass-bg-strong` 的**半透明回退**（深色 text-2 5.59、浅色 4.64，AA 达标），不再整块不透明 |
+| **宿主全局禁用模糊**（如酒馆 Fast UI 默认 `body.no-blur`） | 运行时读实际计算值后给根节点加 `.nvui-glass-fallback`：改用 token 派生 97% 不透明色（`color-mix`）的**近不透明回退**（深色 text-2 6.02、浅色 6.42，AA 达标；有效透出约 1.1% / 2.1%），既保留极轻玻璃感又不出现聊天文字重影，不再整块不透明 |
 | 用户主动不想要透明 / 低性能设备 | 根节点加 `.nvui-solid` 强制实心（优先级高于自动回退） |
 
 - 窄屏（`max-width: 600px`）弹窗自动降档为 `--nvui-glass-blur-sm`（12px）降低移动端 GPU 开销，保留 `92dvh` 与安全区规则；面板本身已无 `backdrop-filter`，无需再降档。
-- **真实酒馆默认观感说明**：SillyTavern `fast_ui_mode` 默认 `true`，宿主会给 `body` 加 `no-blur` 并全局 `unset !important` 掉 `backdrop-filter`。kit 会自动进入半透明回退（`.nvui-glass-fallback`），在面板上仍能看到背景大色块的隐约透出；想要完全玻璃效果需在酒馆设置里关闭 Fast UI 模式。运行时 API 的探测/回退/恢复见 §7.2。
+- **真实酒馆默认观感说明**：SillyTavern `fast_ui_mode` 默认 `true`，宿主会给 `body` 加 `no-blur` 并全局 `unset !important` 掉 `backdrop-filter`。kit 会自动进入 97% 近不透明回退（`.nvui-glass-fallback`，极轻透出），在面板上不再出现聊天文字重影；想要完整玻璃效果需在酒馆设置里关闭 Fast UI 模式。运行时 API 的探测/回退/恢复见 §7.2。
 
 ### 2.5 折叠面板 DOM（破坏性变更）
 
@@ -732,7 +732,7 @@ head.addEventListener('click', () => {
 
 > 口径：按「深色主题宿主纯白 / 浅色主题宿主纯黑」的最坏情况计算。若宿主本身就是典型深色 `#161a24`，浅色弹窗级为 9.70 / 4.83，比表中的最坏值更宽松，仅作参考。
 
-> **自动半透明回退（v2.7.2，`.nvui-glass-fallback`）**：宿主禁用模糊时叠 `--nvui-glass-bg-strong`（0.80）——深色 text 12.27 / text-2 5.59，浅色 11.34 / 4.64，**仍保持双 AA**；这是「不再整块不透明」的依据。
+> **自动近不透明回退（v2.7.2，`.nvui-glass-fallback`）**：宿主禁用模糊时用 token 派生 97% 不透明色（`color-mix(in srgb, var(--nvui-bg-2) 97%, transparent)`）——深色 text 13.23 / text-2 6.02，浅色 12.88 / 6.42，**仍保持双 AA**；有效透出约 1.1% / 2.1%，只保留极轻玻璃感。0.80 半透明档在真实聊天密集背景下会出现可读文字重影，已废弃。
 
 **AA 政策**
 
@@ -1028,7 +1028,7 @@ head.addEventListener('click', () => {
 | `.nvui-glass` | 默认 strong 档（`--nvui-glass-bg-strong`）+ 20px 模糊 + `--nvui-shadow-pop`；无外框描边，靠顶部受光与阴影成形；文字用 `--nvui-text` |
 | `.nvui-glass.is-subtle` | 弹窗级低档（`--nvui-glass-bg`）+ 12px 模糊、去阴影；仅当底下已有遮罩或深色画布时使用 |
 | `.nvui-solid` | 用户主动实心：`overlay` / `modal` / `panel` / `floating` / `tooltip` / `toast` / `glass` 全部改不透明底并 `backdrop-filter: none` |
-| `.nvui-glass-fallback` | **自动**半透明回退（v2.7.2，运行时探测到宿主禁用模糊时加在根节点）：改用 `--nvui-glass-bg-strong` 并关模糊；`.nvui-solid` 优先级更高，可覆盖它 |
+| `.nvui-glass-fallback` | **自动**近不透明回退（v2.7.2，运行时探测到宿主禁用模糊时加在根节点）：改用 token 派生 97% 不透明色并关模糊（极轻透出）；`.nvui-solid` 优先级更高，可覆盖它 |
 
 降级链由 `components.css` 内置，业务不写分支：
 
@@ -1038,7 +1038,7 @@ head.addEventListener('click', () => {
 | `prefers-reduced-transparency: reduce` | 同上，并 `backdrop-filter: none` |
 | `forced-colors: active` | 玻璃表面加 `1px solid CanvasText`，去阴影与模糊 |
 | 窄屏（`max-width: 600px`） | 弹窗模糊降档为 `--nvui-glass-blur-sm` |
-| 宿主全局禁用模糊（Fast UI / `body.no-blur`） | `NVUI.syncGlassFallback()` 读实际计算值，自动加 `.nvui-glass-fallback`（半透明 strong 档，不再整块 `.nvui-solid`）；CSS 就绪前不落回退并自动重探 |
+| 宿主全局禁用模糊（Fast UI / `body.no-blur`） | `NVUI.syncGlassFallback()` 读实际计算值，自动加 `.nvui-glass-fallback`（97% token 派生近不透明档，不再整块 `.nvui-solid`）；CSS 就绪前不落回退并自动重探 |
 
 规则：`.nvui-glass` 直接叠在任意宿主背景上时必须用默认 strong 档，只有确认底下已有遮罩 / 深色画布时才用 `.is-subtle`；popover 玻璃上的说明文字一律用 `--nvui-text`。无障碍：玻璃只做视觉层次，状态语义必须由实色文字 / 图标 / 圆点承担。
 
@@ -1551,7 +1551,7 @@ function showToast(text, kind = 'success') {
 9. **`backdrop-filter` 玻璃要管好兼容、性能与降级。**
    - 每个 `backdrop-filter` 必须同时写 `-webkit-backdrop-filter`（Safari / 旧 WebKit），顺序不能反；
    - 只用于小面积浮层，不给全屏静态区块用；窄屏自动降档 `--nvui-glass-blur-sm`；不要在动画里改 `blur` 半径（会逐帧重采样）；
-   - 回退链：`@supports not (...)` 回退不透明、`prefers-reduced-transparency: reduce` 回退不透明、`forced-colors: active` 用系统色描边、`.nvui-solid` 手动实心、以及 v2.7.2 新增的宿主禁模糊自动半透明回退 `.nvui-glass-fallback`（详见 [§2.4](#24-玻璃与降级)）；
+   - 回退链：`@supports not (...)` 回退不透明、`prefers-reduced-transparency: reduce` 回退不透明、`forced-colors: active` 用系统色描边、`.nvui-solid` 手动实心、以及 v2.7.2 新增的宿主禁模糊自动近不透明回退 `.nvui-glass-fallback`（详见 [§2.4](#24-玻璃与降级)）；
    - 不要用玻璃表达状态：状态色必须是实色文字/图标/圆点。
 10. **宿主模态弹窗期间，kit 浮层必须主动让位。** 宿主 `dialog.showModal()` 会给整个文档加 `inert`，`inert` 元素不参与命中测试，因此 kit 浮层**物理上不可能**既压过模态又保持可交互——任何 z-index / top layer 手段都无效（`popover="manual"` 亦然，实测证伪）。正确做法是让载体自动加 `.is-host-modal`（不可点 + 压暗 + 去色），宿主模态关闭后自动还原；kit 的运行时已内置该机制，宿主无需配合。详见 [§13.7](#137-载体与宿主模态主动让位而非硬压)。
 11. **表单控件的宿主 `!important` 覆盖必须用「有界作用域 + 精确属性」夺回。** 第三方主题会对 `input` / `select` / `textarea` 下 `background: ... !important`，裸类 `.nvui-input`（0,1,0）必输，浅色主题会出现「深底深字」。kit 只在 `dialog.nvui-tl` / `.nvui-panel` 两个默认载体，以及显式加 `.nvui-form-scope` 的自定义容器内，对 `background` / `color` / `border` / `select margin` / `:hover background` / `option` 的 `background`+`color` 使用 `!important`（共 7 条，预算见 [§9](#9-命名与工程约定)）。
@@ -1783,7 +1783,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 | v2.6.0 | 小版本 | 可选：`.nvui-checkbox` 独立复选框（批量选择）；宿主表单隔离层自动生效（`dialog.nvui-tl` / `.nvui-panel` 内 7 条有界 `!important`，修复浅色「深底深字」）；`innerHTML` 注入的折叠条用 `panel.trackAccordion()` / `panel.adoptAccordions()` 接入持久化（默认不接管点击，传 `{ bind: true }` 才绑定）。 |
 | v2.7.0 | 小版本 | 可选：自定义普通容器加 `.nvui-form-scope` 复用表单隔离；修复 `optgroup` 主题配色、焦点陷阱与宿主模态期间 Esc。组件类 79 → 80。 |
 | v2.7.1 | 补丁 | 无需改动：只修浏览器回归测试时序（半选 checkbox 等待最终计算值），组件样式、公开 API、状态格式、token 与 DOM 契约不变。 |
-| v2.7.2 | 补丁 | 覆盖 4 个运行资产即可：玻璃透明感修复（面板改单层玻璃、宿主 Fast UI 默认关模糊时改半透明回退而不是全不透明、玻璃探测三态化并可自愈）。无需改 DOM / API / 状态；建议目检深/浅主题与 Fast UI 开关两态。 |
+| v2.7.2 | 补丁 | 覆盖 4 个运行资产即可：玻璃透明感修复（面板改单层玻璃；宿主 Fast UI 默认关模糊时改为 97% token 派生近不透明回退而不是全不透明；玻璃探测三态化并可自愈）。无需改 DOM / API / 状态；建议目检深/浅主题与 Fast UI 开关两态。 |
 
 **高频 FAQ**
 
@@ -1836,7 +1836,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 
 | 版本 | 日期 | 类型 | 一句话摘要 |
 | :--- | :--- | :--- | :--- |
-| v2.7.2 | 2026-10-26 | 补丁 | 玻璃透明感修复：面板单层玻璃；宿主禁模糊时半透明回退（`.nvui-glass-fallback`）；探测三态化 + 可逆自愈；`setTheme()` 不再误清用户实心偏好 |
+| v2.7.2 | 2026-10-26 | 补丁 | 玻璃透明感修复：面板单层玻璃；宿主禁模糊时 97% token 派生近不透明回退（`.nvui-glass-fallback`）；探测三态化 + 可逆自愈；`setTheme()` 不再误清用户实心偏好 |
 | v2.7.1 | 2026-10-23 | 补丁 | 修 GitHub #15：半选 checkbox 浏览器回归等待最终计算值；CSS / API / DOM 不变 |
 | v2.7.0 | 2026-10-23 | 小版本 | 新增 opt-in `.nvui-form-scope`；修复 #12 `optgroup`、#13 焦点、#14 宿主模态 Esc；组件类 80 |
 | v2.6.0 | 2026-10-21 | 小版本 | 新增 `.nvui-checkbox`、宿主表单隔离层（#9）、折叠条接管入口（#11）；`!important` 预算 14 |
@@ -2184,7 +2184,7 @@ console.log(typeof NVUI.createPanel); // 'function'
 | `NVUI.invalidateTokenCache()` | 手动让令牌缓存失效；宿主在 kit 之外改样式表且未触发 class / 内联样式变化时调用（`setTheme()` 内部已自动调用） | `void` |
 | `NVUI.setTheme(theme, options?)` | 切换主题 / 实心模式（`theme: 'light'`、`options.solid: true/false`；只切类名，不写颜色）。v2.7.2 起不再无条件清除 `.nvui-solid`：不传 `options.solid` 时保留用户实心偏好 | `void` |
 | `NVUI.detectGlassSupport(options?)` | 探测宿主是否**实际**禁用了 `backdrop-filter`（读渲染后的计算值，不猜宿主类名）。内部为 supported / unsupported / unknown 三态；kit CSS 未就绪时返回 `true` 并自动重探（不落回退） | `boolean` |
-| `NVUI.syncGlassFallback(options?)` | 探测并同步自动回退：模糊不可用时给根节点加 `.nvui-glass-fallback`（半透明 strong 档，**不再整块 `.nvui-solid`**），恢复后自动移除；`createPanel()` / `showToast()` / `openLayer()` 已内置 | `boolean` |
+| `NVUI.syncGlassFallback(options?)` | 探测并同步自动回退：模糊不可用时给根节点加 `.nvui-glass-fallback`（token 派生 97% 近不透明档，**不再整块 `.nvui-solid`**），恢复后自动移除；`createPanel()` / `showToast()` / `openLayer()` 已内置 | `boolean` |
 | `NVUI.countHostModals()` | 统计处于模态状态的**宿主**原生 `<dialog>` 数量（用 `:modal` 伪类，自动排除 kit 自身载体） | `number` |
 | `NVUI.syncHostModalState()` | 同步宿主模态降级态（加 / 移 `.is-host-modal`），返回当前宿主模态数 | `number` |
 | `NVUI.getCarrierState()` | 查询载体与宿主模态的层级快照（诊断 / 宿主集成用） | `object` |

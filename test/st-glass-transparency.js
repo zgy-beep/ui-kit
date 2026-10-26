@@ -299,8 +299,9 @@ class Harness {
         check('no-blur：检测为不支持模糊', fallback.supported === false, JSON.stringify(fallback));
         check('no-blur：自动挂 .nvui-glass-fallback 且不挂 .nvui-solid',
             /nvui-glass-fallback/.test(fallback.rootClass) && !/nvui-solid/.test(fallback.rootClass), fallback.rootClass);
-        check('no-blur：面板为 rgba(22,26,36,0.8) 半透明回退', /rgba\(\s*22\s*,\s*26\s*,\s*36\s*,\s*0?\.8\s*\)/.test(m.panelBg || ''), m.panelBg);
-        check('no-blur：背景细节仍有 ≥ 12% 透出（不再 0%）', sv.ratio >= 0.12, `ratio=${sv.ratio.toFixed(3)}`);
+        check('no-blur：面板为 token 派生 97% 不透明回退（color-mix，极轻透出）',
+            /color\(srgb[^)]*\/\s*0\.97\s*\)/.test(m.panelBg || '') || /rgba\([^)]*,\s*0?\.97\s*\)/.test(m.panelBg || ''), m.panelBg);
+        check('no-blur：背景细节透出被压到 0.5%–6%（不再出现可读重影）', sv.ratio >= 0.005 && sv.ratio < 0.06, `ratio=${sv.ratio.toFixed(3)}`);
         report.cases.push({ case: 'no-blur-fallback', fallback, measure: m, stripe: sv });
 
         /* 4. 加载顺序竞争：CSS 未就绪 → unknown 不落回退；CSS 就绪后自愈 */

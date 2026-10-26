@@ -13,7 +13,7 @@
 ### 修复
 
 - **面板改为单层玻璃**：`.nvui-panel` 不再声明 `backdrop-filter`，磨砂由 `.nvui-overlay`（`blur(12px)`）提供。根因：面板自身再叠一层 `backdrop-filter` 会二次采样遮罩「已压暗 + 模糊」的结果，Chrome 对大面积还会降采样，面板内背景细节只剩 12.1%（截图对照可复现）。修复后同一 fixture 下背景细节透出 **32.9%**；token/AA 数值不变，并少了一层大面积模糊（移动端更省）。
-- **宿主禁用模糊时改为半透明回退**：`syncGlassFallback()` 不再整块加 `.nvui-solid`，改为在根节点加 `.nvui-glass-fallback`，CSS 使用 `--nvui-glass-bg-strong`（0.80）的半透明表面；深色 text/text-2 = 12.27/5.59、浅色 11.34/4.64，**AA 双达标**。`.nvui-solid` 只保留为用户主动实心（优先级更高）。真实 SillyTavern `fast_ui_mode` 默认 `true`（`body.no-blur`）时，面板不再显示为一块完全不透明的板。
+- **宿主禁用模糊时改为近不透明回退**：`syncGlassFallback()` 不再整块加 `.nvui-solid`，改为在根节点加 `.nvui-glass-fallback`，CSS 用 `color-mix(in srgb, var(--nvui-bg-2) 97%, transparent)` 生成 97% 不透明底色（无新 token）。深色 text/text-2 = 13.23/6.02、浅色 12.88/6.42，**AA 双达标**；有效宿主透出约 1.1% / 2.1%，保留极轻玻璃感。`.nvui-solid` 只保留为用户主动实心（优先级更高）。**真实 ST 实机验证发现 0.80 半透明档在聊天文本密集背景下有可读重影，因此收紧到 97%**；不支持 `color-mix` 的浏览器退回 0.80 半透明 strong 档。
 - **玻璃探测三态化 + 可逆自愈**：`detectGlassSupport()` 内部区分 `supported` / `unsupported` / `unknown`；kit CSS 未就绪时返回 `true`（不落回退）并安排有限次重探（签名含根/body class、`prefers-reduced-transparency`、CSS 是否就绪、用户实心偏好；时机含定时器、`load`、`fonts.ready`、`openLayer()`）。探测前临时摘掉 `.nvui-solid` / `.nvui-glass-fallback`，修掉「探针被自身降级规则压成 `none` → 永久缓存 false → `{force:true}` 也救不回」的死锁；恢复支持后自动移除回退。
 - **反向缺陷**：`openLayer()` 打开浮层时重探一次，修复「面板创建后才开启 Fast UI / 修改减少透明度」导致的「半透明但无模糊」重影。
 - **`setTheme()` 语义**：不再无条件清除 `.nvui-solid`（用户的实心偏好在切主题时保留）；只有显式传 `options.solid: true/false` 时才切换实心类。
@@ -26,14 +26,14 @@
 
 ### 验证
 
-- `npm test` 全绿（0 失败），新增玻璃三态 / 半透明回退 / 单层玻璃断言。
-- 零依赖 headless Chrome 156 探针：面板背景细节透出 12.1% → 32.9%；宿主 no-blur 时 0% → 18.2%（半透明回退）；CSS 未就绪的时序竞争可自愈；`prefers-reduced-transparency` / `forced-colors` 降级行为不变。复跑命令见 `test/st-glass-transparency.js`。
-- 真实 SillyTavern 宿主回归（playwright 脚本）本机未执行（ST 服务未启动），升级后请目检 Fast UI 开启/关闭两态；`test/st-glass-fallback-check.js` 已按新语义更新断言。
+- `npm test` 全绿（0 失败），新增玻璃三态 / 近不透明回退 / 单层玻璃断言。
+- 零依赖 headless Chrome 156 探针：面板背景细节透出 12.1% → 32.9%；宿主 no-blur 时有效透出 0% → 1.1%（深）/ 2.1%（浅，无可读重影）；CSS 未就绪的时序竞争可自愈；`prefers-reduced-transparency` / `forced-colors` 降级行为不变。复跑命令见 `test/st-glass-transparency.js`。
+- **真实 SillyTavern 宿主实机验证**（本机 ST 服务 + 下游扩展 4 资产覆盖升级）：20 项断言全绿——Fast UI 默认下自动挂 `.nvui-glass-fallback` 且不挂 `.nvui-solid`、回退为 97% 档、面板中心命中 kit（载体 z-index 1000000）、宿主 `showModal()` 时自动让位并在关闭后还原、关闭 Fast UI 后玻璃恢复且回退类移除、重新开启后回退恢复、面板关闭/重开正常、零 pageerror。Playwright 版 `test/st-glass-fallback-check.js` 已按新语义更新，未在本轮执行。
 
 ### 兼容性
 
 - 无 token / 类名 / 关键帧 / `!important` / 公开 API 签名 / 状态格式变更；DOM 必需结构不变。
-- 视觉变化：面板不再二次模糊（更透）；宿主禁模糊时由「不透明」变为「半透明 strong 档」。如需完全实心，显式加 `.nvui-solid`。
+- 视觉变化：面板不再二次模糊（更透）；宿主禁模糊时由「不透明」变为「97% token 派生近不透明档（极轻透出）」。如需完全实心，显式加 `.nvui-solid`。
 - 下游迁移：覆盖 `tokens.css` / `components.css` / `nvui-api.js` / `tokens.json` 四个运行资产即可；想保留旧的「禁模糊即全实心」行为可继续手动加 `.nvui-solid`。
 
 ## v2.7.1（2026-10-23）· GitHub #15 浏览器回归稳定性修复

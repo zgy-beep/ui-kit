@@ -19,7 +19,7 @@
    - 吐司载体请加 `.nvui-tl-toast`（`NVUI.showToast` 已内置），使其层级（`--nvui-z-tooltip`）高于面板载体（`--nvui-z-layer`）。
    - **宿主模态期间 kit 浮层必须主动让位（v2.4.0）**：宿主用 `dialog.showModal()` 打开模态时会给**整页**加 `inert`，而 `inert` 元素**不参与命中测试** —— 此时 kit 浮层**物理上不可能**既压过模态又保持可交互（**任何** z-index / top layer 手段都无效，`popover="manual"` 亦然，实测证伪）。正确行为是让位：kit 载体自动加 `.is-host-modal`（`pointer-events:none` + `opacity:0.35` + `grayscale(0.6)`），宿主模态关闭后**自动还原**。宿主**无需任何配合**；若你是在写宿主端代码且希望「模态期间仍能操作 kit 浮层」，请改用**非模态** `<dialog>` + 自绘遮罩，不要用 `showModal()`。详见 README §13.7。
 4. **无障碍内建**：面板 `role="dialog" aria-modal="true" aria-labelledby`；标签页 `role="tablist"/"tab"/"tabpanel"` + `aria-selected` + `aria-controls`；折叠 `aria-expanded`；关闭按钮 `aria-label`；打开时焦点移入、关闭后归还触发元素（README §2.3 配方）。
-5. **尊重系统偏好**：动效必须可被 `prefers-reduced-motion` 降级（Kit 已内置）；玻璃必须可被 `prefers-reduced-transparency` / 不支持 `backdrop-filter` / `.nvui-solid`（用户主动实心）/ `.nvui-glass-fallback`（宿主禁模糊时的自动半透明回退）降级，不要自己写一套回退。
+5. **尊重系统偏好**：动效必须可被 `prefers-reduced-motion` 降级（Kit 已内置）；玻璃必须可被 `prefers-reduced-transparency` / 不支持 `backdrop-filter` / `.nvui-solid`（用户主动实心）/ `.nvui-glass-fallback`（宿主禁模糊时的 97% 近不透明自动回退）降级，不要自己写一套回退。
 6. **无 emoji 图标**：用 Font Awesome `<i class="fa-solid ...">` 或纯 CSS 图形；README/CSS/JS 文案中也不要写 emoji。
 7. **不要改 Kit 的契约**：不要重命名类/token、不要给组件加第二套皮肤；品牌化只允许整体替换同名 token。
 8. **改完必须跑测试**：`node test/test-ui-kit.js`（或 `npm test`）必须 0 失败；新增/修改组件要同步更新 `preview.html` 与 README。
@@ -496,7 +496,7 @@ async function checkGitHubRelease() {
 | `NVUI.setTheme('light'|'dark', { solid })` | 切换浅色 / 实心扁平模式（只切类名） |
 | `NVUI.clearLayoutState(id, storageAdapter)` | 清理指定面板在持久化存储中的尺寸/位置/状态记忆 |
 | `NVUI.clampPanelLayout(savedSize, savedPos, options)` | 跨屏幕多分辨率视口越界钳制计算引擎（保证桌面与移动端安全贴边，避免关闭按钮不可达） |
-| `NVUI.syncGlassFallback()` | 宿主全局禁用 `backdrop-filter` 时自动挂 `.nvui-glass-fallback` 半透明回退（v2.7.2 起不再整块 `.nvui-solid`；`createPanel`/`showToast`/`openLayer` 已内置） |
+| `NVUI.syncGlassFallback()` | 宿主全局禁用 `backdrop-filter` 时自动挂 `.nvui-glass-fallback`（97% token 派生近不透明回退，v2.7.2 起不再整块 `.nvui-solid`；`createPanel`/`showToast`/`openLayer` 已内置） |
 | `NVUI.openLayer(dialog, overlay)` / `closeLayer(dialog, overlay, cb)` | 非模态浮层载体开合（含退场动画收尾） |
 | `NVUI.countHostModals()` | 统计当前文档处于模态状态的**宿主**原生 `<dialog>` 数量（用 `:modal` 伪类，自动排除 kit 自身载体） |
 | `NVUI.syncHostModalState()` | 同步宿主模态降级态：给所有 kit 载体加/移除 `.is-host-modal`；`createPanel`/`showToast`/`openLayer` 已内置调用 |
@@ -525,7 +525,7 @@ async function checkGitHubRelease() {
 
 ### 6.2 历史版本与兼容基准
 
-- 当前：**v2.7.2**（玻璃透明感修复：面板改单层玻璃；宿主禁用模糊时自动半透明回退 `.nvui-glass-fallback`，不再整块不透明；探测三态化并可自愈；`setTheme()` 不再误清用户 `.nvui-solid`；token / 组件类 / 公开 API 签名不变）。
+- 当前：**v2.7.2**（玻璃透明感修复：面板改单层玻璃；宿主禁用模糊时自动 97% 近不透明回退 `.nvui-glass-fallback`，不再整块不透明；探测三态化并可自愈；`setTheme()` 不再误清用户 `.nvui-solid`；token / 组件类 / 公开 API 签名不变）。
 - 上一版：**v2.7.1**（修复 GitHub #15 的半选 checkbox 浏览器回归偶发中间帧断言；组件样式、token 取值、公开 API 和 DOM 契约不变）。
 - 上一版：**v2.7.0**（已打 tag；opt-in `.nvui-form-scope` 表单作用域，并修复 GitHub #12 的默认载体 `optgroup` 配色、#13 的焦点管理、#14 的宿主模态 Esc；`!important` 预算仍 14，token 取值与公开 API 不变；组件类 80；0 破坏性变更）。
 - 上一版：**v2.6.0**（独立复选框 `.nvui-checkbox` + 宿主表单控件隔离层 + 折叠条接管入口；组件类 79；0 破坏性变更，100% 向后兼容）。

@@ -6,7 +6,7 @@
  *   A. 基线：宿主 body 带 no-blur 时，`.nvui-glass` 探针 computed backdropFilter = none
  *      （浏览器仍支持，@supports 探测不到）。
  *   B. 修复：`NVUI.syncGlassFallback({force:true})` 返回 false，根节点挂 `.nvui-glass-fallback`
- *      （不再挂 `.nvui-solid`），面板背景为 rgba(22,26,36,0.8) 且 backdrop-filter 关闭。
+ *      （不再挂 `.nvui-solid`），面板背景为 token 派生 97% 不透明档且 backdrop-filter 关闭。
  *   C. 对照：摘掉 no-blur 后重探，supported 恢复 true、自动回退被移除，`.nvui-glass` 探针 blur 恢复。
  *   D. 用户 opt-out：手动加 `.nvui-solid` 时仍是不透明（优先级高于自动回退）。
  */
@@ -90,8 +90,8 @@ function check(name, cond, detail) {
     check('NVUI.syncGlassFallback() 正确识别出模糊不可用', after.supported === false, 'supported=' + after.supported);
     check('根节点自动挂上 .nvui-glass-fallback（半透明回退，不再整块 .nvui-solid）',
         /nvui-glass-fallback/.test(after.htmlClass) && !/nvui-solid/.test(after.htmlClass), after.htmlClass);
-    check('面板回退为半透明 strong 档（rgba 0.8，保留隐约玻璃感）',
-        /rgba\(\s*22\s*,\s*26\s*,\s*36\s*,\s*0?\.8\s*\)/.test(after.panelBg || ''), 'bg=' + after.panelBg);
+    check('面板回退为 97% 不透明档（token 派生 color-mix，极轻玻璃感）',
+        /color\(srgb[^)]*\/\s*0\.97\s*\)/.test(after.panelBg || '') || /rgba\([^)]*,\s*0?\.97\s*\)/.test(after.panelBg || ''), 'bg=' + after.panelBg);
     check('回退后 backdrop-filter 已关闭', after.panelBackdrop === 'none', 'panel=' + after.panelBackdrop);
 
     await page.screenshot({ path: path.join(OUT, 'glass-fallback.png') });
