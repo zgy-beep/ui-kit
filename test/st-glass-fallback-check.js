@@ -1,17 +1,14 @@
 /**
- * 实机回归：ISSUES.md #15 —— 宿主全局禁用 backdrop-filter 时的玻璃实心回退
+ * 实机回归：ISSUES.md #15 / #16 / #17 —— 宿主全局禁用 backdrop-filter 时的玻璃回退
+ * v2.7.2 起：不再整块 `.nvui-solid`，改为 `.nvui-glass-fallback` 半透明回退；且可逆、可自愈。
  *
- * 背景：SillyTavern 的 FastUI 用 `body.no-blur * { backdrop-filter: unset !important }`
- * 全局关掉模糊。浏览器**仍然支持** backdrop-filter，所以 `@supports not` 降级分支
- * 根本不触发 —— 玻璃只剩半透明底色，下层文字直接透出来形成重影。
- *
- * 验证三件事：
- *   A. 基线：宿主 body 带 no-blur 时，kit 玻璃元素的 computed backdropFilter 为 none
- *      → 证明「浏览器支持 ≠ 实际生效」，CSS 的 @supports 探测不到。
- *   B. 修复：调用 NVUI.syncGlassFallback() 后，根节点自动挂 .nvui-solid，
- *      且玻璃表面回退为不透明背景（--nvui-bg / --nvui-bg-2）。
- *   C. 对照：把 no-blur 从 body 上摘掉后重探，backdropFilter 恢复为 blur(...)，
- *      说明探测读的是**实际计算值**而不是浏览器能力。
+ * 验证：
+ *   A. 基线：宿主 body 带 no-blur 时，`.nvui-glass` 探针 computed backdropFilter = none
+ *      （浏览器仍支持，@supports 探测不到）。
+ *   B. 修复：`NVUI.syncGlassFallback({force:true})` 返回 false，根节点挂 `.nvui-glass-fallback`
+ *      （不再挂 `.nvui-solid`），面板背景为 rgba(22,26,36,0.8) 且 backdrop-filter 关闭。
+ *   C. 对照：摘掉 no-blur 后重探，supported 恢复 true、自动回退被移除，`.nvui-glass` 探针 blur 恢复。
+ *   D. 用户 opt-out：手动加 `.nvui-solid` 时仍是不透明（优先级高于自动回退）。
  */
 const { chromium } = require('playwright-core');
 const path = require('path');
@@ -43,7 +40,7 @@ function check(name, cond, detail) {
     await page.evaluate(() => window.__NVUI_LAB__ && window.__NVUI_LAB__.open('basic'));
     await page.waitForTimeout(1200);
 
-    // ---- A. 基线：宿主 no-blur 下 backdrop-filter 是否真的没生效 ----
+    // ---- A. 基线 ----
     const baseline = await page.evaluate(() => {
         const probe = document.createElement('div');
         probe.className = 'nvui-glass';
@@ -68,60 +65,67 @@ function check(name, cond, detail) {
 
     check('宿主处于 no-blur 状态（body class 含 no-blur）',
         /no-blur/.test(baseline.bodyClass), baseline.bodyClass);
-    check('浏览器仍支持 backdrop-filter（@supports 探测不到宿主禁用）',
-        /blur/.test(baseline.probeBackdrop) === false
-            ? '实际计算值为 none → 证实 @supports not 无法探测'
-            : '当前环境未禁用，基线不适用',
+    check('宿主禁用了实际模糊（探针 computed backdropFilter = none，@supports 探测不到）',
+        baseline.probeBackdrop === 'none' || !/blur/.test(baseline.probeBackdrop),
         'probe=' + baseline.probeBackdrop);
-    check('kit 玻璃面板此时 backdrop-filter 实际未生效',
-        baseline.panelBackdrop === 'none' || !/blur/.test(baseline.panelBackdrop || ''),
-        'panel=' + baseline.panelBackdrop + ' bg=' + baseline.panelBg);
+    check('面板本体不再声明 backdrop-filter（v2.7.2 单层玻璃）',
+        baseline.panelBackdrop === 'none' || baseline.panelBackdrop === '',
+        'panel=' + baseline.panelBackdrop);
 
-    // ---- B. 修复：调用 syncGlassFallback 后自动挂 .nvui-solid 并回退不透明 ----
+    // ---- B. 修复：半透明回退 ----
     const after = await page.evaluate(() => {
-        const supported = window.NVUI
-            ? window.NVUI.syncGlassFallback({ force: true })
-            : null;
+        const supported = window.NVUI ? window.NVUI.syncGlassFallback({ force: true }) : null;
         const panel = document.querySelector('.nvui-panel');
         const pcs = panel ? getComputedStyle(panel) : null;
+        const cs = panel ? pcs : null;
         return {
             supported,
             htmlClass: document.documentElement.className,
-            panelBackdrop: pcs ? (pcs.backdropFilter || pcs.webkitBackdropFilter || '') : null,
-            panelBg: pcs ? pcs.backgroundColor : null,
-            panelBgOpaque: pcs ? !/rgba\([^)]*,\s*0?\.\d+\)/.test(pcs.backgroundColor) : null,
+            panelBackdrop: cs ? (cs.backdropFilter || cs.webkitBackdropFilter || '') : null,
+            panelBg: cs ? cs.backgroundColor : null,
         };
     });
     console.log('修复后：', JSON.stringify(after, null, 2));
 
-    check('NVUI.syncGlassFallback() 正确识别出模糊不可用',
-        after.supported === false, 'supported=' + after.supported);
-    check('根节点自动挂上 .nvui-solid（宿主 no-blur 自动实心回退）',
-        /nvui-solid/.test(after.htmlClass), after.htmlClass);
-    check('面板玻璃回退为不透明背景（不再是半透明底色 → 无重影）',
-        after.panelBgOpaque === true, 'bg=' + after.panelBg + ' backdrop=' + after.panelBackdrop);
-    check('回退后 backdrop-filter 已被关闭',
-        after.panelBackdrop === 'none', 'panel=' + after.panelBackdrop);
+    check('NVUI.syncGlassFallback() 正确识别出模糊不可用', after.supported === false, 'supported=' + after.supported);
+    check('根节点自动挂上 .nvui-glass-fallback（半透明回退，不再整块 .nvui-solid）',
+        /nvui-glass-fallback/.test(after.htmlClass) && !/nvui-solid/.test(after.htmlClass), after.htmlClass);
+    check('面板回退为半透明 strong 档（rgba 0.8，保留隐约玻璃感）',
+        /rgba\(\s*22\s*,\s*26\s*,\s*36\s*,\s*0?\.8\s*\)/.test(after.panelBg || ''), 'bg=' + after.panelBg);
+    check('回退后 backdrop-filter 已关闭', after.panelBackdrop === 'none', 'panel=' + after.panelBackdrop);
 
     await page.screenshot({ path: path.join(OUT, 'glass-fallback.png') });
 
-    // ---- C. 对照：摘掉 no-blur 后重探，模糊应恢复 ----
+    // ---- C. 对照：摘掉 no-blur 后自动恢复 ----
     const control = await page.evaluate(() => {
         document.body.classList.remove('no-blur');
-        document.documentElement.classList.remove('nvui-solid');
+        const supported = window.NVUI.syncGlassFallback({ force: true });
         const probe = document.createElement('div');
         probe.className = 'nvui-glass';
         probe.style.cssText = 'position:absolute;left:-9999px;width:1px;height:1px;';
         document.body.appendChild(probe);
         const bf = getComputedStyle(probe).backdropFilter || '';
         probe.remove();
-        return bf;
+        return { supported, htmlClass: document.documentElement.className, probe: bf };
     });
-    check('对照：移除 no-blur 后探测值恢复为 blur(...)（说明探测读的是实际计算值）',
-        /blur/.test(control), 'probe=' + control);
+    check('对照：移除 no-blur 后 supported 恢复 true', control.supported === true, 'supported=' + control.supported);
+    check('对照：自动回退类被移除（可逆）', !/nvui-glass-fallback/.test(control.htmlClass), control.htmlClass);
+    check('对照：探针 backdropFilter 恢复为 blur(...)', /blur/.test(control.probe), 'probe=' + control.probe);
+
+    // ---- D. 用户主动实心优先 ----
+    const solid = await page.evaluate(() => {
+        document.documentElement.classList.add('nvui-solid');
+        const panel = document.querySelector('.nvui-panel');
+        const cs = panel ? getComputedStyle(panel) : null;
+        return { bg: cs ? cs.backgroundColor : null, bf: cs ? (cs.backdropFilter || '') : null };
+    });
+    check('用户手动 .nvui-solid 优先级更高（不透明底 + 关闭模糊）',
+        solid.bg === 'rgb(22, 26, 36)' && solid.bf === 'none', JSON.stringify(solid));
+    await page.evaluate(() => document.documentElement.classList.remove('nvui-solid'));
 
     check('全程无控制台错误', errors.length === 0, errors.slice(0, 3).join(' | '));
 
+    fs.writeFileSync(path.join(OUT, 'glass-fallback.json'), JSON.stringify({ baseline, after, control, solid, checks }, null, 2));
     const failed = checks.filter((c) => !c.ok);
     console.log(`\n实机结果：通过 ${checks.length - failed.length}，失败 ${failed.length}`);
     await browser.close();

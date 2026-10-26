@@ -1,12 +1,12 @@
 /**
- * SillyTavern UI Kit v2.7.1「Flat Glass」· 规范守护测试（独立项目）
+ * SillyTavern UI Kit v2.7.2「Flat Glass」· 规范守护测试（独立项目）
  * 运行方式（在本目录下）: node test/test-ui-kit.js（或 npm test）
  *
  * 本文件只读取本项目内的文件，不依赖任何外部仓库/父目录，因此
  * 整个 ui-kit 目录可以被任意移动后直接运行。
  *
  * 覆盖：
- *  0) 项目文件结构、package.json 版本/元数据（2.7.1 + Flat Glass）；
+ *  0) 项目文件结构、package.json 版本/元数据（2.7.2 + Flat Glass）；
  *  1) token 完整性：CORE_TOKENS 显式登记 tokens.css 全部令牌（防漏登记/防幽灵/防僵尸），
  *     深色 110 / 浅色覆盖 47，命名合法，README 全覆盖；
  *  2) 配色规范：组件禁用硬编码颜色、颜色声明走 token、深/浅主题 WCAG AA、
@@ -361,8 +361,8 @@ for (const [name, p] of Object.entries(REQUIRED_FILES)) {
     check(`独立项目文件存在：${name}`, fs.existsSync(p) && fs.statSync(p).size > 10, p);
 }
 const KIT_VERSION = pkg.version;
-check('package.json 版本为合法 semver（2.7.1）',
-    /^2\.7\.1$/.test(String(KIT_VERSION)), String(KIT_VERSION));
+check('package.json 版本为合法 semver（2.7.2）',
+    /^2\.7\.2$/.test(String(KIT_VERSION)), String(KIT_VERSION));
 check('package.json 声明 MIT 许可且与 LICENSE 文件一致',
     pkg.license === 'MIT' && /^MIT License/.test(license));
 check('package.json scripts.test 指向项目内测试（可 npm test）',
@@ -916,18 +916,33 @@ check('.nvui-solid 实心模式：面板同样回退不透明并关闭模糊',
     solidRules.some((r) => /\.nvui-panel/.test(r.selector)
         && /background(?:-color)?\s*:[^;]*var\(--nvui-bg(?:-2)?\)/.test(r.body)
         && /backdrop-filter\s*:\s*none/.test(r.body)));
-/* 回归（ISSUES.md #15）：宿主用 `body.no-blur * { backdrop-filter: unset !important }`
- * 全局关模糊时，浏览器仍「支持」backdrop-filter → @supports 探测不到 → 玻璃只剩半透明底色，
- * 下层文字透出重影。kit 必须改用「读渲染后的实际计算值」来探测，并自动挂 .nvui-solid。 */
-check('玻璃能力探测：读实际计算值 backdropFilter（不靠 @supports），失效时挂 .nvui-solid',
+/* 回归（ISSUES.md #15/#16/#17）：宿主用 `body.no-blur * { backdrop-filter: unset !important }`
+ * 全局关模糊时，浏览器仍「支持」backdrop-filter → @supports 探测不到。
+ * v2.7.2 起：三态探测 + 半透明回退（.nvui-glass-fallback，不再整块 .nvui-solid）；
+ * 探测前临时摘掉降级类避免自锁，CSS 未就绪时 unknown 不落回退并重探。 */
+check('玻璃能力探测：读实际计算值 backdropFilter（不靠 @supports），三态 + 可逆',
     /detectGlassSupport/.test(apiSrc)
     && /getComputedStyle/.test(apiSrc)
     && /backdropFilter/.test(apiSrc)
-    && /classList\.add\(['"]nvui-solid['"]\)/.test(apiSrc)
-    && /syncGlassFallback/.test(apiSrc));
-check('createPanel / showToast 内置玻璃实心回退调用',
+    && /syncGlassFallback/.test(apiSrc)
+    && /function probeGlassState/.test(apiSrc)
+    && /unknown/.test(apiSrc)
+    && /clearGlassFallback/.test(apiSrc)
+    && /glassRecheckAttempts/.test(apiSrc));
+check('玻璃自动回退改为半透明类 .nvui-glass-fallback（不再把 .nvui-solid 作为自动回退）',
+    /nvui-glass-fallback/.test(apiSrc)
+    && /function syncGlassFallback[\s\S]{0,900}applyGlassFallback/.test(apiSrc)
+    && !/function syncGlassFallback[\s\S]{0,900}classList\.add\(['"]nvui-solid['"]\)/.test(apiSrc));
+const glassFallbackBodies = (componentsClean.match(/\.nvui-glass-fallback[^{]*\{[^}]*\}/g) || []).join('\n');
+check('CSS 半透明回退使用 --nvui-glass-bg-strong（AA 安全）且位于 .nvui-solid 之前（用户实心优先）',
+    /var\(--nvui-glass-bg-strong\)/.test(glassFallbackBodies)
+    && /backdrop-filter\s*:\s*none/.test(glassFallbackBodies)
+    && componentsClean.indexOf('.nvui-glass-fallback .nvui-overlay') >= 0
+    && componentsClean.indexOf('.nvui-glass-fallback .nvui-overlay') < componentsClean.indexOf('.nvui-solid .nvui-overlay'));
+check('createPanel / showToast / openLayer 内置玻璃回退调用',
     /function createPanel[\s\S]{0,400}syncGlassFallback\(\)/.test(apiSrc)
-    && /function showToast[\s\S]{0,200}syncGlassFallback\(\)/.test(apiSrc));
+    && /function showToast[\s\S]{0,200}syncGlassFallback\(\)/.test(apiSrc)
+    && /function openLayer[\s\S]{0,900}syncGlassFallback\(\)/.test(apiSrc));
 const rtRules = contextRules(/prefers-reduced-transparency:\s*reduce/);
 const rtBodies = joinedBodies(rtRules);
 check('prefers-reduced-transparency: reduce 降级块（玻璃回退不透明 + 关闭模糊）',
@@ -1268,15 +1283,19 @@ check('is-indicator 状态：显示指示器 + 接管选中态（active 按钮�
 
 // ---- 4.13 v2.1.0 新增：SillyTavern 插件面板布局标准（桌面居中 / 手机底部抽屉） ----
 const panelBaseBodies = plainRuleBodies('.nvui-panel').join('\n');
+/* v2.7.2：只检查「顶层基础规则」——降级块里的 .nvui-panel 仍应保留 backdrop-filter:none */
+const panelTopLevelBodies = joinedBodies(componentRules.filter((r) => r.context.length === 0
+    && r.selector.split(',').some((sel) => sel.trim() === '.nvui-panel')));
 const panelStructureMissing = [];
 if (!/background(?:-color)?\s*:[^;]*var\(--nvui-glass-bg\)/.test(panelBaseBodies)) panelStructureMissing.push('玻璃底 --nvui-glass-bg');
-if (!/backdrop-filter\s*:/.test(panelBaseBodies)) panelStructureMissing.push('backdrop-filter');
+/* v2.7.2：面板改为单层玻璃——模糊由遮罩层提供，面板本体不再叠 backdrop-filter */
+if (/backdrop-filter\s*:/.test(panelTopLevelBodies)) panelStructureMissing.push('面板基础规则不应再有 backdrop-filter（单层玻璃）');
 if (!/display:\s*flex/.test(panelBaseBodies)) panelStructureMissing.push('display:flex');
 if (!/flex-direction:\s*column/.test(panelBaseBodies)) panelStructureMissing.push('flex-direction:column');
 if (!/width:\s*min\(var\(--nvui-panel-width\),\s*100%\)/.test(panelBaseBodies)) panelStructureMissing.push('width:min(--nvui-panel-width,100%)');
 if (!/max-height:\s*var\(--nvui-panel-max-h\)/.test(panelBaseBodies)) panelStructureMissing.push('max-height:--nvui-panel-max-h');
-check('.nvui-panel 面板容器：玻璃表面 + flex 列 + width:min(--nvui-panel-width,100%) + max-height:--nvui-panel-max-h',
-    panelStructureMissing.length === 0, `缺少: ${panelStructureMissing.join(', ')}`);
+check('.nvui-panel 面板容器：玻璃底 + 单层玻璃（无自身 backdrop-filter）+ flex 列 + 固定宽高',
+    panelStructureMissing.length === 0, `缺少/违规: ${panelStructureMissing.join(', ')}`);
 
 const PANEL_PARTS = ['.nvui-panel-header', '.nvui-panel-title', '.nvui-panel-actions',
     '.nvui-panel-body', '.nvui-panel-footer', '.nvui-panel-heading'];
@@ -1711,11 +1730,11 @@ check('nvui-api 在 createPanel / showToast / openLayer 中同步宿主模态降
 check('宿主模态降级态不依赖 :modal 之外的选择器，且排除 kit 自身载体（不自我降级）',
     /dialog:modal/.test(apiSrc)
     && /classList\.contains\('nvui-tl'\)\)\s*continue/.test(apiSrc));
-check('版本号全量对齐 v2.7.1（package.json / tokens.json / tokens.css / components.css）',
-    pkg.version === '2.7.1'
-    && tokensJson.version === '2.7.1'
-    && /ui-kit v2\.7\.1/.test(tokensCss)
-    && /ui-kit v2\.7\.1/.test(componentsCss));
+check('版本号全量对齐 v2.7.2（package.json / tokens.json / tokens.css / components.css）',
+    pkg.version === '2.7.2'
+    && tokensJson.version === '2.7.2'
+    && /ui-kit v2\.7\.2/.test(tokensCss)
+    && /ui-kit v2\.7\.2/.test(componentsCss));
 // ---- 防模板漂移：st-extension-template/ui-kit/ 下每个资产文件都必须与根目录**逐文件**一致 ----
 // 历史教训：早期只校验了 nvui-api.js / components.css / tokens.css 三个文件，
 // 漏掉 tokens.json（机器可读镜像），导致副本版本号落后两版、且缺失 --nvui-z-layer
@@ -2074,7 +2093,7 @@ check('nvui-api: 令牌缓存带签名校验（class / 内联样式变化即重�
     /var sig = \(host\.className \|\| ''\)/.test(apiSrc)
     && /if \(hit && hit\.sig === sig\) return hit\.value;/.test(apiSrc));
 check('nvui-api: setTheme 后主动失效令牌缓存（NEW-10）',
-    /function setTheme\([\s\S]{0,500}invalidateTokenCache\(\);/.test(apiSrc)
+    /function setTheme\([\s\S]{0,900}invalidateTokenCache\(\);/.test(apiSrc)
     && /function invalidateTokenCache\(\)/.test(apiSrc));
 check('nvui-api: 令牌缓存可被宿主手动失效（导出 invalidateTokenCache）',
     /invalidateTokenCache:\s*invalidateTokenCache/.test(apiSrc));

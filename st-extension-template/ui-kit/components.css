@@ -1,7 +1,7 @@
 /**
  * SillyTavern 插件通用 UI Kit · 组件样式
  * ------------------------------------------------------------------
- * 版本：ui-kit v2.7.1；依赖：tokens.css（必须先引入或先拼进来）
+ * 版本：ui-kit v2.7.2；依赖：tokens.css（必须先引入或先拼进来）
  *
  * 本目录是独立项目（自带 package.json / LICENSE / CHANGELOG / test/），
  * 可整目录复制/移动到任意文件夹或仓库，不依赖任何外部文件。
@@ -1604,6 +1604,27 @@ dialog.nvui-tl.nvui-theme-light select.nvui-input,
     box-shadow: none;
 }
 
+/* v2.7.2 宿主禁用 blur 时的「半透明回退」：
+ * 运行时会探测实际计算值（例如 SillyTavern Fast UI 默认 body.no-blur）；
+ * 命中时给根节点加 .nvui-glass-fallback，保留半透明玻璃感而不是整块不透明。
+ * 使用 --nvui-glass-bg-strong（0.80），深色 text/text-2 = 12.27/5.59、浅色 11.34/4.64，AA 达标。
+ * 规则写在 .nvui-solid 之前且 specificity 相同 → 用户主动 .nvui-solid 仍可强制全实心。 */
+.nvui-glass-fallback .nvui-overlay {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+
+.nvui-glass-fallback .nvui-modal,
+.nvui-glass-fallback .nvui-panel,
+.nvui-glass-fallback .nvui-floating,
+.nvui-glass-fallback .nvui-tooltip,
+.nvui-glass-fallback .nvui-toast,
+.nvui-glass-fallback .nvui-glass {
+    background: var(--nvui-glass-bg-strong);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+
 /* 实心扁平模式：手动关闭玻璃（也用于「不喜欢透明」的用户偏好） */
 .nvui-solid .nvui-overlay {
     -webkit-backdrop-filter: none;
@@ -2064,8 +2085,8 @@ dialog.nvui-tl.nvui-theme-light select.nvui-input,
     min-height: 0;
     overflow: hidden;
     background: var(--nvui-glass-bg);
-    -webkit-backdrop-filter: blur(var(--nvui-glass-blur)) saturate(var(--nvui-glass-saturate));
-    backdrop-filter: blur(var(--nvui-glass-blur)) saturate(var(--nvui-glass-saturate));
+    /* v2.7.2：单层玻璃——遮罩层已提供 blur(12px)，面板不再叠加自身 backdrop-filter，
+     * 否则 Chrome 会二次采样遮罩的「已压暗+模糊」结果，反而把面板压成近实心。 */
     border-radius: var(--nvui-radius-xl);
     box-shadow: var(--nvui-shadow-modal);
     color: var(--nvui-text);

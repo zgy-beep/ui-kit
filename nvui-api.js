@@ -1,7 +1,7 @@
 /**
  * SillyTavern NVUI Kit · 可选运行时 API（零依赖）
  * ------------------------------------------------------------------
- * 版本：ui-kit v2.7.1（与 package.json / tokens.css / components.css 版本号保持一致）
+ * 版本：ui-kit v2.7.2（与 package.json / tokens.css / components.css 版本号保持一致）
  * 用途：给插件/其它软件一个「可调用的设计接口」——用函数创建符合本 Kit 规范的面板、
  *       标签页、折叠分组、开关行、输入行、进度条、吐司，自动带上布局标准、无障碍属性、
  *       动效降级与焦点管理，避免每个插件各写一套 DOM。
@@ -52,7 +52,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this), function () {
     'use strict';
 
-    var VERSION = '2.7.1';
+    var VERSION = '2.7.2';
     var PANEL_CLASS = 'nvui-panel';
     var TOAST_LAYER_ID = 'nvui-api-toast-layer';
 
@@ -395,64 +395,176 @@
         tokenCache = Object.create(null);
     }
 
-    /** 主题/实心切换：仅切类名，不写死任何颜色 */
+    /** 主题/实心切换：仅切类名，不写死任何颜色。
+     *  v2.7.2：不再无条件清除 `.nvui-solid`（那是用户主动的实心偏好，不能被切主题抹掉）；
+     *  只有显式传 `options.solid` 时才切换实心类。 */
     function setTheme(theme, options) {
         var host = (options && options.host) || (isDomAvailable() ? document.body : null);
         if (!host || !host.classList) { warn('setTheme(): 无效 host'); return; }
-        host.classList.remove('nvui-theme-light', 'nvui-solid');
+        host.classList.remove('nvui-theme-light');
         if (theme === 'light') host.classList.add('nvui-theme-light');
         else if (theme && theme !== 'dark') warn('setTheme(): 未知主题');
-        if (options && options.solid) host.classList.add('nvui-solid');
+        if (options && typeof options.solid === 'boolean') {
+            if (options.solid) host.classList.add('nvui-solid');
+            else host.classList.remove('nvui-solid');
+        }
         invalidateTokenCache();
     }
 
     /* ---------------------- 玻璃能力探测 ---------------------- */
     /*
-     * v2.2.0 修订补丁（ISSUES.md #15）：部分宿主（如 SillyTavern 的 FastUI）
-     * 会用 `body.no-blur * { backdrop-filter: unset !important }` 全局关掉模糊。
+     * v2.2.0（ISSUES.md #15）：部分宿主（如 SillyTavern 的 Fast UI）会用
+     * `body.no-blur * { backdrop-filter: unset !important }` 全局关掉模糊。
+     * 浏览器仍然「支持」backdrop-filter，所以 @supports 探测不到，必须读渲染后的实际计算值。
      *
-     * 为什么 CSS 探测不出来：
-     *   `@supports not (backdrop-filter: blur(1px))` 问的是「**浏览器**是否支持
-     *   backdrop-filter」。宿主把属性 unset 之后浏览器**仍然支持**，所以
-     *   `@supports` 的降级分支根本不触发 —— 结果是玻璃只剩半透明底色，
-     *   下层文字直接透出来，形成重影。
-     *
-     * 做法：不猜宿主类名（避免与宿主耦合），而是**探测渲染后的实际计算值**：
-     *   造一个带 `.nvui-glass` 的隐藏探针挂到 body，读它的 computed
-     *   `backdropFilter`；若为 `none` 说明模糊已被外部禁用。
-     * 命中即给根节点挂 `.nvui-solid`，kit 全部玻璃回退为不透明表面。
+     * v2.7.2（ISSUES.md #16/#17）修正三件事：
+     *   1. 回退不再整块不透明：宿主禁用模糊时给根节点加 `.nvui-glass-fallback`，
+     *      CSS 用 `--nvui-glass-bg-strong`（0.80）做半透明回退，保留玻璃观感且 AA 安全；
+     *      `.nvui-solid` 只保留给「用户主动要全不透明」。
+     *   2. 三态探测：`supported` / `unsupported` / `unknown`。unknown 表示 kit CSS 尚未就绪，
+     *      此时不写缓存、不落回退，并安排有限次重探（load / fonts / 定时器）。
+     *   3. 可逆与「不自杀」：探测前临时摘掉 `.nvui-solid` 与 `.nvui-glass-fallback`，避免探针被 kit
+     *      自己的降级规则压成 none 而永久误判；恢复支持时移除自动回退。
      */
-    var glassSupportCache = null;
+    var GLASS_FALLBACK_CLASS = 'nvui-glass-fallback';
+    var glassState = { state: null, reason: '', key: '' };
+    var glassRecheckTimer = null;
+    var glassRecheckAttempts = 0;
 
-    function detectGlassSupport(options) {
-        if (!isDomAvailable() || !document.body) return true;
-        if (glassSupportCache !== null && !(options && options.force)) return glassSupportCache;
+    function kitCssReady() {
+        if (!isDomAvailable()) return true;
+        try {
+            return !!getComputedStyle(document.documentElement).getPropertyValue('--nvui-glass-blur').trim();
+        } catch (err) {
+            return false;
+        }
+    }
+
+    function hasUserSolid() {
+        if (!isDomAvailable()) return false;
+        var de = document.documentElement;
+        var body = document.body;
+        return !!((de && de.classList && de.classList.contains('nvui-solid'))
+            || (body && body.classList && body.classList.contains('nvui-solid')));
+    }
+
+    function glassSignature() {
+        if (!isDomAvailable()) return 'node';
+        var reduce = '0';
+        try {
+            if (window.matchMedia && window.matchMedia('(prefers-reduced-transparency: reduce)').matches) reduce = '1';
+        } catch (err) { /* matchMedia 不可用时忽略 */ }
+        var rootClass = (document.documentElement.className || '').replace(/\bnvui-glass-fallback\b/, '').replace(/\s+/g, ' ').trim();
+        return [
+            rootClass,
+            (document.body && document.body.className) || '',
+            reduce,
+            kitCssReady() ? 'css' : 'nocss',
+            hasUserSolid() ? 'solid' : 'nosolid',
+        ].join('|');
+    }
+
+    function applyGlassFallback(root) {
+        if (root && root.classList) root.classList.add(GLASS_FALLBACK_CLASS);
+    }
+
+    function clearGlassFallback(root) {
+        if (root && root.classList && root.classList.contains(GLASS_FALLBACK_CLASS)) {
+            root.classList.remove(GLASS_FALLBACK_CLASS);
+        }
+    }
+
+    /** 探测一次玻璃能力；探测前后恢复用户的 `.nvui-solid` / 自动回退属性（避免自锁）。 */
+    function probeGlassState() {
+        if (!isDomAvailable() || !document.body) return { state: 'supported', reason: 'no-dom' };
+        if (!kitCssReady()) return { state: 'unknown', reason: 'kit-css-not-ready' };
+        var de = document.documentElement;
+        var body = document.body;
+        var restoreSolid = [];
+        var restoreFallback = false;
+        if (de && de.classList && de.classList.contains(GLASS_FALLBACK_CLASS)) {
+            de.classList.remove(GLASS_FALLBACK_CLASS);
+            restoreFallback = true;
+        }
+        if (de && de.classList && de.classList.contains('nvui-solid')) { de.classList.remove('nvui-solid'); restoreSolid.push(de); }
+        if (body && body.classList && body.classList.contains('nvui-solid')) { body.classList.remove('nvui-solid'); restoreSolid.push(body); }
         var probe = document.createElement('div');
         probe.className = 'nvui-glass';
         probe.setAttribute('aria-hidden', 'true');
         probe.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:-9999px;top:0;';
         document.body.appendChild(probe);
-        var cs = window.getComputedStyle(probe);
-        var bf = cs.backdropFilter || cs.webkitBackdropFilter || '';
-        glassSupportCache = !(bf === 'none' || bf === '' || bf === 'unset');
+        var state = 'supported';
+        var reason = '';
         try {
-            probe.parentNode.removeChild(probe);
+            var cs = window.getComputedStyle(probe);
+            var bf = cs.backdropFilter || cs.webkitBackdropFilter || '';
+            if (bf === 'none' || bf === 'unset') { state = 'unsupported'; reason = 'backdrop-filter-disabled'; }
+            else if (bf === '') { state = 'unknown'; reason = 'no-computed-backdrop-filter'; }
         } catch (err) {
-            /* 忽略：探针已从文档移除失败不影响结论 */
+            state = 'unknown';
+            reason = 'probe-failed';
         }
-        return glassSupportCache;
+        try { probe.parentNode.removeChild(probe); } catch (err) { /* 忽略移除失败 */ }
+        for (var i = 0; i < restoreSolid.length; i++) restoreSolid[i].classList.add('nvui-solid');
+        if (de && restoreFallback) de.classList.add(GLASS_FALLBACK_CLASS);
+        return { state: state, reason: reason };
+    }
+
+    /** 有限次重探：覆盖「脚本先于 kit CSS 执行」的加载顺序竞争（CDN / 模块顶层调用）。 */
+    function scheduleGlassRecheck() {
+        if (!isDomAvailable() || glassRecheckTimer || glassRecheckAttempts >= 5) return;
+        glassRecheckTimer = setTimeout(function () {
+            glassRecheckTimer = null;
+            glassRecheckAttempts += 1;
+            glassState = { state: null, reason: '', key: '' };
+            syncGlassFallback();
+        }, 120);
+        if (glassRecheckAttempts === 0) {
+            if (window.addEventListener && document.readyState !== 'complete') {
+                window.addEventListener('load', function onLoad() {
+                    window.removeEventListener('load', onLoad);
+                    syncGlassFallback({ force: true });
+                }, { once: true });
+            }
+            if (document.fonts && document.fonts.ready && document.fonts.ready.then) {
+                document.fonts.ready.then(function () { syncGlassFallback({ force: true }); });
+            }
+        }
     }
 
     /**
-     * 探测玻璃能力；模糊被宿主禁用时自动给根节点挂 `.nvui-solid`（实心回退）。
-     * 返回 true 表示模糊可用。
+     * 玻璃能力探测（公开 API，返回值保持布尔以兼容 v2.7.1）：
+     * true = 模糊可用或暂未确定（unknown 不落回退）；false = 确定被宿主/浏览器禁用。
+     * 结果按「根/body class + 减少透明度偏好 + CSS 就绪 + 用户实心偏好」签名缓存。
+     */
+    function detectGlassSupport(options) {
+        if (!isDomAvailable() || !document.body) return true;
+        var force = !!(options && options.force);
+        var key = glassSignature();
+        if (!force && glassState.state !== null && glassState.key === key) return glassState.state !== 'unsupported';
+        var result = probeGlassState();
+        glassState = { state: result.state, reason: result.reason, key: key };
+        glassRecheckAttempts = 0;
+        if (result.state === 'unknown') scheduleGlassRecheck();
+        return result.state !== 'unsupported';
+    }
+
+    /**
+     * 探测玻璃能力并同步自动回退：
+     * - unsupported（宿主禁用模糊，如 SillyTavern Fast UI 默认 body.no-blur）：
+     *   给根节点加 `.nvui-glass-fallback`，CSS 用半透明 strong 档回退；用户 `.nvui-solid` 优先。
+     * - supported：移除自动回退（可逆）。
+     * - unknown：保持现状，等待重探。
+     * 返回 true 表示模糊可用（与 v2.7.1 兼容）。
      */
     function syncGlassFallback(options) {
         var supported = detectGlassSupport(options);
-        if (!supported) {
-            var root = (options && options.host) || document.documentElement;
-            if (root) root.classList.add('nvui-solid');
-        }
+        if (!isDomAvailable()) return supported;
+        var root = (options && options.host) || document.documentElement;
+        if (!root) return supported;
+        var state = glassState.state;
+        if (state === 'unsupported' && !hasUserSolid()) applyGlassFallback(root);
+        else if (state === 'supported') clearGlassFallback(root);
         return supported;
     }
 
@@ -470,8 +582,9 @@
             overlayEl.__nvuiCloseTimer = null;
         }
         overlayEl.classList.remove('is-closing');
-        /* 打开瞬间同步一次宿主模态降级态 */
+        /* 打开瞬间同步一次宿主模态降级态与玻璃能力（v2.7.2：宿主可能在面板创建后才切换 Fast UI） */
         syncHostModalState();
+        syncGlassFallback();
         if (dialogEl.open) {
             overlayEl.hidden = false;
             return;

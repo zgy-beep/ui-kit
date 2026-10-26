@@ -1,6 +1,6 @@
 # SillyTavern 插件 UI Kit · Flat Glass 设计规范
 
-> 版本：**v2.7.1**（2026-10-23）· 设计语言 **Flat Glass（扁平玻璃）** · 零依赖 · 可整目录复用
+> 版本：**v2.7.2**（2026-10-26）· 设计语言 **Flat Glass（扁平玻璃）** · 零依赖 · 可整目录复用
 
 给 SillyTavern 插件用的自包含浮动 UI 设计系统：两个 CSS 文件接入即可获得一致的弹窗、面板、表单、反馈与动效；需要时再加一个零依赖 JS API 生成符合规范的 DOM。**样式层没有运行时；`nvui-api.js` 是可选增强。**
 
@@ -229,11 +229,11 @@ API 生成的 DOM 自动符合 [§12](#12-sillytavern-插件面板布局标准�
 
 ```html
 <!-- 设计令牌与组件样式 -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.7.1/tokens.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.7.1/components.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.7.2/tokens.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.7.2/components.css">
 
 <!-- 可选运行时 API -->
-<script src="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.7.1/nvui-api.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.7.2/nvui-api.js"></script>
 ```
 
 > 三份资源必须锁定**同一个 tag**，避免令牌、样式与运行时版本漂移；CDN 缓存刷新可能略晚于 tag 推送。
@@ -246,17 +246,21 @@ API 生成的 DOM 自动符合 [§12](#12-sillytavern-插件面板布局标准�
 async function ensureNVUI() {
     const W = window.parent || window, D = W.document;
     if (W.NVUI) return W.NVUI;
-    const CDN = 'https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.7.1'; // 三份资源锁同一 tag
-    if (!D.getElementById('nvui-css-tokens')) {
+    const CDN = 'https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.7.2'; // 三份资源锁同一 tag
+
+    // v2.7.2：先等 CSS 就绪再初始化，否则玻璃探测会在 CSS 缺席时误判为「不支持模糊」
+    const loadCss = (id, href) => new Promise((resolve, reject) => {
+        const existing = D.getElementById(id);
+        if (existing && existing.sheet) { resolve(); return; }
         const link = D.createElement('link');
-        link.id = 'nvui-css-tokens'; link.rel = 'stylesheet'; link.href = `${CDN}/tokens.css`;
+        link.id = id; link.rel = 'stylesheet'; link.href = href;
+        link.onload = resolve;
+        link.onerror = () => reject(new Error('NVUI: 样式加载失败 ' + href));
         D.head.appendChild(link);
-    }
-    if (!D.getElementById('nvui-css-components')) {
-        const link = D.createElement('link');
-        link.id = 'nvui-css-components'; link.rel = 'stylesheet'; link.href = `${CDN}/components.css`;
-        D.head.appendChild(link);
-    }
+    });
+    await loadCss('nvui-css-tokens', `${CDN}/tokens.css`);
+    await loadCss('nvui-css-components', `${CDN}/components.css`);
+
     if (!W.NVUI) {
         await new Promise((resolve, reject) => {
             const s = D.createElement('script');
@@ -394,19 +398,21 @@ function trapFocus(modal, e) {
 ### 2.4 玻璃与降级
 
 - 玻璃只用于浮层：`.nvui-overlay` / `.nvui-modal` / `.nvui-panel` / `.nvui-floating` / `.nvui-tooltip` / `.nvui-toast` / `.nvui-glass`。
+- **单层玻璃（v2.7.2）**：面板与弹窗的「磨砂」由遮罩层（`.nvui-overlay`，`blur(12px)`）提供，面板本体只负责半透明底色与受光/阴影；面板不再叠自己的 `backdrop-filter`，否则 Chrome 会二次采样遮罩的「已压暗 + 模糊」结果，把面板压成近实心（实测背景细节透出从 12.1% 提升到 32.9%）。
 - 弹窗级用 `--nvui-glass-bg`（`rgba(22, 26, 36, 0.64)`，背后有遮罩压暗，正文与次要文字双 AA）；直接叠在宿主上的 popover 级用 `--nvui-glass-bg-strong`（`rgba(22, 26, 36, 0.8)`，**只承诺正文 `--nvui-text` 的 AA**）。口径见 [§4.4](#44-aa-安全玻璃与合成对比度验算)。
 - 圆角玻璃表面（弹窗 / 面板 / 悬浮面板 / 工具提示 / 吐司 / `.nvui-glass`）**不画 1px 外框描边**：圆角处的 1px 半透明描边在缩放时会出现亚像素锯齿，改用「柔和顶部受光（`--nvui-glass-highlight`）+ 阴影」成形。header / footer / 导航底边这类直线分隔保留 1px（`--nvui-glass-line`）。
-- 四层降级链（`components.css` 已内置，业务无需处理）：
+- 五层降级链（`components.css` 已内置，业务无需处理）：
 
 | 降级条件 | CSS 行为 |
 | :--- | :--- |
 | 浏览器不支持 `backdrop-filter` | `@supports not (...)` 回退为不透明表面 |
 | 用户系统开启「减少透明度」 | `prefers-reduced-transparency: reduce` 回退为不透明表面 |
 | 强制颜色 / 高对比模式 | `forced-colors: active` 用系统色 `CanvasText` 描边，去阴影与模糊 |
-| 用户不想要透明 / 低性能设备 | 根节点加 `.nvui-solid` 实心模式 |
+| **宿主全局禁用模糊**（如酒馆 Fast UI 默认 `body.no-blur`） | 运行时读实际计算值后给根节点加 `.nvui-glass-fallback`：改用 `--nvui-glass-bg-strong` 的**半透明回退**（深色 text-2 5.59、浅色 4.64，AA 达标），不再整块不透明 |
+| 用户主动不想要透明 / 低性能设备 | 根节点加 `.nvui-solid` 强制实心（优先级高于自动回退） |
 
-- 窄屏（`max-width: 600px`）弹窗自动降档为 `--nvui-glass-blur-sm`（12px）降低移动端 GPU 开销，保留 `92dvh` 与安全区规则。
-- 宿主若全局禁用了模糊（例如酒馆的 `body.no-blur`），`@supports` 探测不到；运行时 API 会读取**渲染后的实际计算值**并自动加 `.nvui-solid`，见 §7.2。
+- 窄屏（`max-width: 600px`）弹窗自动降档为 `--nvui-glass-blur-sm`（12px）降低移动端 GPU 开销，保留 `92dvh` 与安全区规则；面板本身已无 `backdrop-filter`，无需再降档。
+- **真实酒馆默认观感说明**：SillyTavern `fast_ui_mode` 默认 `true`，宿主会给 `body` 加 `no-blur` 并全局 `unset !important` 掉 `backdrop-filter`。kit 会自动进入半透明回退（`.nvui-glass-fallback`），在面板上仍能看到背景大色块的隐约透出；想要完全玻璃效果需在酒馆设置里关闭 Fast UI 模式。运行时 API 的探测/回退/恢复见 §7.2。
 
 ### 2.5 折叠面板 DOM（破坏性变更）
 
@@ -726,6 +732,8 @@ head.addEventListener('click', () => {
 
 > 口径：按「深色主题宿主纯白 / 浅色主题宿主纯黑」的最坏情况计算。若宿主本身就是典型深色 `#161a24`，浅色弹窗级为 9.70 / 4.83，比表中的最坏值更宽松，仅作参考。
 
+> **自动半透明回退（v2.7.2，`.nvui-glass-fallback`）**：宿主禁用模糊时叠 `--nvui-glass-bg-strong`（0.80）——深色 text 12.27 / text-2 5.59，浅色 11.34 / 4.64，**仍保持双 AA**；这是「不再整块不透明」的依据。
+
 **AA 政策**
 
 1. **弹窗级玻璃**（`.nvui-modal`，背后有遮罩压暗）：正文与次要文字都承诺不低于 4.5:1，可以放心用 `text-2` 写说明。
@@ -1019,7 +1027,8 @@ head.addEventListener('click', () => {
 | :--- | :--- |
 | `.nvui-glass` | 默认 strong 档（`--nvui-glass-bg-strong`）+ 20px 模糊 + `--nvui-shadow-pop`；无外框描边，靠顶部受光与阴影成形；文字用 `--nvui-text` |
 | `.nvui-glass.is-subtle` | 弹窗级低档（`--nvui-glass-bg`）+ 12px 模糊、去阴影；仅当底下已有遮罩或深色画布时使用 |
-| `.nvui-solid` | 根节点加类：`overlay` / `modal` / `panel` / `floating` / `tooltip` / `toast` / `glass` 全部改不透明底并 `backdrop-filter: none` |
+| `.nvui-solid` | 用户主动实心：`overlay` / `modal` / `panel` / `floating` / `tooltip` / `toast` / `glass` 全部改不透明底并 `backdrop-filter: none` |
+| `.nvui-glass-fallback` | **自动**半透明回退（v2.7.2，运行时探测到宿主禁用模糊时加在根节点）：改用 `--nvui-glass-bg-strong` 并关模糊；`.nvui-solid` 优先级更高，可覆盖它 |
 
 降级链由 `components.css` 内置，业务不写分支：
 
@@ -1029,7 +1038,7 @@ head.addEventListener('click', () => {
 | `prefers-reduced-transparency: reduce` | 同上，并 `backdrop-filter: none` |
 | `forced-colors: active` | 玻璃表面加 `1px solid CanvasText`，去阴影与模糊 |
 | 窄屏（`max-width: 600px`） | 弹窗模糊降档为 `--nvui-glass-blur-sm` |
-| 宿主全局禁用模糊 | `NVUI.syncGlassFallback()` 读渲染后的计算值，自动挂 `.nvui-solid`（`createPanel` / `showToast` 已内置） |
+| 宿主全局禁用模糊（Fast UI / `body.no-blur`） | `NVUI.syncGlassFallback()` 读实际计算值，自动加 `.nvui-glass-fallback`（半透明 strong 档，不再整块 `.nvui-solid`）；CSS 就绪前不落回退并自动重探 |
 
 规则：`.nvui-glass` 直接叠在任意宿主背景上时必须用默认 strong 档，只有确认底下已有遮罩 / 深色画布时才用 `.is-subtle`；popover 玻璃上的说明文字一律用 `--nvui-text`。无障碍：玻璃只做视觉层次，状态语义必须由实色文字 / 图标 / 圆点承担。
 
@@ -1542,7 +1551,7 @@ function showToast(text, kind = 'success') {
 9. **`backdrop-filter` 玻璃要管好兼容、性能与降级。**
    - 每个 `backdrop-filter` 必须同时写 `-webkit-backdrop-filter`（Safari / 旧 WebKit），顺序不能反；
    - 只用于小面积浮层，不给全屏静态区块用；窄屏自动降档 `--nvui-glass-blur-sm`；不要在动画里改 `blur` 半径（会逐帧重采样）；
-   - 回退链：`@supports not (...)` 回退不透明、`prefers-reduced-transparency: reduce` 回退不透明、`forced-colors: active` 用系统色描边、`.nvui-solid` 手动实心（详见 [§2.4](#24-玻璃与降级)）；
+   - 回退链：`@supports not (...)` 回退不透明、`prefers-reduced-transparency: reduce` 回退不透明、`forced-colors: active` 用系统色描边、`.nvui-solid` 手动实心、以及 v2.7.2 新增的宿主禁模糊自动半透明回退 `.nvui-glass-fallback`（详见 [§2.4](#24-玻璃与降级)）；
    - 不要用玻璃表达状态：状态色必须是实色文字/图标/圆点。
 10. **宿主模态弹窗期间，kit 浮层必须主动让位。** 宿主 `dialog.showModal()` 会给整个文档加 `inert`，`inert` 元素不参与命中测试，因此 kit 浮层**物理上不可能**既压过模态又保持可交互——任何 z-index / top layer 手段都无效（`popover="manual"` 亦然，实测证伪）。正确做法是让载体自动加 `.is-host-modal`（不可点 + 压暗 + 去色），宿主模态关闭后自动还原；kit 的运行时已内置该机制，宿主无需配合。详见 [§13.7](#137-载体与宿主模态主动让位而非硬压)。
 11. **表单控件的宿主 `!important` 覆盖必须用「有界作用域 + 精确属性」夺回。** 第三方主题会对 `input` / `select` / `textarea` 下 `background: ... !important`，裸类 `.nvui-input`（0,1,0）必输，浅色主题会出现「深底深字」。kit 只在 `dialog.nvui-tl` / `.nvui-panel` 两个默认载体，以及显式加 `.nvui-form-scope` 的自定义容器内，对 `background` / `color` / `border` / `select margin` / `:hover background` / `option` 的 `background`+`color` 使用 `!important`（共 7 条，预算见 [§9](#9-命名与工程约定)）。
@@ -1764,9 +1773,9 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 
 **升级动作**：覆盖 CSS 与 `nvui-api.js`（新 API 全部为增量，旧代码无需修改）；宿主用 `showModal()` 时 kit 自动让位，业务无需改动；运行 `npm test`。
 
-### 10.10 v2.4.0 → v2.7.1 升级速查
+### 10.10 v2.4.0 → v2.7.2 升级速查
 
-从 v2.4.0 及更早版本升到当前 v2.7.1，按版本顺序做这几件事即可（**全部为小版本/补丁，覆盖文件即可，无破坏性变更**）：
+从 v2.4.0 及更早版本升到当前 v2.7.2，按版本顺序做这几件事即可（**全部为小版本/补丁，覆盖文件即可，无破坏性变更**）：
 
 | 版本 | 类型 | 你需要做什么 |
 | :--- | :--- | :--- |
@@ -1774,6 +1783,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 | v2.6.0 | 小版本 | 可选：`.nvui-checkbox` 独立复选框（批量选择）；宿主表单隔离层自动生效（`dialog.nvui-tl` / `.nvui-panel` 内 7 条有界 `!important`，修复浅色「深底深字」）；`innerHTML` 注入的折叠条用 `panel.trackAccordion()` / `panel.adoptAccordions()` 接入持久化（默认不接管点击，传 `{ bind: true }` 才绑定）。 |
 | v2.7.0 | 小版本 | 可选：自定义普通容器加 `.nvui-form-scope` 复用表单隔离；修复 `optgroup` 主题配色、焦点陷阱与宿主模态期间 Esc。组件类 79 → 80。 |
 | v2.7.1 | 补丁 | 无需改动：只修浏览器回归测试时序（半选 checkbox 等待最终计算值），组件样式、公开 API、状态格式、token 与 DOM 契约不变。 |
+| v2.7.2 | 补丁 | 覆盖 4 个运行资产即可：玻璃透明感修复（面板改单层玻璃、宿主 Fast UI 默认关模糊时改半透明回退而不是全不透明、玻璃探测三态化并可自愈）。无需改 DOM / API / 状态；建议目检深/浅主题与 Fast UI 开关两态。 |
 
 **高频 FAQ**
 
@@ -1815,7 +1825,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 
 ### 11.3 Git tag 与 GitHub Releases
 
-1. **Tag 命名**：统一 `vX.Y.Z`（如 `v2.7.1`），禁止裸数字 `2.7.1` 或大写 `V2.7.1`。
+1. **Tag 命名**：统一 `vX.Y.Z`（如 `v2.7.2`），禁止裸数字 `2.7.2` 或大写 `V2.7.2`。
 2. **附注标签**：使用 `git tag -a vX.Y.Z -m "..."`，禁止轻量标签；发布包含版本概要。
 3. **Release Notes**：每个 GitHub Release 包含版本定位、核心更新/缺陷（关联 Issue 编号）、兼容性说明与自动化验证数据。
 4. **发布顺序**：`npm test` 通过 → 同步 9 处版本与模板副本 → `preview.html` 目测 → 打 tag → 创建 Release。
@@ -1826,6 +1836,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 
 | 版本 | 日期 | 类型 | 一句话摘要 |
 | :--- | :--- | :--- | :--- |
+| v2.7.2 | 2026-10-26 | 补丁 | 玻璃透明感修复：面板单层玻璃；宿主禁模糊时半透明回退（`.nvui-glass-fallback`）；探测三态化 + 可逆自愈；`setTheme()` 不再误清用户实心偏好 |
 | v2.7.1 | 2026-10-23 | 补丁 | 修 GitHub #15：半选 checkbox 浏览器回归等待最终计算值；CSS / API / DOM 不变 |
 | v2.7.0 | 2026-10-23 | 小版本 | 新增 opt-in `.nvui-form-scope`；修复 #12 `optgroup`、#13 焦点、#14 宿主模态 Esc；组件类 80 |
 | v2.6.0 | 2026-10-21 | 小版本 | 新增 `.nvui-checkbox`、宿主表单隔离层（#9）、折叠条接管入口（#11）；`!important` 预算 14 |
@@ -1891,7 +1902,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 
 | 类名 | 说明 |
 | :--- | :--- |
-| `.nvui-panel` | 面板本体：`display:flex; flex-direction:column`；`width: min(var(--nvui-panel-width), 100%)`；**固定高** `var(--nvui-panel-max-h)`；`min-height:0; overflow:hidden`；玻璃 + `--nvui-radius-xl` + `--nvui-shadow-modal` |
+| `.nvui-panel` | 面板本体：`display:flex; flex-direction:column`；`width: min(var(--nvui-panel-width), 100%)`；**固定高** `var(--nvui-panel-max-h)`；`min-height:0; overflow:hidden`；**单层玻璃**（v2.7.2：`--nvui-glass-bg` 底色 + 遮罩层提供 `blur(12px)`，本体不叠 `backdrop-filter`）+ `--nvui-radius-xl` + `--nvui-shadow-modal` |
 | `.nvui-panel-header` | 标题栏：标题 + 右侧操作区，`justify-content:space-between`，底部直线分隔，`flex-shrink:0` |
 | `.nvui-panel-title` | 面板标题：`--nvui-fs-2xl` 粗体、单行省略；`aria-labelledby` 指向它 |
 | `.nvui-panel-actions` | 右侧操作区（`.nvui-icon-btn` 组，含关闭按钮），`flex-shrink:0` |
@@ -2156,7 +2167,7 @@ function setupPanelNav(panelEl, controller) {
 ```js
 // Node（测试 / 构建期静态生成；不触发 DOM）
 const NVUI = require('./nvui-api.js');
-console.log(NVUI.version);            // 与 package.json 一致（当前 2.7.1）
+console.log(NVUI.version);            // 与 package.json 一致（当前 2.7.2）
 console.log(typeof NVUI.createPanel); // 'function'
 ```
 
@@ -2171,9 +2182,9 @@ console.log(typeof NVUI.createPanel); // 'function'
 | `NVUI.defaultStorageAdapter` | 默认 `localStorage` 适配器（键前缀 `nvui_state_<id>`），可替换为自定义 StorageAdapter | `object` |
 | `NVUI.getToken(name, scope?)` | 读取当前作用域的 CSS 变量值（如 `getToken('--nvui-accent')`）；内置缓存，宿主的 class / 内联样式一变即自动重算 | `string` |
 | `NVUI.invalidateTokenCache()` | 手动让令牌缓存失效；宿主在 kit 之外改样式表且未触发 class / 内联样式变化时调用（`setTheme()` 内部已自动调用） | `void` |
-| `NVUI.setTheme(theme, options?)` | 切换主题 / 实心模式（`theme: 'light'`、`options.solid: true`；只切类名，不写颜色） | `void` |
-| `NVUI.detectGlassSupport(options?)` | 探测宿主是否**实际**禁用了 `backdrop-filter`（读渲染后的计算值，不猜宿主类名） | `boolean` |
-| `NVUI.syncGlassFallback(options?)` | 探测并在模糊不可用时自动给根节点加 `.nvui-solid`；`createPanel()` / `showToast()` 已内置 | `boolean` |
+| `NVUI.setTheme(theme, options?)` | 切换主题 / 实心模式（`theme: 'light'`、`options.solid: true/false`；只切类名，不写颜色）。v2.7.2 起不再无条件清除 `.nvui-solid`：不传 `options.solid` 时保留用户实心偏好 | `void` |
+| `NVUI.detectGlassSupport(options?)` | 探测宿主是否**实际**禁用了 `backdrop-filter`（读渲染后的计算值，不猜宿主类名）。内部为 supported / unsupported / unknown 三态；kit CSS 未就绪时返回 `true` 并自动重探（不落回退） | `boolean` |
+| `NVUI.syncGlassFallback(options?)` | 探测并同步自动回退：模糊不可用时给根节点加 `.nvui-glass-fallback`（半透明 strong 档，**不再整块 `.nvui-solid`**），恢复后自动移除；`createPanel()` / `showToast()` / `openLayer()` 已内置 | `boolean` |
 | `NVUI.countHostModals()` | 统计处于模态状态的**宿主**原生 `<dialog>` 数量（用 `:modal` 伪类，自动排除 kit 自身载体） | `number` |
 | `NVUI.syncHostModalState()` | 同步宿主模态降级态（加 / 移 `.is-host-modal`），返回当前宿主模态数 | `number` |
 | `NVUI.getCarrierState()` | 查询载体与宿主模态的层级快照（诊断 / 宿主集成用） | `object` |
@@ -2249,7 +2260,7 @@ panel.open();
 ```json
 {
   "name": "sillytavern-nvui-kit-tokens",
-  "version": "2.7.1",
+  "version": "2.7.2",
   "description": "SillyTavern UI Kit 设计令牌机器可读镜像（由 tokens.css 生成，勿手改）。dark = 深色默认，light = .nvui-theme-light 覆盖。",
   "generatedFrom": "tokens.css",
   "dark": { "--nvui-bg": "#161a24", "--nvui-accent": "#8b6dff", "...": "共 110 个令牌" },
