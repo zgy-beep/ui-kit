@@ -525,7 +525,7 @@ async function checkGitHubRelease() {
 
 ### 6.2 历史版本与兼容基准
 
-- 当前：**v2.7.2**（玻璃透明感修复：面板改单层玻璃；宿主禁用模糊时自动 97% 近不透明回退 `.nvui-glass-fallback`，不再整块不透明；探测三态化并可自愈；`setTheme()` 不再误清用户 `.nvui-solid`；token / 组件类 / 公开 API 签名不变）。
+- 当前：**v2.7.2**（玻璃透明感修复：面板保持透明 + 自身 `backdrop-filter` 背后模糊；宿主禁用模糊时自动 97% 近不透明回退 `.nvui-glass-fallback`，不再整块不透明；探测三态化并可自愈；`setTheme()` 不再误清用户 `.nvui-solid`；token / 组件类 / 公开 API 签名不变）。
 - 上一版：**v2.7.1**（修复 GitHub #15 的半选 checkbox 浏览器回归偶发中间帧断言；组件样式、token 取值、公开 API 和 DOM 契约不变）。
 - 上一版：**v2.7.0**（已打 tag；opt-in `.nvui-form-scope` 表单作用域，并修复 GitHub #12 的默认载体 `optgroup` 配色、#13 的焦点管理、#14 的宿主模态 Esc；`!important` 预算仍 14，token 取值与公开 API 不变；组件类 80；0 破坏性变更）。
 - 上一版：**v2.6.0**（独立复选框 `.nvui-checkbox` + 宿主表单控件隔离层 + 折叠条接管入口；组件类 79；0 破坏性变更，100% 向后兼容）。

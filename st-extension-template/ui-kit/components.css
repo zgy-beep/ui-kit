@@ -2091,8 +2091,11 @@ dialog.nvui-tl.nvui-theme-light select.nvui-input,
     min-height: 0;
     overflow: hidden;
     background: var(--nvui-glass-bg);
-    /* v2.7.2：单层玻璃——遮罩层已提供 blur(12px)，面板不再叠加自身 backdrop-filter，
-     * 否则 Chrome 会二次采样遮罩的「已压暗+模糊」结果，反而把面板压成近实心。 */
+    /* v2.7.2：玻璃态必须由「面板自身 backdrop-filter」提供——面板透明，但面板背后的内容要模糊。
+     * 遮罩的 blur(12px) 负责整页磨砂/压暗，面板再叠 blur(20px) 保证面板区域背后的聊天内容不可读。
+     * 宿主禁用 blur 时（Fast UI）由 .nvui-glass-fallback 统一关闭并改近不透明档。 */
+    -webkit-backdrop-filter: blur(var(--nvui-glass-blur)) saturate(var(--nvui-glass-saturate));
+    backdrop-filter: blur(var(--nvui-glass-blur)) saturate(var(--nvui-glass-saturate));
     border-radius: var(--nvui-radius-xl);
     box-shadow: var(--nvui-shadow-modal);
     color: var(--nvui-text);
@@ -2301,6 +2304,9 @@ dialog.nvui-tl.nvui-theme-light select.nvui-input,
         max-height: 92dvh;
         border-bottom: none;
         border-radius: var(--nvui-radius-xl) var(--nvui-radius-xl) 0 0;
+        /* v2.7.2：手机端仍保持「透明 + 面板背后模糊」的玻璃态，模糊半径降档控 GPU */
+        -webkit-backdrop-filter: blur(var(--nvui-glass-blur-sm)) saturate(var(--nvui-glass-saturate));
+        backdrop-filter: blur(var(--nvui-glass-blur-sm)) saturate(var(--nvui-glass-saturate));
     }
 
     .nvui-sheet-handle {

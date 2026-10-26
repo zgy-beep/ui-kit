@@ -271,9 +271,9 @@ class Harness {
         let m = await h.eval(MEASURE);
         let img = await h.shot('panel-single-layer');
         let sv = stripeVisibility(img, m.rect);
-        check('面板本体不再声明 backdrop-filter（单层玻璃）', m.panelBackdrop === 'none' || m.panelBackdrop === '', m.panelBackdrop);
-        check('磨砂由遮罩层提供（overlay backdrop-filter 含 blur）', /blur/.test(m.overlayBackdrop || ''), m.overlayBackdrop);
-        check('面板背景细节透出 ≥ 25%（实测 12.1% → 32.9%）', sv.ratio >= 0.25, `ratio=${sv.ratio.toFixed(3)}`);
+        check('面板自身声明 backdrop-filter（透明面板 + 背后模糊）', /blur/.test(m.panelBackdrop || ''), m.panelBackdrop);
+        check('遮罩层同时提供整页磨砂（overlay backdrop-filter 含 blur）', /blur/.test(m.overlayBackdrop || ''), m.overlayBackdrop);
+        check('玻璃态面板背后细节可见但不透明（条纹对比度 ≥ 8%）', sv.ratio >= 0.08, `ratio=${sv.ratio.toFixed(3)}`);
         report.cases.push({ case: 'panel-single-layer', measure: m, stripe: sv });
 
         /* 2. .nvui-solid 实心优先 */

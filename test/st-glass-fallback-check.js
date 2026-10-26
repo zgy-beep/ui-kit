@@ -106,11 +106,14 @@ function check(name, cond, detail) {
         document.body.appendChild(probe);
         const bf = getComputedStyle(probe).backdropFilter || '';
         probe.remove();
-        return { supported, htmlClass: document.documentElement.className, probe: bf };
+        const panel = document.querySelector('.nvui-panel');
+        const panelBf = panel ? (getComputedStyle(panel).backdropFilter || '') : '';
+        return { supported, htmlClass: document.documentElement.className, probe: bf, panelBf };
     });
     check('对照：移除 no-blur 后 supported 恢复 true', control.supported === true, 'supported=' + control.supported);
     check('对照：自动回退类被移除（可逆）', !/nvui-glass-fallback/.test(control.htmlClass), control.htmlClass);
     check('对照：探针 backdropFilter 恢复为 blur(...)', /blur/.test(control.probe), 'probe=' + control.probe);
+    check('对照：面板自身 backdrop-filter 恢复为 blur(...)（背后模糊回来）', /blur/.test(control.panelBf), 'panel=' + control.panelBf);
 
     // ---- D. 用户主动实心优先 ----
     const solid = await page.evaluate(() => {

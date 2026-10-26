@@ -967,6 +967,10 @@ const latePanelRules = componentRules.filter((r) => /\.nvui-overlay\.is-panel\s*
 const latePanelIdx = componentsClean.indexOf('.nvui-overlay.is-panel > .nvui-panel');
 check('面板降级采用晚绑定覆盖（3 个降级块，位于基础规则之后）',
     latePanelRules.length >= 3 && latePanelIdx > basePanelIdx && basePanelIdx > 0);
+const narrowPanelRule = componentRules.filter((r) => r.context.some((c) => /max-width:\s*600px/.test(c))
+    && r.selector.split(',').some((sel) => sel.trim() === '.nvui-panel'));
+check('窄屏面板保持玻璃态：backdrop-filter 降档为 --nvui-glass-blur-sm',
+    narrowPanelRule.some((r) => /backdrop-filter\s*:[^;]*var\(--nvui-glass-blur-sm\)/.test(r.body)));
 check('面板降级晚绑定：均关闭 backdrop-filter，且不透明回退与 CanvasText 边界齐全',
     latePanelRules.every((r) => /-webkit-backdrop-filter\s*:\s*none/.test(r.body) && /backdrop-filter\s*:\s*none/.test(r.body))
     && latePanelRules.some((r) => /background(?:-color)?\s*:[^;]*var\(--nvui-bg\)/.test(r.body))
@@ -1289,13 +1293,13 @@ const panelTopLevelBodies = joinedBodies(componentRules.filter((r) => r.context.
     && r.selector.split(',').some((sel) => sel.trim() === '.nvui-panel')));
 const panelStructureMissing = [];
 if (!/background(?:-color)?\s*:[^;]*var\(--nvui-glass-bg\)/.test(panelBaseBodies)) panelStructureMissing.push('玻璃底 --nvui-glass-bg');
-/* v2.7.2：面板改为单层玻璃——模糊由遮罩层提供，面板本体不再叠 backdrop-filter */
-if (/backdrop-filter\s*:/.test(panelTopLevelBodies)) panelStructureMissing.push('面板基础规则不应再有 backdrop-filter（单层玻璃）');
+/* v2.7.2：玻璃态必须由面板自身的 backdrop-filter 提供（透明面板 + 背后模糊） */
+if (!/backdrop-filter\s*:/.test(panelTopLevelBodies)) panelStructureMissing.push('面板自身 backdrop-filter（背后模糊）');
 if (!/display:\s*flex/.test(panelBaseBodies)) panelStructureMissing.push('display:flex');
 if (!/flex-direction:\s*column/.test(panelBaseBodies)) panelStructureMissing.push('flex-direction:column');
 if (!/width:\s*min\(var\(--nvui-panel-width\),\s*100%\)/.test(panelBaseBodies)) panelStructureMissing.push('width:min(--nvui-panel-width,100%)');
 if (!/max-height:\s*var\(--nvui-panel-max-h\)/.test(panelBaseBodies)) panelStructureMissing.push('max-height:--nvui-panel-max-h');
-check('.nvui-panel 面板容器：玻璃底 + 单层玻璃（无自身 backdrop-filter）+ flex 列 + 固定宽高',
+check('.nvui-panel 面板容器：玻璃底 + 面板自身 backdrop-filter（背后模糊）+ flex 列 + 固定宽高',
     panelStructureMissing.length === 0, `缺少/违规: ${panelStructureMissing.join(', ')}`);
 
 const PANEL_PARTS = ['.nvui-panel-header', '.nvui-panel-title', '.nvui-panel-actions',

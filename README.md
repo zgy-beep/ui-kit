@@ -398,7 +398,7 @@ function trapFocus(modal, e) {
 ### 2.4 玻璃与降级
 
 - 玻璃只用于浮层：`.nvui-overlay` / `.nvui-modal` / `.nvui-panel` / `.nvui-floating` / `.nvui-tooltip` / `.nvui-toast` / `.nvui-glass`。
-- **单层玻璃（v2.7.2）**：面板与弹窗的「磨砂」由遮罩层（`.nvui-overlay`，`blur(12px)`）提供，面板本体只负责半透明底色与受光/阴影；面板不再叠自己的 `backdrop-filter`，否则 Chrome 会二次采样遮罩的「已压暗 + 模糊」结果，把面板压成近实心（实测背景细节透出从 12.1% 提升到 32.9%）。
+- **玻璃态 = 透明面板 + 面板背后的模糊（v2.7.2）**：`.nvui-panel` 自身带 `backdrop-filter: blur(20px) saturate(150%)`，面板底色半透明（`--nvui-glass-bg`）；面板背后的聊天内容会被面板模糊（不可读），同时遮罩 `.nvui-overlay` 的 `blur(12px)` 负责整页磨砂与压暗。**不是**「只给遮罩加模糊、面板本体去掉 backdrop-filter」——那样面板只是半透明压暗，不是玻璃。宿主禁用 blur（Fast UI）时两者都会被宿主 `!important` 关闭，此时进入 97% 近不透明回退。
 - 弹窗级用 `--nvui-glass-bg`（`rgba(22, 26, 36, 0.64)`，背后有遮罩压暗，正文与次要文字双 AA）；直接叠在宿主上的 popover 级用 `--nvui-glass-bg-strong`（`rgba(22, 26, 36, 0.8)`，**只承诺正文 `--nvui-text` 的 AA**）。口径见 [§4.4](#44-aa-安全玻璃与合成对比度验算)。
 - 圆角玻璃表面（弹窗 / 面板 / 悬浮面板 / 工具提示 / 吐司 / `.nvui-glass`）**不画 1px 外框描边**：圆角处的 1px 半透明描边在缩放时会出现亚像素锯齿，改用「柔和顶部受光（`--nvui-glass-highlight`）+ 阴影」成形。header / footer / 导航底边这类直线分隔保留 1px（`--nvui-glass-line`）。
 - 五层降级链（`components.css` 已内置，业务无需处理）：
@@ -411,7 +411,7 @@ function trapFocus(modal, e) {
 | **宿主全局禁用模糊**（如酒馆 Fast UI 默认 `body.no-blur`） | 运行时读实际计算值后给根节点加 `.nvui-glass-fallback`：改用 token 派生 97% 不透明色（`color-mix`）的**近不透明回退**（深色 text-2 6.02、浅色 6.42，AA 达标；有效透出约 1.1% / 2.1%），既保留极轻玻璃感又不出现聊天文字重影，不再整块不透明 |
 | 用户主动不想要透明 / 低性能设备 | 根节点加 `.nvui-solid` 强制实心（优先级高于自动回退） |
 
-- 窄屏（`max-width: 600px`）弹窗自动降档为 `--nvui-glass-blur-sm`（12px）降低移动端 GPU 开销，保留 `92dvh` 与安全区规则；面板本身已无 `backdrop-filter`，无需再降档。
+- 窄屏（`max-width: 600px`）弹窗与面板的 `backdrop-filter` 自动降档为 `--nvui-glass-blur-sm`（12px）降低移动端 GPU 开销，保留 `92dvh` 与安全区规则（面板仍是「透明 + 背后模糊」的玻璃态，只是模糊半径更小）。
 - **真实酒馆默认观感说明**：SillyTavern `fast_ui_mode` 默认 `true`，宿主会给 `body` 加 `no-blur` 并全局 `unset !important` 掉 `backdrop-filter`。kit 会自动进入 97% 近不透明回退（`.nvui-glass-fallback`，极轻透出），在面板上不再出现聊天文字重影；想要完整玻璃效果需在酒馆设置里关闭 Fast UI 模式。运行时 API 的探测/回退/恢复见 §7.2。
 
 ### 2.5 折叠面板 DOM（破坏性变更）
@@ -1783,7 +1783,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 | v2.6.0 | 小版本 | 可选：`.nvui-checkbox` 独立复选框（批量选择）；宿主表单隔离层自动生效（`dialog.nvui-tl` / `.nvui-panel` 内 7 条有界 `!important`，修复浅色「深底深字」）；`innerHTML` 注入的折叠条用 `panel.trackAccordion()` / `panel.adoptAccordions()` 接入持久化（默认不接管点击，传 `{ bind: true }` 才绑定）。 |
 | v2.7.0 | 小版本 | 可选：自定义普通容器加 `.nvui-form-scope` 复用表单隔离；修复 `optgroup` 主题配色、焦点陷阱与宿主模态期间 Esc。组件类 79 → 80。 |
 | v2.7.1 | 补丁 | 无需改动：只修浏览器回归测试时序（半选 checkbox 等待最终计算值），组件样式、公开 API、状态格式、token 与 DOM 契约不变。 |
-| v2.7.2 | 补丁 | 覆盖 4 个运行资产即可：玻璃透明感修复（面板改单层玻璃；宿主 Fast UI 默认关模糊时改为 97% token 派生近不透明回退而不是全不透明；玻璃探测三态化并可自愈）。无需改 DOM / API / 状态；建议目检深/浅主题与 Fast UI 开关两态。 |
+| v2.7.2 | 补丁 | 覆盖 4 个运行资产即可：玻璃透明感修复（面板保持透明 + 自身 backdrop-filter 背后模糊；宿主 Fast UI 默认关模糊时改为 97% token 派生近不透明回退而不是全不透明；玻璃探测三态化并可自愈）。无需改 DOM / API / 状态；建议目检深/浅主题与 Fast UI 开关两态。 |
 
 **高频 FAQ**
 
@@ -1836,7 +1836,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 
 | 版本 | 日期 | 类型 | 一句话摘要 |
 | :--- | :--- | :--- | :--- |
-| v2.7.2 | 2026-10-26 | 补丁 | 玻璃透明感修复：面板单层玻璃；宿主禁模糊时 97% token 派生近不透明回退（`.nvui-glass-fallback`）；探测三态化 + 可逆自愈；`setTheme()` 不再误清用户实心偏好 |
+| v2.7.2 | 2026-10-26 | 补丁 | 玻璃透明感修复：面板保持透明 + 面板自身 backdrop-filter 背后模糊；宿主禁模糊时 97% token 派生近不透明回退（`.nvui-glass-fallback`）；探测三态化 + 可逆自愈；`setTheme()` 不再误清用户实心偏好 |
 | v2.7.1 | 2026-10-23 | 补丁 | 修 GitHub #15：半选 checkbox 浏览器回归等待最终计算值；CSS / API / DOM 不变 |
 | v2.7.0 | 2026-10-23 | 小版本 | 新增 opt-in `.nvui-form-scope`；修复 #12 `optgroup`、#13 焦点、#14 宿主模态 Esc；组件类 80 |
 | v2.6.0 | 2026-10-21 | 小版本 | 新增 `.nvui-checkbox`、宿主表单隔离层（#9）、折叠条接管入口（#11）；`!important` 预算 14 |
@@ -1902,7 +1902,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 
 | 类名 | 说明 |
 | :--- | :--- |
-| `.nvui-panel` | 面板本体：`display:flex; flex-direction:column`；`width: min(var(--nvui-panel-width), 100%)`；**固定高** `var(--nvui-panel-max-h)`；`min-height:0; overflow:hidden`；**单层玻璃**（v2.7.2：`--nvui-glass-bg` 底色 + 遮罩层提供 `blur(12px)`，本体不叠 `backdrop-filter`）+ `--nvui-radius-xl` + `--nvui-shadow-modal` |
+| `.nvui-panel` | 面板本体：`display:flex; flex-direction:column`；`width: min(var(--nvui-panel-width), 100%)`；**固定高** `var(--nvui-panel-max-h)`；`min-height:0; overflow:hidden`；**玻璃态（透明 + 背后模糊）**：`--nvui-glass-bg` 半透明底 + 自身 `backdrop-filter: blur(20px) saturate(150%)`（窄屏降为 `blur-sm`）+ `--nvui-radius-xl` + `--nvui-shadow-modal` |
 | `.nvui-panel-header` | 标题栏：标题 + 右侧操作区，`justify-content:space-between`，底部直线分隔，`flex-shrink:0` |
 | `.nvui-panel-title` | 面板标题：`--nvui-fs-2xl` 粗体、单行省略；`aria-labelledby` 指向它 |
 | `.nvui-panel-actions` | 右侧操作区（`.nvui-icon-btn` 组，含关闭按钮），`flex-shrink:0` |
