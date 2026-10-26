@@ -78,7 +78,6 @@
 | [`AUDIT.md`](AUDIT.md) | 架构审核报告：v1.1.0 评估、v2.0.0/v2.0.1 复核与问题清单 |
 | [`package.json`](package.json) | 项目元信息与 `npm test` / `test:browser` / `test:e2e` 入口 |
 | [`LICENSE`](LICENSE) | MIT 许可 |
-| [`RELEASE_PLAN_v2.7.0.md`](RELEASE_PLAN_v2.7.0.md) · [`RELEASE_PLAN_v2.7.1.md`](RELEASE_PLAN_v2.7.1.md) | v2.7.x 发布计划与验收口径 |
 | [`test/test-ui-kit.js`](test/test-ui-kit.js) | 规范守护测试：token 完整性、三方覆盖、无硬编码颜色、WCAG 与玻璃合成对比度、宿主红线、动效/降级、版本自洽 |
 | [`test/st-*.js`](test/) | 真实 SillyTavern 宿主实机脚本（需 `playwright-core` + 本机 Chrome）：层级、玻璃降级、宿主模态让位、性能实测 |
 
