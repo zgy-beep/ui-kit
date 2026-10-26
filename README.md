@@ -1,6 +1,6 @@
 # SillyTavern 插件 UI Kit · Flat Glass 设计规范
 
-> 版本：**v2.7.2**（2026-10-26）· 设计语言 **Flat Glass（扁平玻璃）** · 零依赖 · 可整目录复用
+> 版本：**v2.8.0**（2026-10-26）· 设计语言 **Flat Glass（扁平玻璃）** · 零依赖 · 可整目录复用
 
 给 SillyTavern 插件用的自包含浮动 UI 设计系统：两个 CSS 文件接入即可获得一致的弹窗、面板、表单、反馈与动效；需要时再加一个零依赖 JS API 生成符合规范的 DOM。**样式层没有运行时；`nvui-api.js` 是可选增强。**
 
@@ -8,10 +8,10 @@
 
 | 关键事实 | 当前值 |
 | :--- | :--- |
-| 设计令牌 | 110 个（深色默认）+ 47 个浅色覆盖 |
+| 设计令牌 | 111 个（深色默认）+ 47 个浅色覆盖 |
 | 组件类 | 80 个（`nvui-` 前缀；`is-*` 状态类另计） |
 | 关键帧 | 16 个 |
-| `!important` 预算 | 14 条（三类，见 [§9](#9-命名与工程约定)） |
+| `!important` 预算 | 18 条（四类，见 [§9](#9-命名与工程约定)；v2.8.0 新增 force 玻璃 4 条） |
 | 运行依赖 | 0 个（Node 仅测试用） |
 | 验证 | `npm test`（规范守护，零依赖） |
 | 效果预览 | [preview.html](preview.html) · [在线版](https://zgy-beep.github.io/ui-kit/preview.html) |
@@ -61,10 +61,10 @@
 
 | 文件 | 作用 |
 | :--- | :--- |
-| [`tokens.css`](tokens.css) | 设计令牌：表面 / 玻璃 / 分隔 / 文字 / 主色 / 语义 / 焦点环 / 字体 / 间距 / 圆角 / 阴影 / 动效 / 层级 / 尺寸；深色默认 110 个，`.nvui-theme-light` 覆盖 47 个 |
+| [`tokens.css`](tokens.css) | 设计令牌：表面 / 玻璃 / 分隔 / 文字 / 主色 / 语义 / 焦点环 / 字体 / 间距 / 圆角 / 阴影 / 动效 / 层级 / 尺寸；深色默认 111 个，`.nvui-theme-light` 覆盖 47 个 |
 | [`components.css`](components.css) | 组件样式与 16 个关键帧：全部 `nvui-` 前缀，颜色只引用 token |
 | [`nvui-api.js`](nvui-api.js) | **可选**零依赖运行时：`createPanel` / `showToast` / `switchRow` / `inputRow` / `accordion` / `progress` 等，生成合规 DOM 与无障碍属性；Node 下 `require` 不访问 DOM |
-| [`tokens.json`](tokens.json) | `tokens.css` 的机器可读镜像（dark 110 / light 47），供构建工具、其它软件与 AI 读取；由 CSS 生成，勿手改 |
+| [`tokens.json`](tokens.json) | `tokens.css` 的机器可读镜像（dark 111 / light 47），供构建工具、其它软件与 AI 读取；由 CSS 生成，勿手改 |
 | [`preview.html`](preview.html) | 离线组件预览（双击即开）：深 / 浅主题、实心 / 玻璃、面板 / 动效 / API 演示，支持 URL 参数 |
 | [`st-extension-template/`](st-extension-template/) | 可直接复制的 SillyTavern 扩展骨架（manifest + index.js + style.css + 内嵌 kit 运行时） |
 
@@ -229,11 +229,11 @@ API 生成的 DOM 自动符合 [§12](#12-sillytavern-插件面板布局标准�
 
 ```html
 <!-- 设计令牌与组件样式 -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.7.2/tokens.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.7.2/components.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.8.0/tokens.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.8.0/components.css">
 
 <!-- 可选运行时 API -->
-<script src="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.7.2/nvui-api.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.8.0/nvui-api.js"></script>
 ```
 
 > 三份资源必须锁定**同一个 tag**，避免令牌、样式与运行时版本漂移；CDN 缓存刷新可能略晚于 tag 推送。
@@ -246,7 +246,7 @@ API 生成的 DOM 自动符合 [§12](#12-sillytavern-插件面板布局标准�
 async function ensureNVUI() {
     const W = window.parent || window, D = W.document;
     if (W.NVUI) return W.NVUI;
-    const CDN = 'https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.7.2'; // 三份资源锁同一 tag
+    const CDN = 'https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.8.0'; // 三份资源锁同一 tag
 
     // v2.7.2：先等 CSS 就绪再初始化，否则玻璃探测会在 CSS 缺席时误判为「不支持模糊」
     const loadCss = (id, href) => new Promise((resolve, reject) => {
@@ -400,6 +400,7 @@ function trapFocus(modal, e) {
 - 玻璃只用于浮层：`.nvui-overlay` / `.nvui-modal` / `.nvui-panel` / `.nvui-floating` / `.nvui-tooltip` / `.nvui-toast` / `.nvui-glass`。
 - **玻璃态 = 透明面板 + 面板背后的强模糊（v2.7.2 增强）**：面板态（`.nvui-overlay.is-panel`）单独使用更透的玻璃：遮罩为 `color-mix(--nvui-bg 20%)` + `blur(24px)`，面板为 `color-mix(--nvui-bg 30%)` + 顶部 token 柔光 + `blur(48px) saturate(190%) brightness(1.12)`；浅色主题面板提高到 62% 不透明底。面板背后的聊天内容会明显可见但被强模糊，这才是玻璃效果。面板/遮罩的玻璃规则同时提升到 `dialog.nvui-tl` 作用域，避免真实 ST 中其它扩展内嵌的旧版 kit CSS 按加载顺序覆盖。
   > 面板态是**视觉优先档**：在纯白/极亮宿主下不承诺 text-2 的 AA（正文仍建议深色宿主使用）；需要严格 AA 或完全可读时用 `.nvui-solid` 或减少透明度降级。宿主禁用 blur（Fast UI）时仍进入 97% 近不透明回退，见后文。
+- **Fast UI 强制玻璃（v2.8.0，可选）**：`NVUI.createPanel({ glass: 'force' })` / `panel.setGlassMode('force')` 只对**本面板**用 4 条作用域 `!important` 覆盖宿主 `body.no-blur * { backdrop-filter: unset !important }`；`prefers-reduced-transparency` / `forced-colors` / 浏览器不支持时自动回退。默认 `auto` 尊重宿主；`force` 必须在插件设置里给用户关闭项。
 - 弹窗级用 `--nvui-glass-bg`（`rgba(22, 26, 36, 0.64)`，背后有遮罩压暗，正文与次要文字双 AA）；直接叠在宿主上的 popover 级用 `--nvui-glass-bg-strong`（`rgba(22, 26, 36, 0.8)`，**只承诺正文 `--nvui-text` 的 AA**）。口径见 [§4.4](#44-aa-安全玻璃与合成对比度验算)。
 - 圆角玻璃表面（弹窗 / 面板 / 悬浮面板 / 工具提示 / 吐司 / `.nvui-glass`）**不画 1px 外框描边**：圆角处的 1px 半透明描边在缩放时会出现亚像素锯齿，改用「柔和顶部受光（`--nvui-glass-highlight`）+ 阴影」成形。header / footer / 导航底边这类直线分隔保留 1px（`--nvui-glass-line`）。
 - 五层降级链（`components.css` 已内置，业务无需处理）：
@@ -464,7 +465,7 @@ head.addEventListener('click', () => {
 8. **层级靠表面与间距，不靠描边堆盒子**：`bg` → `bg-2` → `bg-3` → `block-bg` → `block-bg-2` 由深到浅分层；只有表达「浮起」时才用玻璃与阴影。
 9. **可用性优先**：开关整行可点、按钮最小高度 `--nvui-control-h`、图标按钮 28×28、触屏留足间距；折叠收起态必须给当前值摘要。
 10. **可访问性内建**：对比度（含玻璃合成）、`focus-visible` 单圈 2px 焦点环、`aria-*` 语义、尊重 `prefers-reduced-motion` / `prefers-reduced-transparency` / `forced-colors`、读屏文本用 `.nvui-sr-only`。
-11. **不污染宿主**：全部 `nvui-` 前缀、无裸元素选择器、无全局重置；`!important` 只用在白名单三类共 14 条（[§9](#9-命名与工程约定)）。
+11. **不污染宿主**：全部 `nvui-` 前缀、无裸元素选择器、无全局重置；`!important` 只用在白名单四类共 18 条（[§9](#9-命名与工程约定)）。
 12. **描边精致化**：焦点环为单圈 2px 整数像素、不叠内圈；圆角玻璃无外框；ghost 按钮/空态/标签指示器去圆角描边；直线分隔保留 1px 玻璃分隔色。
 
 **快速判断（违反即返工）**
@@ -476,11 +477,11 @@ head.addEventListener('click', () => {
 
 ## 4. 配色规范
 
-> `tokens.css` 共定义 **110 个令牌**（深色默认，挂在 `:root` 与 `.nvui-scope` 上），`.nvui-theme-light` 覆盖其中 **47 个**；`tokens.json` 是同一份数据的机器可读镜像，供构建工具与其它软件读取。本章只回答「有哪些令牌、怎么选」；玻璃表面到底能不能读，见 [4.4](#44-aa-安全玻璃与合成对比度验算)。
+> `tokens.css` 共定义 **111 个令牌**（深色默认，挂在 `:root` 与 `.nvui-scope` 上），`.nvui-theme-light` 覆盖其中 **47 个**；`tokens.json` 是同一份数据的机器可读镜像，供构建工具与其它软件读取。本章只回答「有哪些令牌、怎么选」；玻璃表面到底能不能读，见 [4.4](#44-aa-安全玻璃与合成对比度验算)。
 
 ### 4.1 深色主题令牌（默认，`:root` / `.nvui-scope`）
 
-深色是默认主题。同一组令牌同时挂在 `:root` 与 `.nvui-scope` 上：整页可用，局部容器也可用。组件样式只引用这些令牌，不写颜色字面量。本章 4.1 列出 51 个颜色、玻璃、焦点与骨架类令牌，第 5 章 15 个排版令牌，第 6 章 44 个尺寸、动效与层级令牌，三处相加即 110 个令牌。
+深色是默认主题。同一组令牌同时挂在 `:root` 与 `.nvui-scope` 上：整页可用，局部容器也可用。组件样式只引用这些令牌，不写颜色字面量。本章 4.1 列出 51 个颜色、玻璃、焦点与骨架类令牌，第 5 章 15 个排版令牌，第 6 章 44 个尺寸、动效与层级令牌，再加 1 个版本令牌 `--nvui-kit-version`，合计 111 个令牌。
 
 **表面 / 背景（11）**
 
@@ -706,7 +707,7 @@ head.addEventListener('click', () => {
 }
 ```
 
-本章所有取值由 `test/test-ui-kit.js` 守护；命名约定与 `!important` 预算（14 条）见第 9 章。
+本章所有取值由 `test/test-ui-kit.js` 守护；命名约定与 `!important` 预算（18 条）见第 9 章。
 
 ### 4.4 AA 安全玻璃与合成对比度验算
 
@@ -961,6 +962,7 @@ head.addEventListener('click', () => {
 | 令牌 | 值 | 用途 |
 | :--- | :--- | :--- |
 | `--nvui-z-layer` | `1000000` | 载体档：`dialog.nvui-tl` 自身（非模态 `show()` 不进 top layer，档位必须显式给） |
+| `--nvui-kit-version` | `"2.8.0"` | v2.8.0 起：纯 CSS 下游可读的 kit 版本（与 `package.json` / `NVUI.version` 一致） |
 | `--nvui-z-floating` | `1000010` | 悬浮入口与悬浮面板 |
 | `--nvui-z-overlay` | `1000020` | 子浮层：遮罩与弹窗层 |
 | `--nvui-z-tooltip` | `1000030` | 工具提示；吐司载体也取此档 |
@@ -1107,6 +1109,7 @@ head.addEventListener('click', () => {
 | :--- | :--- |
 | `.nvui-btn` | 默认中性按钮：`--nvui-block-bg` 底、无描边，悬停 `--nvui-block-bg-2` |
 | `.nvui-btn-row` | 按钮组：等宽（`flex: 1 1 140px`）并自动换行，窄屏单列 |
+| `.nvui-actions` | 默认按钮组容器（v2.8.0）：`flex + wrap + gap 8px + 右对齐`；不想记 `.nvui-btn-row` / footer 时的通用出口 |
 | `.nvui-btn.is-primary` | 主操作：`--nvui-accent-strong` 实心 + `--nvui-on-accent` 文字 + 顶部内高光 |
 | `.nvui-btn.is-secondary` | 次级操作：主色淡底 + 主色文字 |
 | `.nvui-btn.is-ghost` | 弱操作：淡底、无描边 |
@@ -1206,7 +1209,7 @@ dialog.nvui-tl textarea.nvui-input,
 | 规则 | 说明 |
 | :--- | :--- |
 | 作用域 | 默认仍是 `dialog.nvui-tl` 与 `.nvui-panel` 双载体；v2.7.0 起，显式加 `.nvui-form-scope` 的自定义容器成为第三作用域，未加类不接管 |
-| `!important` 分配 | 基础态 `background` / `color` / `border` 3 条 + `select` 的 `margin` 1 条 + `:hover` 的 `background` 1 条 + `option` 与默认载体 `optgroup` 的 `background` / `color` 2 条，合计 7 条；全文件总量 14 条见 §9 |
+| `!important` 分配 | 表单隔离 7 条（基础态 `background` / `color` / `border` 3 条 + `select` 的 `margin` 1 条 + `:hover` 的 `background` 1 条 + `option` 与默认载体 `optgroup` 的 `background` / `color` 2 条）；全文件总量 18 条（另含 checkbox 2、reduced-motion 5、force 玻璃 4）见 §9 |
 | 值 | 全部来自 token；`border: none` / `margin: 0` 是对宿主描边与外边距的明确 reset，不是新配色 |
 | `:hover` | 必须同作用域再声明一次 `background: var(--nvui-block-bg) !important`，否则会被基础态的 `!important` 压掉 |
 | 外边界 | 三个作用域之外的 `.nvui-input` 不接管；作用域内非 `.nvui-input` 控件同样不接管 |
@@ -1570,13 +1573,14 @@ function showToast(text, kind = 'success') {
 - **焦点环统一走 token**：组件只允许 `outline: var(--nvui-focus-ring-w) solid var(--nvui-focus-ring-color);` + `outline-offset: var(--nvui-focus-ring-offset)`，不得各写像素值或直接写 `outline: 2px solid var(--nvui-accent)`；当前为单圈 2px 整数像素。
 - **玻璃 AA 红线**：新增玻璃表面必须复用 `--nvui-glass-bg` / `--nvui-glass-bg-strong`，不得自造 alpha 值；玻璃上的文字只能用 `--nvui-text`（popover 级一律正文色）；改动玻璃/遮罩/文字取值必须重跑合成对比度测试并同步 [§4.4](#44-aa-安全玻璃与合成对比度验算) 与 `CHANGELOG.md`。
 - **颜色**：`components.css` 内禁止 `#hex` / `rgb()` / `hsl()` 字面量，只能用 `var(--nvui-*)`（`transparent` / `inherit` / `currentColor` 除外）。这条即「禁止硬编码颜色」，测试会扫描。
-- **`!important` 预算**：总数 **14**，只允许三类，且只允许清单内的属性值：
+- **`!important` 预算**：总数 **18**，只允许四类，且只允许清单内的属性值：
   1. **宿主 checkbox `::before` 压制（2 条）**：`.nvui-checkbox` / `.nvui-switch-row` 共用 `content: none` + `display: none`；
   2. **`prefers-reduced-motion` 降级块（5 条）**：`animation-duration` / `animation-iteration-count` / `animation-delay` / `transition-duration` / `scroll-behavior`；
-  3. **宿主表单控件隔离（7 条）**：作用域为 `dialog.nvui-tl` + `.nvui-panel` 两个默认载体，以及显式加 `.nvui-form-scope` 的自定义容器；值只能是 `var(--nvui-input-bg)` / `var(--nvui-text)` / `border: none` / `margin: 0` / `var(--nvui-block-bg)` / `var(--nvui-bg-2)`。
+  3. **宿主表单控件隔离（7 条）**：作用域为 `dialog.nvui-tl` + `.nvui-panel` 两个默认载体，以及显式加 `.nvui-form-scope` 的自定义容器；值只能是 `var(--nvui-input-bg)` / `var(--nvui-text)` / `border: none` / `margin: 0` / `var(--nvui-block-bg)` / `var(--nvui-bg-2)`；
+  4. **v2.8.0 force 玻璃（4 条）**：仅 `dialog.nvui-tl[data-nvui-glass="force"]` 下的 panel/overlay 各 `background` + `backdrop-filter`，用于覆盖宿主 Fast UI 的 `!important`。
 
   其它地方一律不得使用；新增类别必须先改本节预算，并同步 `test/test-ui-kit.js` 的分类计数、作用域选择器与精确属性值断言。
-- **选择器**：不得出现裸元素选择器（`input { ... }` / `button { ... }`）与全局重置；所有规则必须在 `.nvui-` / `dialog.nvui-tl` 作用域下。
+- **选择器**：不得出现裸元素选择器（`input { ... }` / `button { ... }`）与全局重置；所有规则必须在 `.nvui-` / `dialog.nvui-tl` 作用域下；v2.8.0 的零 specificity 默认间距允许 `:where(...)` 形式。
 - **图标**：Font Awesome `<i>`；纯 CSS 图形只用于箭头 / 滑钮 / 加载环 / 状态点 / 骨架扫光。
 - **无 emoji**：README、CSS、HTML、JS 文案中不使用 emoji。
 - **文件结构**：本目录是自包含独立项目（`package.json` / `LICENSE` / `CHANGELOG.md` / `test/` 齐全），可直接整目录复制或移动；`preview.html` 必须保持离线可打开（无 CDN、无网络请求）；文档内部链接一律用同目录相对路径，不引用父目录。
@@ -1775,9 +1779,9 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 
 **升级动作**：覆盖 CSS 与 `nvui-api.js`（新 API 全部为增量，旧代码无需修改）；宿主用 `showModal()` 时 kit 自动让位，业务无需改动；运行 `npm test`。
 
-### 10.10 v2.4.0 → v2.7.2 升级速查
+### 10.10 v2.4.0 → v2.8.0 升级速查
 
-从 v2.4.0 及更早版本升到当前 v2.7.2，按版本顺序做这几件事即可（**全部为小版本/补丁，覆盖文件即可，无破坏性变更**）：
+从 v2.4.0 及更早版本升到当前 v2.8.0，按版本顺序做这几件事即可（**全部为小版本/补丁，覆盖文件即可，无破坏性变更**）。完整步骤见 [UPGRADING.md](UPGRADING.md)，历史版本差异见 [MIGRATION-v2.md](MIGRATION-v2.md)。
 
 | 版本 | 类型 | 你需要做什么 |
 | :--- | :--- | :--- |
@@ -1786,6 +1790,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 | v2.7.0 | 小版本 | 可选：自定义普通容器加 `.nvui-form-scope` 复用表单隔离；修复 `optgroup` 主题配色、焦点陷阱与宿主模态期间 Esc。组件类 79 → 80。 |
 | v2.7.1 | 补丁 | 无需改动：只修浏览器回归测试时序（半选 checkbox 等待最终计算值），组件样式、公开 API、状态格式、token 与 DOM 契约不变。 |
 | v2.7.2 | 补丁 | 覆盖 4 个运行资产即可：玻璃透明感修复（面板保持透明 + 自身 backdrop-filter 背后模糊；宿主 Fast UI 默认关模糊时改为 97% token 派生近不透明回退而不是全不透明；玻璃探测三态化并可自愈）。无需改 DOM / API / 状态；建议目检深/浅主题与 Fast UI 开关两态。 |
+| v2.8.0 | 小版本 | 覆盖 4 资产；新增 `--nvui-kit-version`、`selfCheck` / `defaults`、`.nvui-actions`、`createPanel({ glass })` 与控制器 `setGlassMode/getGlassState`；相邻按钮 8px 默认间距。可选接入，见 [UPGRADING.md](UPGRADING.md)。 |
 
 **高频 FAQ**
 
@@ -1809,7 +1814,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 
 ### 11.2 版本一致性清单
 
-任何发布必须**原子更新**以下 9 处版本声明，避免漂移：
+任何发布必须**原子更新**以下 10 处版本声明，避免漂移（`npm run verify:release` 会逐项校验）：
 
 | # | 位置 | 形式 |
 | :--- | :--- | :--- |
@@ -1822,6 +1827,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 | 7 | `README.md` | 文首 `版本：**vX.Y.Z**` |
 | 8 | `AI-GUIDE.md` | 文首版本行 |
 | 9 | `CHANGELOG.md` | 最新 `## vX.Y.Z` 条目（含日期与变更摘要） |
+| 10 | `tokens.css` | `--nvui-kit-version: X.Y.Z`（纯 CSS 可读的版本信号） |
 
 此外，`st-extension-template/ui-kit/` 下的 4 个资产文件（`nvui-api.js` / `components.css` / `tokens.css` / `tokens.json`）必须与仓库根目录保持**逐字节一致**（`npm test` 用 MD5 校验），发布前用复制覆盖而不是手改。
 
@@ -1830,7 +1836,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 1. **Tag 命名**：统一 `vX.Y.Z`（如 `v2.7.2`），禁止裸数字 `2.7.2` 或大写 `V2.7.2`。
 2. **附注标签**：使用 `git tag -a vX.Y.Z -m "..."`，禁止轻量标签；发布包含版本概要。
 3. **Release Notes**：每个 GitHub Release 包含版本定位、核心更新/缺陷（关联 Issue 编号）、兼容性说明与自动化验证数据。
-4. **发布顺序**：`npm test` 通过 → 同步 9 处版本与模板副本 → `preview.html` 目测 → 打 tag → 创建 Release。
+4. **发布顺序**：`npm test` 通过 → 同步 10 处版本与模板副本（或 `npm run sync:template`）→ `npm run verify:release` → `preview.html` 目测 → 打 tag → 创建 Release。
 
 ### 11.4 版本时间线（摘要）
 
@@ -1838,6 +1844,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 
 | 版本 | 日期 | 类型 | 一句话摘要 |
 | :--- | :--- | :--- | :--- |
+| v2.8.0 | 2026-10-26 | 小版本 | 下游 DX：版本 token / selfCheck / defaults / `.nvui-actions` / 相邻按钮 8px / `glass: auto / force / solid`；token 111、组件类 81、`!important` 18 |
 | v2.7.2 | 2026-10-26 | 补丁 | 玻璃透明感修复：面板保持透明 + 面板自身 backdrop-filter 背后模糊；宿主禁模糊时 97% token 派生近不透明回退（`.nvui-glass-fallback`）；探测三态化 + 可逆自愈；`setTheme()` 不再误清用户实心偏好 |
 | v2.7.1 | 2026-10-23 | 补丁 | 修 GitHub #15：半选 checkbox 浏览器回归等待最终计算值；CSS / API / DOM 不变 |
 | v2.7.0 | 2026-10-23 | 小版本 | 新增 opt-in `.nvui-form-scope`；修复 #12 `optgroup`、#13 焦点、#14 宿主模态 Esc；组件类 80 |
@@ -2146,7 +2153,7 @@ function setupPanelNav(panelEl, controller) {
 | 文件 | 作用 | 是否必须 |
 | :--- | :--- | :--- |
 | [`nvui-api.js`](nvui-api.js) | 零依赖运行时 API：用函数生成符合 §12 布局标准与 §7 无障碍契约的面板 / 行组件 / 吐司 | 可选（需要 JS 生成 DOM 时） |
-| [`tokens.json`](tokens.json) | `tokens.css` 的机器可读镜像（dark 110 / light 47），供构建工具、其它软件、AI 读取 | 可选 |
+| [`tokens.json`](tokens.json) | `tokens.css` 的机器可读镜像（dark 111 / light 47），供构建工具、其它软件、AI 读取 | 可选 |
 | [`AI-GUIDE.md`](AI-GUIDE.md) | 给 AI 编码助手的操作手册：硬约束、读文件顺序、标准流程、提示词模板、验收清单 | 可选（AI 协作时强烈建议） |
 
 不引入这三个文件不影响纯 CSS 用法；它们不改变任何既有类名、DOM 契约与 token 取值。
@@ -2169,7 +2176,7 @@ function setupPanelNav(panelEl, controller) {
 ```js
 // Node（测试 / 构建期静态生成；不触发 DOM）
 const NVUI = require('./nvui-api.js');
-console.log(NVUI.version);            // 与 package.json 一致（当前 2.7.2）
+console.log(NVUI.version);            // 与 package.json 一致（当前 2.8.0）
 console.log(typeof NVUI.createPanel); // 'function'
 ```
 
@@ -2185,6 +2192,9 @@ console.log(typeof NVUI.createPanel); // 'function'
 | `NVUI.getToken(name, scope?)` | 读取当前作用域的 CSS 变量值（如 `getToken('--nvui-accent')`）；内置缓存，宿主的 class / 内联样式一变即自动重算 | `string` |
 | `NVUI.invalidateTokenCache()` | 手动让令牌缓存失效；宿主在 kit 之外改样式表且未触发 class / 内联样式变化时调用（`setTheme()` 内部已自动调用） | `void` |
 | `NVUI.setTheme(theme, options?)` | 切换主题 / 实心模式（`theme: 'light'`、`options.solid: true/false`；只切类名，不写颜色）。v2.7.2 起不再无条件清除 `.nvui-solid`：不传 `options.solid` 时保留用户实心偏好 | `void` |
+| `NVUI.selfCheck(options?)` | v2.8.0：运行时自检（`kitVersion/cssLoaded/glass/carrierZ/hostModalCount/tokens/issues`）；`expect` 不匹配、CSS 未加载、自动回退会进 `issues`；Node 无 DOM 返回 `no-dom` | `object` |
+| `NVUI.checkCompatibility({ min, max })` | v2.8.0：semver 区间判断（按 major/minor/patch 数值比较） | `{ compatible, actual, reason }` |
+| `NVUI.defaults` | v2.8.0：冻结的组件官方默认值（`switchRow/inputRow/accordion/progress/createPanel/showToast/actions`） | `object` |
 | `NVUI.detectGlassSupport(options?)` | 探测宿主是否**实际**禁用了 `backdrop-filter`（读渲染后的计算值，不猜宿主类名）。内部为 supported / unsupported / unknown 三态；kit CSS 未就绪时返回 `true` 并自动重探（不落回退） | `boolean` |
 | `NVUI.syncGlassFallback(options?)` | 探测并同步自动回退：模糊不可用时给根节点加 `.nvui-glass-fallback`（token 派生 97% 近不透明档，**不再整块 `.nvui-solid`**），恢复后自动移除；`createPanel()` / `showToast()` / `openLayer()` 已内置 | `boolean` |
 | `NVUI.countHostModals()` | 统计处于模态状态的**宿主**原生 `<dialog>` 数量（用 `:modal` 伪类，自动排除 kit 自身载体） | `number` |
@@ -2210,6 +2220,7 @@ console.log(typeof NVUI.createPanel); // 'function'
 | `version` | 标题旁版本徽标文字（可选；业务版本，不是 kit 版本） |
 | `tabs` | `[{ key, label, icon }]`；为空时无导航（单页面板） |
 | `active` | 初始 tab key（默认第一个） |
+| `glass` | v2.8.0：`'auto'`（默认，尊重 Fast UI）/ `'force'`（仅本面板强制真玻璃）/ `'solid'`（实心）；无效值 warn + 回退 auto |
 | `actions` | 标题栏右侧额外图标按钮 `[{ icon, label, onClick }]` |
 | `footer` | 底部按钮 `[{ label, variant, onClick, close }]` |
 | `mount` | 挂载节点（默认 `document.body`；无效则回退 body，仍无效则中止创建） |
@@ -2225,7 +2236,19 @@ console.log(typeof NVUI.createPanel); // 'function'
 `open()` / `close()` / `destroy()` / `setTab(key)` / `syncIndicator()` / `addNode(key, node)` /
 `addSwitch(key, opts)` / `addInput(key, opts)` / `addAccordion(key, opts)` / `addProgress(key, opts)` / `addSectionTitle(key, text)` /
 `showUpdate(updateConfig)` / `trackAccordion(node, id?, options?)` / `adoptAccordions(root, options?)` /
-`clearLayoutState()` / `flushPersistSave()` / `setSize(width, height)` / `setMaximized(boolean)`，以及只读 getter `activeTab`。
+`clearLayoutState()` / `flushPersistSave()` / `setSize(width, height)` / `setMaximized(boolean)` / `setGlassMode(mode)` / `getGlassState()`，以及只读 getter `activeTab`。
+
+**组件默认值（`NVUI.defaults`）**
+
+| 组件 | 默认值 |
+| :--- | :--- |
+| `switchRow` | `label=''`、`value=false`、`disabled=false`、`feature=false` |
+| `inputRow` | `label=''`、`type='text'`、`placeholder=''`；`value/min/max/step` 不设置 |
+| `accordion` | `title=''`、`summary=''`、`open=false`、`content=[]` |
+| `progress` | `value=0`（归一化 0–100）、`indeterminate=false`、`label=''` |
+| `createPanel` | `id='nvui-panel'`、`title='面板'`、`tabs=[]`、`active` 首 tab、`actions=[]`、`footer` 无、`persist=false`、`glass='auto'` |
+| `showToast` | `message=''`、`icon='fa-solid fa-circle-info'`、`duration=3200`（0=不消失）、`dismissible=true` |
+| `.nvui-actions` | `display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end` |
 
 > `destroy()`：销毁面板并从 DOM 移除其 dialog/overlay、注销全局 Esc 监听、触发 `destroy` 回调。长生命周期插件（可反复打开的设置页）建议在卸载 / 重复初始化前调用，避免 DOM 与监听器累积。
 
@@ -2262,10 +2285,10 @@ panel.open();
 ```json
 {
   "name": "sillytavern-nvui-kit-tokens",
-  "version": "2.7.2",
+  "version": "2.8.0",
   "description": "SillyTavern UI Kit 设计令牌机器可读镜像（由 tokens.css 生成，勿手改）。dark = 深色默认，light = .nvui-theme-light 覆盖。",
   "generatedFrom": "tokens.css",
-  "dark": { "--nvui-bg": "#161a24", "--nvui-accent": "#8b6dff", "...": "共 110 个令牌" },
+  "dark": { "--nvui-bg": "#161a24", "--nvui-accent": "#8b6dff", "...": "共 111 个令牌" },
   "light": { "--nvui-bg": "#f7f8fc", "--nvui-accent": "#6d4df2", "...": "共 47 个覆盖" }
 }
 ```
@@ -2274,7 +2297,7 @@ panel.open();
 | :--- | :--- |
 | `name` / `version` | 包名与 kit 版本（与 `package.json` 一致） |
 | `generatedFrom` | 固定为 `tokens.css`（唯一事实来源） |
-| `dark` | 深色默认令牌全集（110 个），键为 `--nvui-*`，值为 CSS 文本 |
+| `dark` | 深色默认令牌全集（111 个），键为 `--nvui-*`，值为 CSS 文本 |
 | `light` | `.nvui-theme-light` 覆盖（47 个）；未覆盖的令牌继承 `dark` |
 
 用途：构建工具生成工具类 / 主题、其它软件导入设计变量、AI 不必解析 CSS 就能知道有哪些令牌、设计工具做令牌映射。

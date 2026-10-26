@@ -1,7 +1,7 @@
 /**
  * SillyTavern 插件通用 UI Kit · 组件样式
  * ------------------------------------------------------------------
- * 版本：ui-kit v2.7.2；依赖：tokens.css（必须先引入或先拼进来）
+ * 版本：ui-kit v2.8.0；依赖：tokens.css（必须先引入或先拼进来）
  *
  * 本目录是独立项目（自带 package.json / LICENSE / CHANGELOG / test/），
  * 可整目录复制/移动到任意文件夹或仓库，不依赖任何外部文件。
@@ -456,6 +456,25 @@ dialog.nvui-tl > .nvui-toast-stack {
 
 .nvui-btn-row > .nvui-btn {
     flex: 1 1 140px;
+}
+
+/* v2.8.0 默认间距契约：正文内裸相邻按钮默认 8px（零 specificity，可被普通类覆盖）；
+ * 已有 gap 的分组/底部容器重置，避免双倍间距。 */
+:where(.nvui-panel-body, .nvui-modal-body, .nvui-floating) > .nvui-btn + .nvui-btn {
+    margin-inline-start: var(--nvui-space-2);
+}
+
+:where(.nvui-btn-row, .nvui-panel-footer, .nvui-modal-footer, .nvui-actions) > .nvui-btn {
+    margin-inline-start: 0;
+}
+
+/* v2.8.0 默认按钮组：不想记 .nvui-btn-row / footer 时的通用容器 */
+.nvui-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--nvui-space-2);
 }
 
 /* ==========================================================================
@@ -2144,6 +2163,24 @@ dialog.nvui-tl .nvui-panel {
     backdrop-filter: blur(calc(var(--nvui-glass-blur) * 2.4)) saturate(190%) brightness(1.05);
 }
 
+/* v2.8.0 面板级 force：显式 opt-in 才覆盖宿主 Fast UI 的
+ * `body.no-blur * { backdrop-filter: unset !important }`。
+ * 4 条 !important（panel/overlay 各 background + backdrop-filter），不使用 -webkit- 前缀；
+ * JS 在 preferences-reduced-transparency / forced-colors / 不支持浏览器时不会写这个属性。 */
+dialog.nvui-tl[data-nvui-glass="force"] .nvui-overlay.is-panel {
+    background: color-mix(in srgb, var(--nvui-bg) 20%, transparent) !important;
+    -webkit-backdrop-filter: blur(calc(var(--nvui-glass-blur-sm) * 2)) saturate(160%);
+    backdrop-filter: blur(calc(var(--nvui-glass-blur-sm) * 2)) saturate(160%) !important;
+}
+
+dialog.nvui-tl[data-nvui-glass="force"] .nvui-panel {
+    background:
+        linear-gradient(160deg, var(--nvui-block-bg), transparent 42%),
+        color-mix(in srgb, var(--nvui-bg) 30%, transparent) !important;
+    -webkit-backdrop-filter: blur(calc(var(--nvui-glass-blur) * 2.4)) saturate(190%) brightness(1.12);
+    backdrop-filter: blur(calc(var(--nvui-glass-blur) * 2.4)) saturate(190%) brightness(1.12) !important;
+}
+
 .nvui-panel-header {
     display: flex;
     align-items: center;
@@ -2720,6 +2757,19 @@ dialog.nvui-tl .nvui-panel {
 }
 
 .nvui-solid dialog.nvui-tl .nvui-panel {
+    background: var(--nvui-bg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+
+/* 面板级 solid 把类加在 dialog 自身（.nvui-solid .nvui-panel 仍是祖先匹配，需更高 specificity 压过载体玻璃） */
+dialog.nvui-tl.nvui-solid .nvui-overlay.is-panel {
+    background: var(--nvui-overlay-bg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+
+dialog.nvui-tl.nvui-solid .nvui-panel {
     background: var(--nvui-bg);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;

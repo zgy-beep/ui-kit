@@ -1,7 +1,7 @@
 /**
  * SillyTavern NVUI Kit · 可选运行时 API（零依赖）
  * ------------------------------------------------------------------
- * 版本：ui-kit v2.7.2（与 package.json / tokens.css / components.css 版本号保持一致）
+ * 版本：ui-kit v2.8.0（与 package.json / tokens.css / components.css 版本号保持一致）
  * 用途：给插件/其它软件一个「可调用的设计接口」——用函数创建符合本 Kit 规范的面板、
  *       标签页、折叠分组、开关行、输入行、进度条、吐司，自动带上布局标准、无障碍属性、
  *       动效降级与焦点管理，避免每个插件各写一套 DOM。
@@ -52,7 +52,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this), function () {
     'use strict';
 
-    var VERSION = '2.7.2';
+    var VERSION = '2.8.0';
     var PANEL_CLASS = 'nvui-panel';
     var TOAST_LAYER_ID = 'nvui-api-toast-layer';
 
@@ -95,6 +95,14 @@
 
     function warn(message, detail) {
         logAt('warn', message, detail);
+    }
+
+    /* v2.8.0：默认值缺失类告警只提示一次，避免每次创建组件都刷屏。 */
+    var onceWarnings = Object.create(null);
+    function warnOnce(key, message, detail) {
+        if (onceWarnings[key]) return;
+        onceWarnings[key] = true;
+        warn(message, detail);
     }
 
     function error(message, detail) {
@@ -568,6 +576,78 @@
         return supported;
     }
 
+    /* ---------------------- v2.8.0 玻璃模式（面板级） ---------------------- */
+
+    var GLASS_MODES = ['auto', 'force', 'solid'];
+
+    function normalizeGlassMode(value) {
+        if (value === undefined || value === null || value === '') return 'auto';
+        var mode = String(value).toLowerCase();
+        if (GLASS_MODES.indexOf(mode) === -1) {
+            warn('glass 模式 "' + value + '" 无效，已回退 auto（可选 auto/force/solid）');
+            return 'auto';
+        }
+        return mode;
+    }
+
+    function browserSupportsBackdrop() {
+        if (typeof window === 'undefined' || !window.CSS || typeof window.CSS.supports !== 'function') {
+            return true;
+        }
+        try {
+            return !!(window.CSS.supports('backdrop-filter', 'blur(1px)')
+                || window.CSS.supports('-webkit-backdrop-filter', 'blur(1px)'));
+        } catch (err) {
+            return true;
+        }
+    }
+
+    function glassPreferenceBlocksForce() {
+        if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+        try {
+            return !!(window.matchMedia('(prefers-reduced-transparency: reduce)').matches
+                || window.matchMedia('(forced-colors: active)').matches);
+        } catch (err) {
+            return false;
+        }
+    }
+
+    function resolveEffectiveGlassMode(mode) {
+        if (mode === 'solid') return 'solid';
+        if (mode === 'force') {
+            if (!browserSupportsBackdrop() || glassPreferenceBlocksForce()) return 'auto';
+            return 'force';
+        }
+        return 'auto';
+    }
+
+    function applyPanelGlassMode(dialogEl, mode) {
+        if (!dialogEl || !dialogEl.setAttribute) return 'auto';
+        var effective = resolveEffectiveGlassMode(mode);
+        /* data-nvui-glass 是「实际生效」模式，供 CSS 使用；请求模式另存，便于 getGlassState 解释。 */
+        dialogEl.setAttribute('data-nvui-glass-mode', mode);
+        dialogEl.setAttribute('data-nvui-glass', effective);
+        if (effective === 'solid') dialogEl.classList.add('nvui-solid');
+        else dialogEl.classList.remove('nvui-solid');
+        if (effective === 'auto') {
+            /* 回到 auto 时重新同步宿主回退；force 时保留全局回退，让其它 auto 面板继续生效 */
+            if (typeof syncGlassFallback === 'function') syncGlassFallback();
+        }
+        return effective;
+    }
+
+    function versionTag() {
+        return String(VERSION);
+    }
+
+    function stampVersion(root) {
+        if (!isDomAvailable()) return;
+        try {
+            if (document.documentElement) document.documentElement.setAttribute('data-nvui-version', versionTag());
+            if (root && root.setAttribute) root.setAttribute('data-nvui-version', versionTag());
+        } catch (err) { /* 属性写入失败不影响主流程 */ }
+    }
+
     /* ---------------------- 浮层开合（top-layer 载体） ---------------------- */
 
     /**
@@ -691,6 +771,7 @@
     /** 胶囊开关行：<label class="nvui-switch-row"><input type="checkbox"><span>…</span></label> */
     function switchRow(options) {
         var opts = options || {};
+        if (!opts.label) warnOnce('switchRow-label', 'switchRow(): 缺少 label，将渲染空标签行');
         var row = el('label', 'nvui-switch-row' + (opts.feature ? ' is-feature' : ''));
         var input = el('input', null, { type: 'checkbox' });
         input.checked = !!opts.value;
@@ -741,6 +822,7 @@
      *    - 白名单外的类型（'pathway'、'richtext' …）静默回退 text 并记一条 warn。 */
     function inputRow(options) {
         var opts = options || {};
+        if (!opts.label) warnOnce('inputRow-label', 'inputRow(): 缺少 label，将渲染空标签行');
         var row = el('label', 'nvui-input-row');
         var type = normalizeInputType(opts.type);
         /* 伪类型 path：DOM 类型仍是 text，只靠 .is-path 类表现「路径框」 */
@@ -790,6 +872,7 @@
     /** 折叠分组：button.nvui-acc-head + .nvui-acc-body > .nvui-acc-inner */
     function accordion(options) {
         var opts = options || {};
+        if (!opts.title) warnOnce('accordion-title', 'accordion(): 缺少 title，将渲染空标题折叠组');
         var root = el('div', 'nvui-acc' + (opts.open ? ' is-open' : ''));
         var head = el('button', 'nvui-acc-head nvui-acc-header', { type: 'button', 'aria-expanded': opts.open ? 'true' : 'false' });
         var title = el('span', 'nvui-acc-title', { text: opts.title || '' });
@@ -836,6 +919,7 @@
     /** 线性进度条：role=progressbar + .nvui-progress-bar（宽度由 API 设置） */
     function progress(options) {
         var opts = options || {};
+        if (opts.indeterminate && !opts.label) warnOnce('progress-label', 'progress({indeterminate:true}): 缺少 label/aria-label，屏幕阅读器无法获知进度含义');
         var initial = normalizeProgressValue(opts.value);
         var trackAttrs = {
             role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100',
@@ -1344,6 +1428,11 @@
 
     function createPanel(options) {
         var opts = options || {};
+        /* 宿主若全局禁用了 backdrop-filter，先恢复回退态，避免玻璃只剩半透明底色 */
+        syncGlassFallback();
+        var glassMode = normalizeGlassMode(opts.glass);
+        var effectiveGlassMode = glassMode;
+        var glassMediaCleanup = null;
         /* 面板 id 会被派生出 -layer / -overlay / -title / -tab-* / -pane-* 等多个 DOM id，
            所以它本身也必须是合法 id（不能含空格 / 引号 / < >）。 */
         var id = uniqueId(sanitizeIdPart(opts.id || 'nvui-panel', 'nvui-panel'));
@@ -1388,9 +1477,38 @@
 
         /* NEW-36：显式设置 closing="" 与 role="presentation"，杜绝 SillyTavern fixToastrForDialogs 劫持注入 */
         var dialogTitleStr = (typeof opts.title === 'symbol') ? '面板' : (opts.title || '面板');
-        var dialog = el('dialog', 'nvui-tl', { id: id + '-layer', closing: '', role: 'presentation', 'aria-label': dialogTitleStr + ' 浮层' });
+        var dialog = el('dialog', 'nvui-tl', {
+            id: id + '-layer',
+            closing: '',
+            role: 'presentation',
+            'aria-label': dialogTitleStr + ' 浮层',
+            'data-nvui-version': VERSION,
+            'data-nvui-glass-mode': glassMode,
+        });
+        stampVersion(dialog);
         var overlay = el('div', 'nvui-overlay is-panel', { id: id + '-overlay', hidden: '' });
         var panel = el('div', 'nvui-panel', { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': id + '-title' });
+        effectiveGlassMode = applyPanelGlassMode(dialog, glassMode);
+
+        /* force 模式需要跟随系统「减少透明度 / 强制颜色」动态让位；auto/solid 也同步一次。 */
+        function refreshPanelGlassMode() {
+            effectiveGlassMode = applyPanelGlassMode(dialog, glassMode);
+        }
+        if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+            var glassMqs = [
+                window.matchMedia('(prefers-reduced-transparency: reduce)'),
+                window.matchMedia('(forced-colors: active)'),
+            ];
+            var onGlassPrefChange = function () { refreshPanelGlassMode(); };
+            glassMqs.forEach(function (mq) {
+                if (mq && typeof mq.addEventListener === 'function') mq.addEventListener('change', onGlassPrefChange);
+            });
+            glassMediaCleanup = function () {
+                glassMqs.forEach(function (mq) {
+                    if (mq && typeof mq.removeEventListener === 'function') mq.removeEventListener('change', onGlassPrefChange);
+                });
+            };
+        }
 
         /* 初始自定义宽度（opts.width，默认交由 CSS / token 720px） */
         if (typeof opts.width === 'number' && !isNaN(opts.width)) {
@@ -2635,6 +2753,7 @@
          * 摘除动作本身幂等（removed 标志），重复触发无害。
          */
         function destroy() {
+            if (glassMediaCleanup) { glassMediaCleanup(); glassMediaCleanup = null; }
             restoreForeignNodes(dialog);
             unregisterEscapeHandler(closePanel);
             var removed = false;
@@ -2713,6 +2832,28 @@
                 applyClamping();
                 if (persistConfig && persistConfig.size) schedulePersistSave();
             },
+            setGlassMode: function (mode) {
+                glassMode = normalizeGlassMode(mode);
+                effectiveGlassMode = applyPanelGlassMode(dialog, glassMode);
+                return effectiveGlassMode;
+            },
+            getGlassState: function () {
+                var reason = '';
+                if (glassMode === 'force' && effectiveGlassMode !== 'force') {
+                    reason = !browserSupportsBackdrop() ? 'backdrop-unsupported' : 'preference-blocked';
+                } else if (effectiveGlassMode === 'auto' && isDomAvailable() && document.body
+                    && document.body.classList.contains('no-blur')) {
+                    reason = 'host-no-blur';
+                }
+                return {
+                    mode: glassMode,
+                    effective: effectiveGlassMode,
+                    fastUI: !!(isDomAvailable() && document.body && document.body.classList.contains('no-blur')),
+                    browserSupports: browserSupportsBackdrop(),
+                    preferenceBlocked: glassPreferenceBlocksForce(),
+                    reason: reason,
+                };
+            },
         };
 
         Object.defineProperty(controller, 'activeTab', {
@@ -2775,6 +2916,7 @@
      */
     function showToast(options) {
         var opts = options || {};
+        if (!opts.message) warnOnce('showToast-message', 'showToast(): 缺少 message，将弹出空通知');
         syncGlassFallback();
         var layer = ensureToastLayer();
         if (!layer) return { element: null, dismiss: function () {} };
@@ -2783,7 +2925,8 @@
         installHostModalWatcher();
         var stack = q('.nvui-toast-stack', layer);
         if (!stack) return { element: null, dismiss: function () {} };
-        var toast = el('div', 'nvui-toast' + (opts.type ? ' is-' + opts.type : ''), { role: 'status' });
+        var toast = el('div', 'nvui-toast' + (opts.type ? ' is-' + opts.type : ''), { role: 'status', 'data-nvui-version': VERSION });
+        stampVersion(toast);
         var ic = iconNode(opts.icon || 'fa-solid fa-circle-info');
         if (ic) toast.appendChild(ic);
         var text = el('span', null, { text: opts.message || '' });
@@ -2833,6 +2976,91 @@
         return { element: toast, dismiss: dismiss };
     }
 
+    /* ---------------------- v2.8.0 自检 / 默认值 ---------------------- */
+
+    var DEFAULTS = Object.freeze({
+        switchRow: Object.freeze({ label: '', value: false, disabled: false, feature: false }),
+        inputRow: Object.freeze({ label: '', type: 'text', placeholder: '', value: null, disabled: false }),
+        accordion: Object.freeze({ title: '', summary: '', open: false, content: Object.freeze([]) }),
+        progress: Object.freeze({ value: 0, indeterminate: false, label: '', variant: null }),
+        createPanel: Object.freeze({
+            id: 'nvui-panel', title: '面板', version: null, tabs: Object.freeze([]), active: null,
+            actions: Object.freeze([]), footer: null, mount: null, persist: false, width: null,
+            themeToggle: false, update: null, glass: 'auto',
+        }),
+        showToast: Object.freeze({
+            message: '', type: null, icon: 'fa-solid fa-circle-info', duration: 3200, dismissible: true,
+        }),
+        actions: Object.freeze({ className: 'nvui-actions' }),
+    });
+
+    function semverTuple(value) {
+        var raw = String(value === undefined || value === null ? '' : value).replace(/^v/i, '').split('-')[0];
+        var parts = raw.split('.');
+        var out = [];
+        for (var i = 0; i < 3; i++) {
+            var n = parseInt(parts[i], 10);
+            out.push(isFinite(n) ? n : 0);
+        }
+        return out;
+    }
+
+    function compareSemver(a, b) {
+        var pa = semverTuple(a);
+        var pb = semverTuple(b);
+        for (var i = 0; i < 3; i++) {
+            if (pa[i] !== pb[i]) return pa[i] > pb[i] ? 1 : -1;
+        }
+        return 0;
+    }
+
+    function checkCompatibility(options) {
+        var opts = options || {};
+        var reason = '';
+        if (opts.min && compareSemver(VERSION, opts.min) < 0) reason = 'below-min';
+        else if (opts.max && compareSemver(VERSION, opts.max) > 0) reason = 'above-max';
+        return { compatible: !reason, actual: VERSION, reason: reason };
+    }
+
+    function selfCheck(options) {
+        var opts = options || {};
+        var issues = [];
+        if (!isDomAvailable()) {
+            return {
+                ok: false, kitVersion: VERSION, expect: opts.expect || null,
+                cssLoaded: false, glass: { state: 'unknown', autoFallback: false, reason: 'no-dom' },
+                carrierZ: null, hostModalCount: 0, tokens: {}, issues: ['no-dom'],
+            };
+        }
+        var cssLoaded = !!getToken('--nvui-glass-blur');
+        var cssVersion = String(getToken('--nvui-kit-version') || '').trim().replace(/^["']|["']$/g, '');
+        if (opts.expect && String(opts.expect) !== VERSION) issues.push('version-mismatch');
+        if (!cssLoaded) issues.push('css-not-loaded');
+        if (cssVersion && cssVersion !== VERSION) issues.push('css-version-mismatch');
+        try { detectGlassSupport({ force: true }); } catch (err) { /* 探测失败不影响自检返回 */ }
+        var fallback = false;
+        try { fallback = document.documentElement.classList.contains(GLASS_FALLBACK_CLASS); } catch (err) { /* 忽略 */ }
+        if (fallback) issues.push('glass-auto-fallback');
+        var zRaw = getToken('--nvui-z-layer');
+        var zNum = parseFloat(zRaw);
+        return {
+            ok: issues.length === 0,
+            kitVersion: VERSION,
+            expect: opts.expect || null,
+            cssLoaded: cssLoaded,
+            cssVersion: cssVersion,
+            glass: {
+                state: glassState.state || 'unknown',
+                autoFallback: fallback,
+                reason: glassState.reason || '',
+            },
+            carrierZ: isFinite(zNum) ? zNum : null,
+            hostModalCount: countHostModals(),
+            tokens: { accent: getToken('--nvui-accent') },
+            issues: issues,
+        };
+    }
+
     /* ---------------------- 导出 ---------------------- */
 
     return {
@@ -2856,6 +3084,9 @@
         getToken: getToken,
         invalidateTokenCache: invalidateTokenCache,
         setTheme: setTheme,
+        selfCheck: selfCheck,
+        checkCompatibility: checkCompatibility,
+        defaults: DEFAULTS,
         detectGlassSupport: detectGlassSupport,
         syncGlassFallback: syncGlassFallback,
         countHostModals: countHostModals,

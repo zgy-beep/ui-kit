@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SillyTavern UI Kit v2.7.2 · Flat Glass 组件预览</title>
+<title>SillyTavern UI Kit v2.8.0 · Flat Glass 组件预览</title>
 <!--
-  SillyTavern 插件通用 UI Kit v2.7.2「Flat Glass」组件预览页
+  SillyTavern 插件通用 UI Kit v2.8.0「Flat Glass」组件预览页
   ------------------------------------------------------------------
   v2.5.0 新增（2026-10-21）：
   ① 表现层布局状态持久化（R1 · Issue #5）：createPanel 支持 persist: true，自动记忆
@@ -85,6 +85,11 @@
     /* ==========================================================================
      * 预览页骨架样式（仅本文件使用，pv- 前缀，不进入 kit）
      * ========================================================================== */
+    :root {
+        /* v2.8.0：消费版本令牌，纯 CSS 也能验证 tokens.css 已加载正确版本 */
+        --pv-kit-version: var(--nvui-kit-version);
+    }
+
     html {
         -webkit-text-size-adjust: 100%;
     }
@@ -1127,7 +1132,7 @@
         <div class="pv-hero-main">
             <h1>
                 <span>SillyTavern UI Kit</span>
-                <span class="nvui-badge is-accent">v2.7.2</span>
+                <span class="nvui-badge is-accent">v2.8.0</span>
                 <span class="nvui-badge">Flat Glass</span>
             </h1>
             <p class="nvui-hint pv-hero-sub">
@@ -2112,6 +2117,10 @@
                                 <button type="button" class="nvui-btn is-sm is-ghost" id="pv-progress-reset">重置</button>
                                 <button type="button" class="nvui-btn is-sm is-secondary" id="pv-progress-ind-toggle">切回确定进度</button>
                             </div>
+                            <div class="nvui-actions">
+                                <button type="button" class="nvui-btn is-sm">取消</button>
+                                <button type="button" class="nvui-btn is-sm is-primary">保存</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2775,7 +2784,7 @@ panel.showUpdate({ version: 'v2.5.0', label: '新版本 v2.5.0 可用', url: 'ht
     </main>
 
     <footer class="pv-footer">
-        <div>SillyTavern UI Kit v2.7.2 · Flat Glass · 单文件离线预览（无外链 / 无 CDN / 无 emoji）</div>
+        <div>SillyTavern UI Kit v2.8.0 · Flat Glass · 单文件离线预览（无外链 / 无 CDN / 无 emoji）</div>
         <div>文件：tokens.css + components.css · 规范：README.md · 令牌：110 个 · 组件类：80 个 · 关键帧：16 个</div>
     </footer>
 </div>

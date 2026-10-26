@@ -6,6 +6,29 @@
 - 新增组件 / 新增 token（不破坏既有 DOM 与取值）：小版本（2.x.0）
 - 重命名类 / token、删除 token、修改 DOM 契约：大版本（x.0.0）
 
+## v2.8.0（2026-10-26）· 下游 DX + 组件默认值 + Fast UI 玻璃模式（MINOR）
+
+> 小版本，additive：新增 3 个顶层导出（`selfCheck` / `checkCompatibility` / `defaults`）与面板控制器方法；新增 `--nvui-kit-version`、`.nvui-actions`、`glass` 模式；无删除/改名。下游覆盖 4 个运行资产即可升级。
+
+### 新增
+
+- **运行时自检**：`NVUI.selfCheck({ expect })` 返回 `kitVersion/cssLoaded/glass/carrierZ/hostModalCount/tokens/issues`；`NVUI.checkCompatibility({ min, max })` 做 semver 区间判断；Node 无 DOM 安全返回 `no-dom`。
+- **版本可观测**：`tokens.css` 新增 `--nvui-kit-version`（深色 110→111）；`createPanel` / `showToast` 的载体与 `documentElement` 写 `data-nvui-version`。
+- **组件默认值**：`NVUI.defaults` 冻结对象；`switchRow/inputRow/accordion/progress/showToast` 缺 label/title/message 时 `warnOnce`。
+- **默认间距**：正文内裸相邻 `.nvui-btn` 默认 8px；`.nvui-actions` 新增按钮组容器（组件类 80→81）；`.nvui-btn-row` / footer 内不双倍。
+- **Fast UI 玻璃模式**：`createPanel({ glass: 'auto' | 'force' | 'solid' })`，默认 `auto`；控制器 `panel.setGlassMode()` / `panel.getGlassState()`；`force` 仅面板级 opt-in，用 4 条作用域 `!important` 覆盖宿主 `body.no-blur`，并在减少透明度 / 强制颜色 / 不支持浏览器时回退；不提供全局 setter。
+
+### 工具 / 发布
+
+- `npm run sync:template`（4 资产 + md5）、`npm run verify:release`、`npm run pack`（zip + SHA256SUMS + manifest.json）、`npm run downstream:check`。
+- API 表面冻结测试（27 顶层导出 + 控制器方法）、CI 门禁、`UPGRADING.md` / `MIGRATION-v2.md`。
+
+### 兼容性
+
+- token 110→111（仅 `--nvui-kit-version`）、组件类 80→81（`.nvui-actions`）、`!important` 14→18（仅 force 块）；其余数字契约不变。
+- `glass` 默认 `auto`，不改变现有 Fast UI 回退行为；`force` 由插件显式选择并可在设置中关闭。
+- 面板态仍是视觉优先档；严格 AA 用 `.nvui-solid`。
+
 ## v2.7.2（2026-10-26）· 玻璃透明感修复（PATCH）
 
 > 补丁版本：不改 token 取值/数量（110/47）、组件类（80）、关键帧（16）、`!important` 预算（14）、公开 API 签名与持久化状态格式；下游覆盖 4 个运行资产即可升级。
