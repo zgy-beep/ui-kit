@@ -76,6 +76,8 @@
 | [`AI-GUIDE.md`](AI-GUIDE.md) | 给 AI 编码助手的操作手册：硬约束、读文件顺序、面板标准流程、提示词模板、验收清单 |
 | [`CHANGELOG.md`](CHANGELOG.md) | 变更记录与版本时间线（**历史事实的唯一来源**） |
 | [`AUDIT.md`](AUDIT.md) | 架构审核报告：v1.1.0 评估、v2.0.0/v2.0.1 复核与问题清单 |
+| [`ROADMAP.md`](ROADMAP.md) | 下一阶段计划：v2.8.2 / v2.9.0 / v3.0.0 的任务拆解、验收标准、风险与待拍板项（追踪：GitHub issue #17 / #18 / #19） |
+| [`ISSUES.md`](ISSUES.md) | 缺陷与审查项的本地追踪表：复现证据、修复点、实机数据（与 GitHub Issues 双向对应） |
 | [`package.json`](package.json) | 项目元信息与 `npm test` / `test:browser` / `test:e2e` 入口 |
 | [`LICENSE`](LICENSE) | MIT 许可 |
 | [`test/test-ui-kit.js`](test/test-ui-kit.js) | 规范守护测试：token 完整性、三方覆盖、无硬编码颜色、WCAG 与玻璃合成对比度、宿主红线、动效/降级、版本自洽 |
