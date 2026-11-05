@@ -6,6 +6,36 @@
 - 新增组件 / 新增 token（不破坏既有 DOM 与取值）：小版本（2.x.0）
 - 重命名类 / token、删除 token、修改 DOM 契约：大版本（x.0.0）
 
+## v2.8.1（2026-11-05）· `persist.size: false` 尺寸隔离修复（PATCH）
+
+> 补丁版本：不改 token 取值/数量（111/47）、组件类（81）、关键帧（16）、`!important` 预算（18）、公开 API 签名与持久化状态格式；下游覆盖 4 个运行资产即可升级。
+
+### 修复
+
+- **`persist.size: false` 不再把历史尺寸写回内联样式（GitHub [#16](https://github.com/zgy-beep/ui-kit/issues/16)）**：下游用 `createPanel({ persist: { size: false, tab: true, accordion: true } })` 关闭尺寸持久化、并在业务 CSS 里用 `--nvui-panel-max-h` / `height: var(--nvui-panel-max-h)` 接管面板高度时，只要 `nvui_state_<id>` 里**曾经**存在过 `size.width/height`（旧版本存过或用户拖拽过），面板重开就会被写回旧 px 高度 —— 1440×900 实测只有 567px，而不是 94vh 的 846px。三处定版改动：
+  1. `applyClamping()` 增加 `useSavedSize = !!(persistConfig && persistConfig.size)` 门禁：`persist.size: false` 时**完全不读** `loadedState.size`；面板自身的内联 px（拖拽 / `opts.width` / `setSize()` / 最大化）仍照常参与视口钳制，clamp 的安全语义不变；
+  2. `applyLoadedState()` 在 `persistConfig.size === false` 且存档带 `size` 时，先把 `size` 摘成 `null` 再恢复其它字段（同步与异步 StorageAdapter 两条路径共用），避免后续任何路径再读到旧值；
+  3. `flushPersistSave()` 不再 `loadedState.size` 原样回存，改为在 `persist.size: false` 时写 `size: null` —— 历史遗留值被**一次性自愈**清掉，下游不必再手动清理存储。
+- 下游此前为规避该缺陷写的「开面板前 `delete state.size`」补丁可以删除，行为不再依赖它。
+
+### 测试
+
+- 新增 `test/issue-16-persist-size.js`（真实 Chromium，8 项断言）：T1 复现（旧 `size` + `size:false` → 无内联 height、回到 94vh token 高度）、T2 历史 `size` 被清成 `null` 且 tab/accordion 存档保留、T3 门禁不误伤内联 px（`setSize(720, 5000)` 仍被钳制）、T4 `persist.size: true` 旧尺寸照常恢复、T5 清理后再开不死灰复燃、T6 无 `persist` 不写尺寸内联样式、T7 旧存档 `isMaximized: true` 不进最大化态、T8 全程零 pageerror。
+- **红测验证**：把 `nvui-api.js` 临时还原为 v2.8.0 原文件时 T1/T2/T7 全红（`inlineHeight: "400px"`、存档 `size` 仍为旧对象），修复后 8/8 全绿。
+- 接入 `npm run test:issue16`，并追加到 `npm run test:browser` 链尾。
+- 全量回归：`npm test` 367 PASS / 0 FAIL、`test:api` 27 导出冻结、forms 455/455、accordion 18/18、optgroup 217/217、focus 13/13，`verify:release` 通过。
+
+### 文档 / 版本
+
+- README（标题版本 / CDN tag / §10.10 升级速查 / §11.4 版本时间线 / token 表 `--nvui-kit-version`）、AI-GUIDE（当前版本与历史基准）、UPGRADING（新增「2.8.0 → 2.8.1」段，含绕过补丁删除说明）、MIGRATION-v2、preview.html 同步到 v2.8.1。
+- `st-extension-template/ui-kit/` 4 资产随 `npm run sync:template` 同步（md5 逐文件一致）。
+- `ISSUES.md`：#16 转入「已修复」并写明修复版本与回归入口。
+
+### 兼容性
+
+- 无 token / 类名 / 关键帧 / `!important` / 公开 API 签名 / `nvui_state_*` 状态格式变更。
+- 唯一可观察行为变化：`persist.size: false` 的面板不再被历史存档尺寸钳回；`persist.size: true`（默认）完全不变。
+
 ## v2.8.0（2026-10-26）· 下游 DX + 组件默认值 + Fast UI 玻璃模式（MINOR）
 
 > 小版本，additive：新增 3 个顶层导出（`selfCheck` / `checkCompatibility` / `defaults`）与面板控制器方法；新增 `--nvui-kit-version`、`.nvui-actions`、`glass` 模式；无删除/改名。下游覆盖 4 个运行资产即可升级。

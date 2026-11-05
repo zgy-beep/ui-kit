@@ -22,6 +22,7 @@
 | GitHub Issue | 问题与证据 | 修复状态 |
 | :--- | :--- | :--- |
 | [#15](https://github.com/zgy-beep/ui-kit/issues/15) | v2.7.0 forms 浏览器回归一次并行运行得到 453/455，半选 checkbox 背景和横杠透明度读到过渡中间帧；串行复跑 455/455。 | v2.7.1 修复与验收通过：等待两项计算样式终值并保留最终断言；三份并行 forms 各 455/455。发布提交关联 `Fixes #15`。 |
+| [#16](https://github.com/zgy-beep/ui-kit/issues/16) | `persist: { size: false }` 时 `applyClamping()` 仍读 `loadedState.size`，把 `nvui_state_<id>` 里历史 `size` 的 px 高度写回内联样式（1440×900 实测 567px vs 94vh 的 846px）；`flushPersistSave()` 又把旧 `size` 原样回存，导致旧值永远清不掉。复现证据：`nvui-api.js` v2.8.0 `applyClamping()` 高度分支、`flushPersistSave()` 的 `size:` 三元分支。 | **v2.8.1 修复并验收通过**：`applyClamping()` 加 `persistConfig.size` 门禁（不读存档 size，内联 px 仍钳制）、`applyLoadedState()` 摘除旧 `size`、`flushPersistSave()` 落 `size: null` 主动清理。回归入口 `node test/issue-16-persist-size.js`（8/8，Chromium；还原 v2.8.0 时为 3 项红）。发布提交关联 `Fixes #16`。 |
 
 ---
 
@@ -29,6 +30,7 @@
 
 | # | 问题 | 严重度 | 状态 | 证据 | 修复 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| G16（GitHub #16） | `persist: { size: false }` 关闭尺寸持久化后，面板仍被历史存档的 px 宽高钳回，压掉下游 `height: var(--nvui-panel-max-h)`；且旧 `size` 每次落盘被原样回存，永远清不掉 | **P1 持久化** | 已修复（v2.8.1） | `nvui-api.js` v2.8.0：`applyClamping()` 的 `loadedState.size` 分支无 `persistConfig.size` 门禁；`flushPersistSave()` 写 `persistConfig.size ? {...} : loadedState.size`。下游 ST-Worldbook-Editor 实测 1440×900 下 567px（期望 94vh = 846px） | ① `applyClamping()` 增加 `useSavedSize` 门禁（存档 size 完全不读，内联 px 仍照常视口钳制）；② `applyLoadedState()` 在 `size === false` 时把存档 `size` 摘成 `null`（同步/异步 adapter 同路径）；③ `flushPersistSave()` 改为落 `size: null`，历史遗留值一次性自愈。回归入口 `node test/issue-16-persist-size.js`（Chromium 8/8；还原 v2.8.0 时 T1/T2/T7 全红），已并入 `npm run test:browser` |
 | 1 | `nvui-api.js` 的 `el()` 支持 `html` 属性直写 `innerHTML`，构成 XSS 汇聚点 | P0 安全 | 已修复 | `nvui-api.js` 原 L73 `else if (k === 'html') node.innerHTML = String(v);` | 删除该分支，只保留 `text` → `textContent`，其余走 `setAttribute`。GitHub Issue #1 |
 | 2 | `animationend` 冒泡截断退场动画：面板内子动画（如 `.nvui-tabpane-in`）结束会冒泡到 overlay，导致 overlay 自身退场被提前截断 | P0 正确性 | 已修复 | 实机对照实验：A 组（切 tab 后 30ms 关闭）overlay 退场在 207ms 被 hidden（截断）；B/C 组正常 | `closeLayer` / 吐司 `dismiss()` 的 `onAnimEnd` 增加 `event.target` 校验（+ 吐司校验 `animationName`） |
 | 3 | 每次 `createPanel` 都在 `document` 上挂 `keydown` 监听且从不注销 → 监听器泄漏 | P1 正确性 | 已修复 | `nvui-api.js` 原 `on(document, 'keydown', ...)`；实机：第 3 个面板新增 document 监听数 = 1 | 引入全局单例 Esc 调度器 `escapeStack`，只由最上层可见浮层响应；面板销毁时自动注销 |
@@ -286,3 +288,52 @@
 
 运行环境：本机 SillyTavern `T:\Github\SillyTavern\APP\SillyTavern`（v1.19.0，http://127.0.0.1:8000）。
 用 `playwright-core` 直连本机 Chrome（`NODE_PATH` 注入模块解析路径）。
+
+---
+
+## 下一步迭代计划（v2.8.1 之后）
+
+> 依据：本仓库现有 50 个测试脚本里只有 5 个接进了 `npm test` / `test:browser`；CI 只跑静态门禁；
+> #16 这类缺陷的共同根因是「kit 往面板写内联 px」与「下游用 CSS 接管尺寸」互相打架。
+> 因此三条线按「先消掉同类风险 → 再补下游能力 → 最后做破坏性重构」推进。
+
+### 线路 A · v2.8.x 补丁线（收尾，预计 1~2 天，风险极低）
+
+| # | 事项 | 具体动作 | 验收 |
+| :--- | :--- | :--- | :--- |
+| A1 | 尺寸语义矩阵补齐 | 把 #16 的断言扩展到 `persist: { size:false, tab:false, accordion:false }` / `persist: true` / `persist: {}` / 异步 StorageAdapter 四种组合（`test/issue-16-persist-size.js` 增 T9~T12） | 12/12 绿；异步 adapter 下 `size:null` 同样落盘 |
+| A2 | 浏览器套件免 NODE_PATH | `playwright-core` 提为 `devDependencies`（不进运行时依赖），`test/*.js` 统一走 `scripts/resolve-browser.js`；缺 Chrome / 缺包时输出**可执行的修复命令**而不是 `[FATAL]` | 新机器 `npm i && npm run test:browser` 一次通过；缺依赖时提示含 `npm i -D playwright-core` |
+| A3 | 一键门禁 `npm run verify:all` | 新增 `scripts/verify-all.js`：静态 4 项 + `verify:release` + `pack` 产物校验；检测到 Chrome 再追加浏览器套件（含 issue-16 / glass / e2e） | 本机全绿；CI（ubuntu、无 Chrome）自动跳过浏览器段且不报错 |
+| A4 | 测试目录收敛 | 50 个脚本按「回归 / 宿主实机 / 一次性探针」分类，移入 `test/host/`、`test/probe/` 并在 `test/README.md` 立索引；退役一次性探针（保留结论于 ISSUES.md） | `test/*.js` 顶层只剩可回归脚本；README §13 同步 |
+| A5 | CHANGELOG ↔ 版本一致性 | `verify-release.js` 增加「CHANGELOG 首条 == `package.json.version`」与「README §11.4 时间线含当前版本行」断言（现在靠人肉保证） | 故意改错版本号时 `verify:release` 必须红 |
+
+### 线路 B · v2.9.0（MINOR，主题：下游可维护性 / 可观测性，预计 1~2 周）
+
+全部 additive，不改 token 取值 / 组件类命名 / 状态格式 v1，下游覆盖 4 资产即可。
+
+| # | 能力 | 设计要点 | 为什么值得做 |
+| :--- | :--- | :--- | :--- |
+| B1 | `panel.getLayoutState()` / `setLayoutState(state, { silent })` | 复用 `nvui_state_v1` 结构；`setLayoutState` 只写内存 + 调度一次落盘，不触发 `applyLoadedState` 的 tab 恢复 | 现在只有 `clearLayoutState()`；下游要「导出/导入布局」「同步到 `extension_settings`」只能自己反解存储 |
+| B2 | `NVUI.diagnostics()` | `selfCheck()` 的超集，返回可直接贴进 issue 的 JSON：版本、4 资产 md5/`--nvui-kit-version`、玻璃态、宿主模态数、`escapeStack` 深度、持久化键清单、监听器计数 | #16 的报告里最贵的一步是「确认下游装的是哪版、状态里到底有什么」 |
+| B3 | `persist.size: 'width-only'` | 在现有布尔之上加枚举：只持久化宽度、高度始终交给 CSS token（`applyClamping` 已有 `useSavedSize` 门禁，改造成本低） | 「定宽 + 高度自适应」是下游高频诉求，#16 正是它的误用形态 |
+| B4 | 拖拽调尺寸的键盘通道 | 面板右下 resize 手柄 `tabindex=0` + `role=separator` + 方向键步进（Shift 加速）+ Home 复位，走 `setSize()` 同一路径 | 当前调尺寸只有鼠标；键盘用户无法用「记忆尺寸」能力 |
+| B5 | `inputRow` 补 `textarea` 与 `hint` / `error` 状态 | 沿用 `INPUT_TYPES` 白名单思路加 `'textarea'` 伪类型；`error` 联动 `aria-invalid` + `aria-describedby` | 14 种原生类型里没有多行文本，下游长文本配置只能自绘 |
+| B6 | `NVUI.setTheme('auto')` | 跟随 `prefers-color-scheme` + 宿主 `.nvui-theme-light` 双信号，带 `matchMedia` 监听与缓存失效 | 下游现在普遍写两套皮肤切换逻辑 |
+
+### 线路 C · v3.0.0（MAJOR，破坏性，需单独迁移器，预计 3~4 周）
+
+| # | 变更 | 破坏点 | 迁移方案 |
+| :--- | :--- | :--- | :--- |
+| C1 | **内联尺寸彻底停写**：面板宽高改由 `--nvui-panel-w` / `--nvui-panel-h` CSS 变量承载，`clampPanelLayout()` 只算变量值 | 任何读 `panel.style.width/height` 的下游代码失效（含本仓库部分测试断言） | 状态格式升 `v2`（`{ size: { w, h, mode } }`）+ `migrateStateV1toV2()`；保留一版 `data-nvui-legacy-size` 兼容开关 |
+| C2 | 按钮组收敛：`.nvui-btn-row` / `.nvui-actions` / `*-footer` 三套合一，命名统一 | 类名删除 | 旧类保留为 alias 一版并 `warnOnce` |
+| C3 | `tokens.json` schema v2（分组 + 类型 + 描述） | 机器读 token 的脚本失效 | 提供 `scripts/tokens-v1-to-v2.js` |
+| C4 | 兼容矩阵与硬门禁 | — | `checkCompatibility({ min })` + `package.json.engines`；README 明确 ST 1.19 / 1.20、Chrome/Edge/Safari 最低版本 |
+
+### 排期与门禁
+
+1. **本周**：A1 → A2 → A5（先把「同类 bug 不会再漏」和「新人可复跑」做掉）。
+2. **下一版发布前**：A3、A4，然后打 `v2.8.2`（若 A1 发现新缺陷）或直接进 v2.9 开发线。
+3. **v2.9 开工顺序**：B1 → B3（共用持久化语义）→ B2 → B6 → B4 / B5。
+4. **每条线的完成定义**：静态断言 + 真机断言双绿、`verify:release` 通过、CHANGELOG 有条目、ISSUES.md 状态闭环、4 资产 md5 一致。
+5. **明确不做**：不为性能类疑点再开一轮「逐帧重排」改造（#3 / #8~#12 已用帧间隔实测证伪）；不在 v2.x 内改 DOM 必需层级（留给 C1）。
+

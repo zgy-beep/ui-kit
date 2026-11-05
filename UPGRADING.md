@@ -1,6 +1,38 @@
-# UPGRADING · v2.8.0
+# UPGRADING · v2.8.1
 
-本文件是**常青升级指南**：当前版本是 v2.8.0。历史大版本差异见 [MIGRATION-v2.md](MIGRATION-v2.md)。
+本文件是**常青升级指南**：当前版本是 v2.8.1。历史大版本差异见 [MIGRATION-v2.md](MIGRATION-v2.md)。
+
+## 2.8.0 → 2.8.1
+
+v2.8.1 是 **PATCH**：只修 `persist.size: false` 的尺寸隔离缺陷（GitHub #16），没有 token / 组件类 / `!important` / 公开 API / DOM 契约 / 状态格式变更。
+
+### 1. 覆盖 4 个运行资产
+
+```
+tokens.css
+components.css
+nvui-api.js
+tokens.json
+```
+
+保持 `tokens.css` 在 `components.css` 之前，CSS 先于 JS。4 个必须是同一版本；v2.8.1 的 `--nvui-kit-version`、`NVUI.version` 都会读成 `2.8.1`。
+
+### 2. 本次行为变化（只影响 `persist: { size: false }`）
+
+`persist.size: false` 现在的语义是**完全不参与尺寸持久化**：
+
+- 不再从 `nvui_state_<id>` 恢复 `size`；
+- `applyClamping()` 不再把存档里的 px 宽高写回面板内联样式（下游 `height: var(--nvui-panel-max-h)` / `94vh` 不再被旧值压掉）；
+- 下一次落盘会把历史遗留的 `size` 主动写回 `null`，即「一次性自愈」，无需下游清理存储；
+- **面板自身的内联 px 仍然照常受视口钳制**（拖拽、`opts.width`、`setSize()`、最大化语义不变）。
+
+`persist.size: true`（默认）行为完全不变。下游若此前写过「开面板前手动 `delete state.size`」的绕过补丁，升级后可以直接删掉。
+
+```js
+// 升级后：不再需要这段绕行
+const state = storage.get('nvui_state_wbe');
+if (state && state.size) { delete state.size; storage.set('nvui_state_wbe', state); }
+```
 
 ## 2.7.2 → 2.8.0
 
@@ -20,7 +52,7 @@ tokens.json
 ### 2. 版本自检
 
 ```js
-const r = NVUI.selfCheck({ expect: '2.8.0' });
+const r = NVUI.selfCheck({ expect: '2.8.1' });
 if (!r.ok) console.warn('[my-plugin] ui-kit', r.issues);
 ```
 
@@ -64,8 +96,8 @@ panel.getGlassState();
 
 ### 6. 验收清单
 
-1. 4 资产同版本；`NVUI.version === '2.8.0'`；
-2. `NVUI.selfCheck({ expect: '2.8.0' })` 无 `version-mismatch` / `css-not-loaded`；
+1. 4 资产同版本；`NVUI.version === '2.8.1'`；
+2. `NVUI.selfCheck({ expect: '2.8.1' })` 无 `version-mismatch` / `css-not-loaded`；
 3. `node ui-kit/test/downstream-check.js` exit 0；
 4. 面板/弹窗/吐司/折叠/表单冒烟，零 pageerror；
 5. 检查相邻按钮间距、`.nvui-actions`、玻璃 auto/force/solid 三态；

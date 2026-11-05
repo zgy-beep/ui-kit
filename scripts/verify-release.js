@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * v2.8.0 verify-release.js
+ * v2.8.1 verify-release.js
  * 以 package.json.version 为唯一版本源，校验发布前必须一致的静态契约。
  * 零依赖；失败 exit 1 并逐条打印原因。
  */

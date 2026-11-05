@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * v2.8.0 downstream-check.js
+ * v2.8.1 downstream-check.js
  * 只依赖 4 个运行资产；可随资产拷入下游 ui-kit/test/ 后执行：
  *   node ui-kit/test/downstream-check.js
  * 不读取 README/CHANGELOG/AUDIT；失败 exit 1。

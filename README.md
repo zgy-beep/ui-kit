@@ -1,6 +1,6 @@
 # SillyTavern 插件 UI Kit · Flat Glass 设计规范
 
-> 版本：**v2.8.0**（2026-10-26）· 设计语言 **Flat Glass（扁平玻璃）** · 零依赖 · 可整目录复用
+> 版本：**v2.8.1**（2026-11-05）· 设计语言 **Flat Glass（扁平玻璃）** · 零依赖 · 可整目录复用
 
 给 SillyTavern 插件用的自包含浮动 UI 设计系统：两个 CSS 文件接入即可获得一致的弹窗、面板、表单、反馈与动效；需要时再加一个零依赖 JS API 生成符合规范的 DOM。**样式层没有运行时；`nvui-api.js` 是可选增强。**
 
@@ -229,11 +229,11 @@ API 生成的 DOM 自动符合 [§12](#12-sillytavern-插件面板布局标准�
 
 ```html
 <!-- 设计令牌与组件样式 -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.8.0/tokens.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.8.0/components.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.8.1/tokens.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.8.1/components.css">
 
 <!-- 可选运行时 API -->
-<script src="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.8.0/nvui-api.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.8.1/nvui-api.js"></script>
 ```
 
 > 三份资源必须锁定**同一个 tag**，避免令牌、样式与运行时版本漂移；CDN 缓存刷新可能略晚于 tag 推送。
@@ -246,7 +246,7 @@ API 生成的 DOM 自动符合 [§12](#12-sillytavern-插件面板布局标准�
 async function ensureNVUI() {
     const W = window.parent || window, D = W.document;
     if (W.NVUI) return W.NVUI;
-    const CDN = 'https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.8.0'; // 三份资源锁同一 tag
+    const CDN = 'https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.8.1'; // 三份资源锁同一 tag
 
     // v2.7.2：先等 CSS 就绪再初始化，否则玻璃探测会在 CSS 缺席时误判为「不支持模糊」
     const loadCss = (id, href) => new Promise((resolve, reject) => {
@@ -962,7 +962,7 @@ head.addEventListener('click', () => {
 | 令牌 | 值 | 用途 |
 | :--- | :--- | :--- |
 | `--nvui-z-layer` | `1000000` | 载体档：`dialog.nvui-tl` 自身（非模态 `show()` 不进 top layer，档位必须显式给） |
-| `--nvui-kit-version` | `"2.8.0"` | v2.8.0 起：纯 CSS 下游可读的 kit 版本（与 `package.json` / `NVUI.version` 一致） |
+| `--nvui-kit-version` | `"2.8.1"` | v2.8.0 起：纯 CSS 下游可读的 kit 版本（与 `package.json` / `NVUI.version` 一致） |
 | `--nvui-z-floating` | `1000010` | 悬浮入口与悬浮面板 |
 | `--nvui-z-overlay` | `1000020` | 子浮层：遮罩与弹窗层 |
 | `--nvui-z-tooltip` | `1000030` | 工具提示；吐司载体也取此档 |
@@ -1779,9 +1779,9 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 
 **升级动作**：覆盖 CSS 与 `nvui-api.js`（新 API 全部为增量，旧代码无需修改）；宿主用 `showModal()` 时 kit 自动让位，业务无需改动；运行 `npm test`。
 
-### 10.10 v2.4.0 → v2.8.0 升级速查
+### 10.10 v2.4.0 → v2.8.1 升级速查
 
-从 v2.4.0 及更早版本升到当前 v2.8.0，按版本顺序做这几件事即可（**全部为小版本/补丁，覆盖文件即可，无破坏性变更**）。完整步骤见 [UPGRADING.md](UPGRADING.md)，历史版本差异见 [MIGRATION-v2.md](MIGRATION-v2.md)。
+从 v2.4.0 及更早版本升到当前 v2.8.1，按版本顺序做这几件事即可（**全部为小版本/补丁，覆盖文件即可，无破坏性变更**）。完整步骤见 [UPGRADING.md](UPGRADING.md)，历史版本差异见 [MIGRATION-v2.md](MIGRATION-v2.md)。
 
 | 版本 | 类型 | 你需要做什么 |
 | :--- | :--- | :--- |
@@ -1791,6 +1791,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 | v2.7.1 | 补丁 | 无需改动：只修浏览器回归测试时序（半选 checkbox 等待最终计算值），组件样式、公开 API、状态格式、token 与 DOM 契约不变。 |
 | v2.7.2 | 补丁 | 覆盖 4 个运行资产即可：玻璃透明感修复（面板保持透明 + 自身 backdrop-filter 背后模糊；宿主 Fast UI 默认关模糊时改为 97% token 派生近不透明回退而不是全不透明；玻璃探测三态化并可自愈）。无需改 DOM / API / 状态；建议目检深/浅主题与 Fast UI 开关两态。 |
 | v2.8.0 | 小版本 | 覆盖 4 资产；新增 `--nvui-kit-version`、`selfCheck` / `defaults`、`.nvui-actions`、`createPanel({ glass })` 与控制器 `setGlassMode/getGlassState`；相邻按钮 8px 默认间距。可选接入，见 [UPGRADING.md](UPGRADING.md)。 |
+| v2.8.1 | 补丁 | 覆盖 4 资产即可，无需改调用：修 GitHub #16 —— `persist: { size: false }` 现在真的「完全不参与尺寸持久化」（不再把历史 px 高度写回内联样式，并主动清理 `size: null`）；`persist.size: true` 行为不变。 |
 
 **高频 FAQ**
 
@@ -1844,6 +1845,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 
 | 版本 | 日期 | 类型 | 一句话摘要 |
 | :--- | :--- | :--- | :--- |
+| v2.8.1 | 2026-11-05 | 补丁 | 修 GitHub #16：`persist.size: false` 彻底退出尺寸持久化（旧 `size` 存档不再写回内联高度，落盘主动清成 `null`）；新增 `test/issue-16-persist-size.js` |
 | v2.8.0 | 2026-10-26 | 小版本 | 下游 DX：版本 token / selfCheck / defaults / `.nvui-actions` / 相邻按钮 8px / `glass: auto / force / solid`；token 111、组件类 81、`!important` 18 |
 | v2.7.2 | 2026-10-26 | 补丁 | 玻璃透明感修复：面板保持透明 + 面板自身 backdrop-filter 背后模糊；宿主禁模糊时 97% token 派生近不透明回退（`.nvui-glass-fallback`）；探测三态化 + 可逆自愈；`setTheme()` 不再误清用户实心偏好 |
 | v2.7.1 | 2026-10-23 | 补丁 | 修 GitHub #15：半选 checkbox 浏览器回归等待最终计算值；CSS / API / DOM 不变 |
@@ -2176,7 +2178,7 @@ function setupPanelNav(panelEl, controller) {
 ```js
 // Node（测试 / 构建期静态生成；不触发 DOM）
 const NVUI = require('./nvui-api.js');
-console.log(NVUI.version);            // 与 package.json 一致（当前 2.8.0）
+console.log(NVUI.version);            // 与 package.json 一致（当前 2.8.1）
 console.log(typeof NVUI.createPanel); // 'function'
 ```
 
@@ -2285,7 +2287,7 @@ panel.open();
 ```json
 {
   "name": "sillytavern-nvui-kit-tokens",
-  "version": "2.8.0",
+  "version": "2.8.1",
   "description": "SillyTavern UI Kit 设计令牌机器可读镜像（由 tokens.css 生成，勿手改）。dark = 深色默认，light = .nvui-theme-light 覆盖。",
   "generatedFrom": "tokens.css",
   "dark": { "--nvui-bg": "#161a24", "--nvui-accent": "#8b6dff", "...": "共 111 个令牌" },

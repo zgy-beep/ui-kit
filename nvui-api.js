@@ -1,7 +1,7 @@
 /**
  * SillyTavern NVUI Kit · 可选运行时 API（零依赖）
  * ------------------------------------------------------------------
- * 版本：ui-kit v2.8.0（与 package.json / tokens.css / components.css 版本号保持一致）
+ * 版本：ui-kit v2.8.1（与 package.json / tokens.css / components.css 版本号保持一致）
  * 用途：给插件/其它软件一个「可调用的设计接口」——用函数创建符合本 Kit 规范的面板、
  *       标签页、折叠分组、开关行、输入行、进度条、吐司，自动带上布局标准、无障碍属性、
  *       动效降级与焦点管理，避免每个插件各写一套 DOM。
@@ -52,7 +52,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : this), function () {
     'use strict';
 
-    var VERSION = '2.8.0';
+    var VERSION = '2.8.1';
     var PANEL_CLASS = 'nvui-panel';
     var TOAST_LAYER_ID = 'nvui-api-toast-layer';
 
@@ -1932,11 +1932,13 @@
                 var toSave = {
                     version: 1,
                     timestamp: Date.now(),
+                    /* Issue #16：persist.size:false 时不得把历史 size 原样回存，
+                       否则旧像素高度永远清不掉，每次打开都会被 applyClamping() 写回内联样式。 */
                     size: persistConfig.size ? {
                         width: currentW,
                         height: currentH,
                         isMaximized: isMax,
-                    } : (loadedState ? loadedState.size : null),
+                    } : null,
                     tab: persistConfig.tab ? currentTabKey : (loadedState ? loadedState.tab : null),
                     accordion: persistConfig.accordion ? currentAccState : (loadedState ? loadedState.accordion : null),
                 };
@@ -1966,6 +1968,22 @@
             }
             isRestoring = true;
             try {
+                /* Issue #16：persist.size:false 时，「不恢复尺寸」还不够 ——
+                   旧存档里的 size 会被 applyClamping() 读到并写回内联 px。这里在恢复前
+                   先把 size 摘成 null，让本面板的 loadedState 从此刻起就是「无尺寸」语义；
+                   下一次 flushPersistSave() 会顺带把历史遗留值真正清掉。 */
+                if (persistConfig && persistConfig.size === false && saved.size) {
+                    var clearedState = {};
+                    var stateKeys = Object.keys(saved);
+                    for (var sk = 0; sk < stateKeys.length; sk++) {
+                        if (stateKeys[sk] !== 'size') clearedState[stateKeys[sk]] = saved[stateKeys[sk]];
+                    }
+                    clearedState.size = null;
+                    loadedState = clearedState;
+                    saved = clearedState;
+                    debug('applyLoadedState(): persist.size:false，已忽略并清除历史 size 存档');
+                }
+
                 // 1. 恢复尺寸
                 if (persistConfig && persistConfig.size && saved.size) {
                     if (saved.size.isMaximized) {
@@ -2039,10 +2057,17 @@
                 return;
             }
 
+            /* Issue #16：persist.size:false 表示本面板**完全不参与**尺寸持久化。
+               此时存档里的 size 一律不可读 —— 否则历史 px 高度会被钳回内联样式，
+               覆盖下游 CSS（如 `height: var(--nvui-panel-max-h)` / 94vh）。
+               注意只拦「存档尺寸」：面板自身的内联 px（用户拖拽 / opts.width / 最大化）
+               仍然照常参与钳制，clamp 的视口安全语义不变。 */
+            var useSavedSize = !!(persistConfig && persistConfig.size);
+
             var targetW = null;
             if (panel.style.width && panel.style.width.indexOf('px') !== -1) {
                 targetW = parseInt(panel.style.width, 10);
-            } else if (loadedState && loadedState.size && typeof loadedState.size.width === 'number') {
+            } else if (useSavedSize && loadedState && loadedState.size && typeof loadedState.size.width === 'number') {
                 targetW = loadedState.size.width;
             } else if (typeof opts.width === 'number' && !isNaN(opts.width)) {
                 targetW = opts.width;
@@ -2051,7 +2076,7 @@
             var targetH = null;
             if (panel.style.height && panel.style.height.indexOf('px') !== -1) {
                 targetH = parseInt(panel.style.height, 10);
-            } else if (loadedState && loadedState.size && typeof loadedState.size.height === 'number') {
+            } else if (useSavedSize && loadedState && loadedState.size && typeof loadedState.size.height === 'number') {
                 targetH = loadedState.size.height;
             }
 
