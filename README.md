@@ -2223,6 +2223,7 @@ console.log(typeof NVUI.createPanel); // 'function'
 | `NVUI.countHostModals()` | 统计处于模态状态的**宿主**原生 `<dialog>` 数量（用 `:modal` 伪类，自动排除 kit 自身载体） | `number` |
 | `NVUI.syncHostModalState()` | 同步宿主模态降级态（加 / 移 `.is-host-modal`），返回当前宿主模态数 | `number` |
 | `NVUI.getCarrierState()` | 查询载体与宿主模态的层级快照（诊断 / 宿主集成用） | `object` |
+| `NVUI.diagnostics()` | **v2.9.0 新增**：一次性诊断快照，可直接贴进 issue。8 个字段：`status` / `version` / `assets`（三个资产的 `loaded` + `kitVersion`，`md5` 只在发布产物的 `manifest.json` 里，运行时为 `null`）/ `glass` / `hostModals` / `escapeStackDepth` / `persistKeys` / `listenerCounts`（只统计挂在 window / document / `documentElement` / body / `MediaQueryList` 上的活体监听）。纯只读，不建 DOM、不写存储；Node 等无 DOM 环境返回 `{ status: 'no-dom', version, assets: null }` | `object` |
 | `NVUI.openLayer(dialogEl, overlayEl)` | 打开浮层载体（非模态 `dialog.show()`，避免 `inert`） | `void` |
 | `NVUI.closeLayer(dialogEl, overlayEl, done?)` | 关闭载体（`is-closing` 退场 → `animationend` 或约 260ms 兜底 → `hidden` + `close()`） | `void` |
 | `NVUI.clearLayoutState(id, storageAdapter?)` | 清除指定面板的布局记忆（StorageAdapter 或默认 localStorage） | `void` |

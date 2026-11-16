@@ -503,6 +503,7 @@ async function checkGitHubRelease() {
 | `NVUI.openLayer(dialog, overlay)` / `closeLayer(dialog, overlay, cb)` | 非模态浮层载体开合（含退场动画收尾） |
 | `NVUI.countHostModals()` | 统计当前文档处于模态状态的**宿主**原生 `<dialog>` 数量（用 `:modal` 伪类，自动排除 kit 自身载体） |
 | `NVUI.syncHostModalState()` | 同步宿主模态降级态：给所有 kit 载体加/移除 `.is-host-modal`；`createPanel`/`showToast`/`openLayer` 已内置调用 |
+| `NVUI.diagnostics()` | v2.9.0（GH-#18 B2）诊断快照：`status` / `version` / `assets{loaded,kitVersion,md5}` / `glass` / `hostModals` / `escapeStackDepth` / `persistKeys` / `listenerCounts`。只读无副作用；Node 下返回 `status:'no-dom'`。排查「装的哪版 / 状态里有什么 / 监听有没有漏摘」先看它 |
 | `NVUI.getCarrierState()` | 浮层载体层级快照（`carrierZ` / `hostModalCount` / `degraded` / `carriers[]`），排查层级问题时先看它 |
 | `NVUI.switchRow({ label, value, feature, onChange })` | 胶囊开关行 |
 | `NVUI.inputRow({ label, type, value, min, max, step, onChange })` | 输入行（number 默认隐藏原生步进按钮） |

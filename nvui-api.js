@@ -229,9 +229,38 @@
         return null;
     }
 
+    /* 活体监听计数（v2.9.0 / GH-#18 B2）。
+       只统计挂在**长寿命目标**（window / document / documentElement / body /
+       MediaQueryList）上的监听 —— 元素级监听随节点一起被回收，把它们也算进来
+       只会让计数只增不减，反而掩盖真泄漏（实测：面板按钮的 click 会让计数永远涨）。
+       kit 侧所有挂载 / 摘除都走 on() / off()，计数才是可信的。 */
+    var listenerCounts = Object.create(null);
+
+    function isGlobalListenerTarget(target) {
+        if (!target) return false;
+        if (typeof window !== 'undefined' && target === window) return true;
+        if (typeof document !== 'undefined'
+            && (target === document || target === document.documentElement || target === document.body)) {
+            return true;
+        }
+        if (typeof window !== 'undefined' && typeof window.MediaQueryList === 'function'
+            && target instanceof window.MediaQueryList) {
+            return true;
+        }
+        return false;
+    }
+
     function on(target, type, handler, options) {
+        if (!target || typeof target.addEventListener !== 'function') return handler;
         target.addEventListener(type, handler, options || false);
+        if (isGlobalListenerTarget(target)) listenerCounts[type] = (listenerCounts[type] || 0) + 1;
         return handler;
+    }
+
+    function off(target, type, handler, options) {
+        if (!target || typeof target.removeEventListener !== 'function') return;
+        target.removeEventListener(type, handler, options || false);
+        if (isGlobalListenerTarget(target) && listenerCounts[type] > 0) listenerCounts[type] -= 1;
     }
 
     /**
@@ -583,8 +612,8 @@
         }, 120);
         if (glassRecheckAttempts === 0) {
             if (window.addEventListener && document.readyState !== 'complete') {
-                window.addEventListener('load', function onLoad() {
-                    window.removeEventListener('load', onLoad);
+                on(window, 'load', function onLoad() {
+                    off(window, 'load', onLoad);
                     syncGlassFallback({ force: true });
                 }, { once: true });
             }
@@ -764,7 +793,7 @@
             /* NEW-44：若在退场期间已被重新 open，中止关闭流程 */
             if (!overlayEl.classList.contains('is-closing')) return;
             /* 退场监听必须摘除，防止监听器累积 */
-            try { overlayEl.removeEventListener('animationend', onAnimEnd); } catch (err) { /* 忽略 */ }
+            try { off(overlayEl, 'animationend', onAnimEnd); } catch (err) { /* 忽略 */ }
             overlayEl.hidden = true;
             overlayEl.classList.remove('is-closing');
             if (dialogEl.open) {
@@ -1094,7 +1123,7 @@
 
     function registerEscapeHandler(handler, isVisible, isConnected) {
         if (!escapeBound) {
-            document.addEventListener('keydown', onEscapeKey);
+            on(document, 'keydown', onEscapeKey);
             escapeBound = true;
         }
         /* NEW-29：支持 promote 动态将 entry 提升到栈顶；NEW-37：支持 isConnected 自动清理孤儿 */
@@ -1122,7 +1151,7 @@
             }
         }
         if (escapeStack.length === 0 && escapeBound) {
-            document.removeEventListener('keydown', onEscapeKey);
+            off(document, 'keydown', onEscapeKey);
             escapeBound = false;
         }
     }
@@ -1271,7 +1300,7 @@
             /* 已有 dialog：逐个挂上 open 属性观察 */
             scanForDialogs(document);
             hostModalScanObserver.observe(document.documentElement, { childList: true, subtree: true });
-            document.addEventListener('close', function () { syncHostModalState(); }, true);
+            on(document, 'close', function () { syncHostModalState(); }, true);
         } catch (err) {
             /* 观察器不可用时降级为「仅手动调用 syncHostModalState()」，不影响功能 */
             hostModalWatcherInstalled = false;
@@ -1561,7 +1590,7 @@
 
         function bindAccordionEvent(target, type, handler, owner) {
             if (!target || typeof target.addEventListener !== 'function') return null;
-            target.addEventListener(type, handler, false);
+            on(target, type, handler, false);
             var binding = { target: target, type: type, handler: handler };
             if (owner) {
                 if (!owner.bindings) owner.bindings = [];
@@ -1574,7 +1603,7 @@
 
         function unbindAccordionBinding(binding) {
             if (!binding) return;
-            try { binding.target.removeEventListener(binding.type, binding.handler, false); } catch (e) {}
+            try { off(binding.target, binding.type, binding.handler, false); } catch (e) {}
         }
 
         function unbindAccordionItem(item) {
@@ -2204,7 +2233,7 @@
         }
 
         function unbindWindowResize() {
-            try { window.removeEventListener('resize', onWindowResize); } catch (e) {}
+            try { off(window, 'resize', onWindowResize); } catch (e) {}
             if (resizeRaf) { cancelAnimationFrame(resizeRaf); resizeRaf = null; }
         }
 
@@ -2776,7 +2805,7 @@
             dispose: function () {
                 disposed = true;
                 if (raf) { cancelAnimationFrame(raf); raf = null; }
-                try { body.removeEventListener('scroll', schedule); } catch (e) {}
+                try { off(body, 'scroll', schedule); } catch (e) {}
                 if (observer) { try { observer.disconnect(); } catch (e) {} observer = null; }
             },
         };
@@ -2864,11 +2893,11 @@
             ];
             var onGlassPrefChange = function () { refresh(); };
             glassMqs.forEach(function (mq) {
-                if (mq && typeof mq.addEventListener === 'function') mq.addEventListener('change', onGlassPrefChange);
+                if (mq && typeof mq.addEventListener === 'function') on(mq, 'change', onGlassPrefChange);
             });
             mediaCleanup = function () {
                 glassMqs.forEach(function (mq) {
-                    if (mq && typeof mq.removeEventListener === 'function') mq.removeEventListener('change', onGlassPrefChange);
+                    if (mq && typeof mq.removeEventListener === 'function') off(mq, 'change', onGlassPrefChange);
                 });
             };
         }
@@ -3330,11 +3359,11 @@
             unregisterEscapeHandler(closePanel);
             var removed = false;
             var onClose = function () {
-                dialog.removeEventListener('close', onClose);
+                off(dialog, 'close', onClose);
                 setTimeout(remove, 0);
             };
             if (dialog && dialog.open) {
-                try { dialog.addEventListener('close', onClose); dialog.close(); }
+                try { on(dialog, 'close', onClose); dialog.close(); }
                 catch (err) { remove(); }
                 setTimeout(remove, 50);
             } else { remove(); }
@@ -3510,7 +3539,7 @@
                 removed = true;
                 if (fallback) { clearTimeout(fallback); fallback = null; }
                 /* 退场监听必须摘除，否则同一条吐司反复 dismiss 会叠加监听器 */
-                try { toast.removeEventListener('animationend', onAnimEnd); } catch (err) { /* 忽略 */ }
+                try { off(toast, 'animationend', onAnimEnd); } catch (err) { /* 忽略 */ }
                 if (toast.parentNode) toast.parentNode.removeChild(toast);
                 /* 承载层保持常驻开启：一旦在这里 close()，
                    后续 showToast 会拿到一个已关闭的载体，第二条及以后的吐司全部不可见。
@@ -3620,6 +3649,101 @@
         };
     }
 
+    /* ---------------------- 诊断快照（v2.9.0 / GH-#18 B2） ---------------------- */
+    /*
+     * 下游提 issue 时最贵的一步是「你装的是哪版、状态里到底有什么」。
+     * 这里把散在各处的运行态收成一个可直接贴进 issue 的 JSON。
+     *
+     * 三条纪律：
+     * 1. **无副作用**：只读，不建 DOM、不改类名、不写存储、不触发玻璃重探；
+     * 2. **不抛错**：任何一段失败都退化为 null / 空值，诊断工具本身不该成为故障源；
+     * 3. **无 DOM 环境**（Node / SSR）返回 status:'no-dom'，而不是空对象或抛错。
+     */
+
+    /** 在已加载的样式表里找一个选择器片段（读-only，跨域表跳过）。 */
+    function hasKitStyleRule(needle) {
+        try {
+            var sheets = document.styleSheets || [];
+            for (var i = 0; i < sheets.length; i++) {
+                var rules = null;
+                try { rules = sheets[i].cssRules; } catch (e) { continue; }
+                if (!rules) continue;
+                for (var j = 0; j < rules.length; j++) {
+                    var rule = rules[j];
+                    if (!rule) continue;
+                    if (rule.selectorText && rule.selectorText.indexOf(needle) !== -1) return true;
+                    /* 支持一层 @media / @supports 包裹 */
+                    var inner = rule.cssRules;
+                    if (inner && inner.length) {
+                        for (var k = 0; k < inner.length; k++) {
+                            if (inner[k] && inner[k].selectorText && inner[k].selectorText.indexOf(needle) !== -1) return true;
+                        }
+                    }
+                }
+            }
+        } catch (e) { /* 样式表不可读就当没有 */ }
+        return false;
+    }
+
+    /** 默认适配器下已存在的布局存档键（自定义 StorageAdapter 不在其中）。 */
+    function collectPersistKeys() {
+        var keys = [];
+        try {
+            var ls = (typeof window !== 'undefined') ? window.localStorage : null;
+            if (!ls || typeof ls.key !== 'function') return keys;
+            for (var i = 0; i < ls.length; i++) {
+                var k = ls.key(i);
+                if (k && k.indexOf('nvui_state_') === 0) keys.push(k);
+            }
+        } catch (e) { /* 隐私模式 / 配额受限：拿不到就当空 */ }
+        return keys.sort();
+    }
+
+    function snapshotListenerCounts() {
+        var out = {};
+        var types = Object.keys(listenerCounts);
+        for (var i = 0; i < types.length; i++) {
+            var n = listenerCounts[types[i]];
+            if (n > 0) out[types[i]] = n;
+        }
+        return out;
+    }
+
+    function diagnostics() {
+        if (!isDomAvailable() || typeof document === 'undefined') {
+            return { status: 'no-dom', version: VERSION, assets: null };
+        }
+        var cssVersion = '';
+        var cssLoaded = false;
+        try {
+            cssVersion = String(getToken('--nvui-kit-version') || '').trim().replace(/^["']|["']$/g, '');
+            cssLoaded = !!getToken('--nvui-glass-blur');
+        } catch (e) { /* 令牌读不到就按未加载处理 */ }
+        var fallback = false;
+        try { fallback = document.documentElement.classList.contains(GLASS_FALLBACK_CLASS); } catch (e) {}
+        var hostModals = 0;
+        try { hostModals = countHostModals(); } catch (e) {}
+        return {
+            status: 'ok',
+            version: VERSION,
+            /* md5 只有发布产物 manifest.json 里才有，运行时算不出来 —— 保留键位避免下游读不到时报错 */
+            assets: {
+                tokensCss: { loaded: cssLoaded, kitVersion: cssVersion || null, md5: null },
+                componentsCss: { loaded: hasKitStyleRule('.nvui-panel'), kitVersion: null, md5: null },
+                nvuiApi: { loaded: true, kitVersion: VERSION, md5: null },
+            },
+            glass: {
+                state: (glassState && glassState.state) || 'unknown',
+                reason: (glassState && glassState.reason) || '',
+                autoFallback: fallback,
+            },
+            hostModals: hostModals,
+            escapeStackDepth: escapeStack.length,
+            persistKeys: collectPersistKeys(),
+            listenerCounts: snapshotListenerCounts(),
+        };
+    }
+
     /* ---------------------- 导出 ---------------------- */
 
     return {
@@ -3644,6 +3768,7 @@
         invalidateTokenCache: invalidateTokenCache,
         setTheme: setTheme,
         selfCheck: selfCheck,
+        diagnostics: diagnostics,
         checkCompatibility: checkCompatibility,
         defaults: DEFAULTS,
         detectGlassSupport: detectGlassSupport,

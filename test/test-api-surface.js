@@ -9,7 +9,7 @@ const api = require(path.join(ROOT, 'nvui-api.js'));
 const src = fs.readFileSync(path.join(ROOT, 'nvui-api.js'), 'utf8');
 
 const EXPECTED_EXPORTS = [
-    'VERSION', 'PANEL_CLASS', 'accordion', 'checkCompatibility', 'classes', 'clearLayoutState',
+    'VERSION', 'PANEL_CLASS', 'accordion', 'checkCompatibility', 'classes', 'clearLayoutState', 'diagnostics',
     'clampPanelLayout', 'closeLayer', 'config', 'countHostModals', 'createPanel', 'defaultStorageAdapter',
     'defaults', 'detectGlassSupport', 'getCarrierState', 'getToken', 'inputRow', 'invalidateTokenCache',
     'openLayer', 'progress', 'selfCheck', 'setTheme', 'showToast', 'switchRow', 'syncGlassFallback',

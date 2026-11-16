@@ -2108,7 +2108,8 @@ check('nvui-api: 切 tab 前先保存上一个 domKey（否则旧 pane 无法移
 check('nvui-api: destroy() 先 dialog.close() 再摘节点（NEW-16：宿主能收到 close 事件）',
     /function destroy\(\)[\s\S]{0,700}dialog\.close\(\)[\s\S]{0,300}removeChild\(dialog\)/.test(apiSrc));
 check('nvui-api: destroy() 把摘除推迟到 close 事件派发之后（NEW-16 残留：document 级委托监听也能收到 close）',
-    /dialog\.addEventListener\('close',\s*onClose\)/.test(apiSrc)
+    /* v2.9.0 起监听统一走 on()/off()（B2 活体计数），两种写法都算 */
+    /(?:dialog\.addEventListener\('close',\s*onClose\)|on\(dialog,\s*'close',\s*onClose\))/.test(apiSrc)
     && /setTimeout\(remove,\s*0\)/.test(apiSrc)
     /* 兜底路径必须存在：close 事件未派发时也要摘干净，不能让载体节点泄漏在 DOM 里 */
     && /setTimeout\(remove,\s*50\)/.test(apiSrc)
@@ -2210,10 +2211,14 @@ check('nvui-api: 退场兜底定时器在正常结束时被 clearTimeout（不�
 check('nvui-api: Esc 走全局单例调度器（不为每个面板挂永久 document 监听器）',
     /escapeStack/.test(apiSrc) && /registerEscapeHandler/.test(apiSrc));
 check('nvui-api: 单例调度器在最后一个面板注销后移除全局监听',
-    /removeEventListener\('keydown',\s*onEscapeKey\)/.test(apiSrc));
-check('nvui-api: createPanel 不再直接 on(document, "keydown")',
-    !/on\(document,\s*'keydown'/.test(apiSrc),
-    apiSrc.match(/on\(document,\s*'keydown'[^\n]*/)?.[0] || '');
+    /(?:removeEventListener\('keydown',\s*onEscapeKey\)|off\(document,\s*'keydown',\s*onEscapeKey\))/.test(apiSrc));
+/* 反向断言不能用负向前瞻：`\s*` 会回溯到零空格，`(?!onEscapeKey)` 永远成立。
+   改为抓出所有 document 级 keydown 的处理函数名再逐个比对。 */
+const DOC_KEYDOWN_HANDLERS = (apiSrc.match(/on\(document,\s*'keydown',\s*([A-Za-z_$][\w$]*)/g) || [])
+    .map((line) => line.replace(/^[\s\S]*,\s*/, ''));
+check('nvui-api: createPanel 不再直接 on(document, "keydown")（document 级只允许单例挂 onEscapeKey）',
+    DOC_KEYDOWN_HANDLERS.every((h) => h === 'onEscapeKey'),
+    DOC_KEYDOWN_HANDLERS.join(', ') || '(none)');
 
 /* --- 9.4 id 唯一性 --- */
 check('nvui-api: 面板 id 走唯一化处理（防重复面板造成 id 冲突与 aria 指向错乱）',
