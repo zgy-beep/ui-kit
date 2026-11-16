@@ -31,35 +31,15 @@ const path = require('path');
 
 /* ==================== 1. 依赖与浏览器 ==================== */
 
+/* 依赖解析统一到 scripts/resolve-browser.js（Roadmap A2） */
+const browserDeps = require('../scripts/resolve-browser');
+
 function loadPlaywright() {
-    const candidates = [
-        process.env.PLAYWRIGHT_MODULE_PATH,
-        'playwright-core',
-        'C:/Users/Administrator/.workbuddy/binaries/node/workspace/node_modules/playwright-core',
-    ].filter(Boolean);
-    let lastError = null;
-    for (const candidate of candidates) {
-        try {
-            return require(candidate);
-        } catch (err) {
-            lastError = err;
-        }
-    }
-    throw new Error(
-        '无法解析 playwright-core；请设置 PLAYWRIGHT_MODULE_PATH，例如\n'
-        + '  $env:PLAYWRIGHT_MODULE_PATH="C:\\Users\\Administrator\\.workbuddy\\binaries\\node\\workspace\\node_modules\\playwright-core"\n'
-        + `最后一次错误：${lastError && lastError.message}`
-    );
+    return browserDeps.loadPlaywright();
 }
 
 function resolveChrome() {
-    const candidates = [
-        process.env.CHROME_PATH,
-        process.env.ST_CHROME,
-        'C:/Program Files/Google/Chrome/Application/chrome.exe',
-        'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
-    ].filter(Boolean);
-    return candidates.find((candidate) => fs.existsSync(candidate)) || null;
+    return browserDeps.resolveChrome();
 }
 
 let chromium;

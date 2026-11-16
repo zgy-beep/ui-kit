@@ -8,34 +8,15 @@
 const fs = require('fs');
 const path = require('path');
 
-function requirePlaywright() {
-    try { return require('playwright-core'); }
-    catch (e) {
-        console.error('[FATAL] 未找到 playwright-core。任选一种修复：');
-        console.error('  1) npm i -D playwright-core（推荐，见 Roadmap A2）');
-        console.error('  2) 让 NODE_PATH 指向含 playwright-core 的 node_modules');
-        console.error('     当前 NODE_PATH=' + (process.env.NODE_PATH || '(空)'));
-        process.exit(2);
-    }
-}
-const { chromium } = requirePlaywright();
+const browserDeps = require('../../scripts/resolve-browser');
+const { chromium } = browserDeps.requirePlaywright();
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const OUT = process.env.NVUI_HOST_OUT
     ? path.resolve(process.env.NVUI_HOST_OUT)
     : path.join(ROOT, 'st-lab-out', 'host');
 const HOST = process.env.NVUI_HOST_URL || 'http://127.0.0.1:8000/';
-const CHROME = [
-    process.env.CHROME_PATH,
-    'C:/Program Files/Google/Chrome/Application/chrome.exe',
-    'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
-    '/usr/bin/google-chrome',
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-].filter(Boolean).find((p) => fs.existsSync(p));
-if (!CHROME) {
-    console.error('[FATAL] 未找到 Chrome。请设置 CHROME_PATH 指向可执行文件。');
-    process.exit(2);
-}
+const CHROME = browserDeps.requireChrome();
 const PKG_VERSION = require('../../package.json').version;
 const A = {
     tokens: path.join(ROOT, 'tokens.css'),

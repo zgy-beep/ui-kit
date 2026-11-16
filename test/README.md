@@ -11,7 +11,10 @@
 | `npm run test:v280` | `test-v280-features.js` | v2.8.x 功能契约（selfCheck / defaults / force 玻璃） |
 | `npm run verify:release` | `scripts/verify-release.js` | 发布一致性：版本自洽、模板 MD5、CDN tag、CHANGELOG / README 时间线；`--self-test` 做反向验证 |
 
-## 2. 浏览器 spec（需 Chrome，无需 ST 宿主）
+## 2. 浏览器 spec（需 Chrome + `playwright-core`，无需 ST 宿主）
+
+**前置**：`npm i`（`playwright-core` 是 devDependency）+ 本机 Chrome（`CHROME_PATH` / `ST_CHROME` 可覆盖）。
+解析顺序与缺包时的修复命令统一在 [`scripts/resolve-browser.js`](../scripts/resolve-browser.js)，缺环境时退出码 2。
 
 | 入口 | 脚本 |
 | :--- | :--- |
@@ -23,7 +26,8 @@
 ## 3. 宿主实机（需真实 SillyTavern + Chrome）
 
 **前置**：宿主在 `http://127.0.0.1:8000`（可 `NVUI_HOST_URL` 覆盖）、Chrome 可执行（`CHROME_PATH`）、
-`playwright-core` 可解析（`NODE_PATH` 或本地 devDependency）。缺条件时退出码 2 并打印修复命令。
+`playwright-core` 可解析（`npm i` 后的本地 devDependency，或 `NODE_PATH`）。三者统一由
+`scripts/resolve-browser.js` 解析，缺条件时退出码 2 并打印修复命令。
 
 | 入口 | 脚本 | 断言数 |
 | :--- | :--- | :--- |

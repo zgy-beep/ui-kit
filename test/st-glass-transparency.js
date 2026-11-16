@@ -17,7 +17,9 @@ const zlib = require('zlib');
 const { spawn } = require('child_process');
 
 const KIT = path.resolve(__dirname, '..');
-const CHROME = process.env.NVUI_CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+const browserDeps = require('../scripts/resolve-browser');
+const CHROME = process.env.NVUI_CHROME || browserDeps.resolveChrome()
+    || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const PORT = Number(process.env.NVUI_CDP_PORT || 9350);
 const PROFILE = path.join(process.env.TEMP, 'nvui-glass-' + Date.now());
 const OUT = process.argv[2] || path.join(KIT, 'test', 'out', 'glass-transparency');

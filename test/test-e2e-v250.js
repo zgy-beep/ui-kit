@@ -29,21 +29,17 @@ const crypto = require('crypto');
 
 /* ==================== 1. Toolchain & Environment ==================== */
 
+/* 依赖解析统一到 scripts/resolve-browser.js（Roadmap A2） */
+const browserDeps = require('../scripts/resolve-browser');
+
 function resolvePlaywright() {
-    try {
-        return require('playwright-core');
-    } catch {
-        try {
-            return require('C:/Users/Administrator/.workbuddy/binaries/node/workspace/node_modules/playwright-core');
-        } catch (e) {
-            console.error('[FATAL] Failed to resolve playwright-core:', e.message);
-            process.exit(1);
-        }
-    }
+    return browserDeps.requirePlaywright();
 }
 
 const KIT_ROOT = path.resolve(__dirname, '..');
-const CHROME_PATH = process.env.ST_CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+const CHROME_PATH = browserDeps.resolveChrome()
+    || process.env.ST_CHROME
+    || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const HOST_URL = process.env.ST_HOST_URL || 'http://127.0.0.1:8000/';
 
 const PATHS = {

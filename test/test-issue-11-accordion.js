@@ -35,24 +35,19 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 
+/* 依赖解析统一到 scripts/resolve-browser.js（Roadmap A2） */
+const browserDeps = require('../scripts/resolve-browser');
+
 function resolvePlaywright() {
-    try {
-        return require('playwright-core');
-    } catch (e) {
-        try {
-            return require('C:/Users/Administrator/.workbuddy/binaries/node/workspace/node_modules/playwright-core');
-        } catch (e2) {
-            console.error('[FATAL] 无法解析 playwright-core: ' + e.message);
-            console.error('        请设置 NODE_PATH 指向含 playwright-core 的 node_modules。');
-            process.exit(1);
-        }
-    }
+    return browserDeps.requirePlaywright();
 }
 
 const { chromium } = resolvePlaywright();
 
 const KIT_ROOT = path.resolve(__dirname, '..');
-const CHROME_PATH = process.env.ST_CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+const CHROME_PATH = browserDeps.resolveChrome()
+    || process.env.ST_CHROME
+    || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 
 const PATHS = {
     tokensCss: path.join(KIT_ROOT, 'tokens.css'),

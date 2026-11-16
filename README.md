@@ -144,7 +144,9 @@
 
 ## 2. 快速开始
 
-本目录是独立项目：不依赖任何外部仓库或父目录，可整目录复制和移动到任意位置。最小验证只需要 `npm test`（零依赖，无需 `npm install`）；预览直接双击 `preview.html`。
+本目录是独立项目：不依赖任何外部仓库或父目录，可整目录复制和移动到任意位置。最小验证只需要 `npm test`（**运行时零依赖**，无需 `npm install`）；预览直接双击 `preview.html`。
+
+浏览器/宿主套件需要一个**开发期**依赖（不进 4 个发布资产）：`npm i` 会装上 `playwright-core`，Chrome 走本机安装（`CHROME_PATH` 可覆盖）。依赖解析与缺包时的修复命令统一在 `scripts/resolve-browser.js`；一键门禁见 `npm run verify:all`（CI 无 Chrome 时浏览器段自动跳过）。
 
 ```text
 ui-kit/

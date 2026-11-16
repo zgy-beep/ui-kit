@@ -31,5 +31,8 @@
     "verify:release": "node scripts/verify-release.js",
     "pack": "node scripts/pack.js",
     "downstream:check": "node test/downstream-check.js"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.64.0"
   }
 }
