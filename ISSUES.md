@@ -384,7 +384,10 @@
 
 ### P2 选择性项（先算成本）
 
-1. **G-07 语义层与社区标签**：文档共约 523 KB / 5.5k 行（README 2506、AUDIT 1022、CHANGELOG 867、AI-GUIDE 540 等）。
+1. **G-07 语义层与社区标签 [阻塞：无 LLM 凭据，2026-11-16 复核]**：文档共约 523 KB / 5.5k 行（README 2506、AUDIT 1022、CHANGELOG 867、AI-GUIDE 540 等）。
+   **复核证据**：`GEMINI_API_KEY` / `GOOGLE_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` 全部为空（`printenv` 实测）；
+   `graphify label` 无后端可用，`--no-label` 只能保留 `Community N` 占位。**恢复条件**：任一路径注入 key 后执行
+   `graphify label . --only AI-GUIDE.md,README.md`（先两份文档试水，再决定是否全量 `extract --mode deep`）。
    当前环境**无** `GEMINI_API_KEY` / `GOOGLE_API_KEY`，`graphify label` 需 LLM 后端，全量语义提取会落到 host agent，成本过高。
    **建议分级**：先只接 `AI-GUIDE.md` + `README.md` §13 两个文件，验证 doc↔code 关联是否够用，再决定是否 `graphify extract . --mode deep` 全量重建。
    （原拟纳入的 `tokens.json` 因 G-06 的文件名启发式无法进图，暂不列入。）
@@ -442,6 +445,7 @@
 | 修复焦点陷阱（#23） | `trapTabFocus()` 模块级化；`test/issue-13-14-focus-escape.spec.js` 新增 T1b；模板已同步 | 修复前复现「Tab1 → `body.drop_target`」；修复后 spec 15/15、静态 368/368 |
 | 测试归档（G-05） | 7 个零引用探针 → `test/archive/2026-10/`，补目录 README | 全文索引确认仅 7 个 0 引用；`node --check` 全通过；`test/` 根脚本 50 → 43 |
 | GitHub 维护（11-16） | 建 GH-#20（焦点陷阱，对应本地 `#23`）/ GH-#21（3 条 UX 观察）；GH-#17 勾选与进度段按实测刷新（A1–A3 未开始、A4/A5 部分）；补建 `ROADMAP.md` 修掉三个 open issue 的死链 | `gh issue list/view` 逐条核对；本地 `#N` 与 GitHub 编号是两套序列，已加映射约定 |
+| G-07 复核（11-16） | 语义层 / 社区标签仍阻塞：四种常见 LLM key 环境变量实测全空；`--no-label` 产物已可用（`GRAPH_REPORT.md` 10.6 KB + 7 条建议问题），仅「可读标签」缺后端 | `printenv GEMINI_API_KEY / GOOGLE_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY` 均空；恢复命令与试水范围已写进待办区 |
 | 测试归档 A4（11-16） | 30 个零门禁引用探针 → `test/probe/`（新增 `probe/README.md` 30 条清单 + lab 依赖列）；5 个脚本 `__dirname` 改 `'..','..'`；`test/` 根 44 → 14 个脚本；文档路径 47 处同步 | `npm test` 370/0；`node --check` 30/30；`test-ui-kit.js` 两条存在性断言改指 probe/ |
 | 尺寸矩阵 A1（11-16） | `issue-16` 8 → 12 项（T9 三项全关 / T10 `persist:true` / T11 `persist:{}` / T12 异步 adapter；错误面移到末尾为 T13） | 变异测试：`anyPersistEnabled()` 改成 `!!persistConfig` 时 T9 变红；12/12 绿 |
 | 依赖解析 A2（11-16） | `scripts/resolve-browser.js` 统一 playwright/Chrome 解析 + 可执行修复命令（退出码 2）；`playwright-core@^1.64.0` 进 devDependencies；11 个脚本改用；运行时仍零依赖 | 未设 `NODE_PATH` 跑 `test:browser` 455+18+217+15+12 全绿；缺包模拟 exit=2 |

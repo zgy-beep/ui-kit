@@ -70,6 +70,10 @@
 
 MINOR，全 additive。推荐顺序：**B1 → B3（共用持久化语义）→ B2 → B6 → B4 / B5**。
 
+> **2026-11-16 追加（GH-#21 剩余两条）**：进度条可视标签 `progress({ showLabel, showValue })` 与面板 body
+> 滚动边缘渐隐 `data-nvui-fade`（mask-image）已落地，均属 additive，计入本版（commit `e37b446`，
+> 回归 `test/issue-21-ux.spec.js` 11/11）。B1–B6 尚未开始，本版仍处**开发中**，未 bump 版本号。
+
 | # | 能力 | 问题 | API 草案 | 验收 |
 | :--- | :--- | :--- | :--- | :--- |
 | B1 | 布局状态读写出入口 | 现在只有 `clearLayoutState()`，下游要「导出/导入布局」「同步到 `extension_settings`」只能反解存储结构 | `panel.getLayoutState() → state`<br>`panel.setLayoutState(state, { silent })`<br>只写内存 + 调度一次落盘，不触发 `applyLoadedState` 的 tab 恢复 | 往返幂等：`get → set → get` 深相等；`silent:true` 不写存储 |
