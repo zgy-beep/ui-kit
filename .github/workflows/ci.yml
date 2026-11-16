@@ -40,19 +40,21 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: 校验发布契约
+      - name: 校验发布契约并打包（verify:all 内含 pack + 产物校验）
+        run: npm run verify:all -- --no-browser
+      # Release notes 由人工按 MAINTAINING.md §2.4 撰写（版本定位 / 核心更新 / 兼容性 / 验证数据），
+      # CI 只负责传产物。此前用 action-gh-release + generate_release_notes 会把正文整段覆盖成
+      # 自动生成的 "Full Changelog"（v2.8.3 实测），故改为 gh CLI 只做 upload。
+      - name: 创建 / 更新 GitHub Release（不覆盖手写 notes）
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npm test
-          npm run test:api
-          npm run test:v280
-          npm run verify:release
-      - name: 打包
-        run: npm run pack
-      - name: 创建 / 更新 GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/ui-kit-*.zip
-            dist/SHA256SUMS
-            dist/manifest.json
-          generate_release_notes: true
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          files="dist/ui-kit-${tag#v}.zip dist/SHA256SUMS dist/manifest.json"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" $files --clobber
+          else
+            gh release create "$tag" --title "$tag" \
+              --notes "变更明细见 CHANGELOG.md 的 \`## ${tag}\` 条目。" $files
+          fi
