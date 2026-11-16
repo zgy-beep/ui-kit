@@ -293,11 +293,8 @@ dialog.nvui-tl > .nvui-toast-stack {
     display: none;
 }
 
+/* v3.0.0：flex / 对齐 / gap 由按钮组统一规则提供（见 §按钮组），这里只剩容器语义 */
 .nvui-modal-footer {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: var(--nvui-space-2);
     flex-shrink: 0;
     padding: var(--nvui-space-3) var(--nvui-space-4);
     border-top: 1px solid var(--nvui-glass-line);
@@ -447,11 +444,20 @@ dialog.nvui-tl > .nvui-toast-stack {
     width: 100%;
 }
 
-/* 按钮组：等宽换行（桌面并排、窄屏自动换行） */
-.nvui-btn-row {
+/* v3.0.0：按钮组的排版声明只写一次。
+   .nvui-actions（正式名）/ .nvui-btn-row（v2 旧名，v3.x 内保留 alias）/ 两个 footer
+   此前是四段几乎相同的 flex + gap，改一处要同步四处，行为差异也没人记得住。
+   差异只保留两处：操作区右对齐、.nvui-btn-row 内的按钮等宽。
+   用 :where() 包住 → 零 specificity，下游一条普通规则即可改回左对齐或自定义 gap。 */
+:where(.nvui-actions, .nvui-btn-row, .nvui-panel-footer, .nvui-modal-footer) {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: var(--nvui-space-2);
+}
+
+:where(.nvui-actions, .nvui-panel-footer, .nvui-modal-footer) {
+    justify-content: flex-end;
 }
 
 .nvui-btn-row > .nvui-btn {
@@ -468,14 +474,8 @@ dialog.nvui-tl > .nvui-toast-stack {
     margin-inline-start: 0;
 }
 
-/* v2.8.0 默认按钮组：不想记 .nvui-btn-row / footer 时的通用容器 */
-.nvui-actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: flex-end;
-    gap: var(--nvui-space-2);
-}
+/* v3.0.0：.nvui-actions 的 flex / gap 已并入上面的按钮组统一规则（alias 关系），
+   这里不再重复声明，避免再次分叉。 */
 
 /* ==========================================================================
  * 6. 胶囊开关行（含酒馆宿主 checkbox 样式隔离 + 弹簧回弹）
@@ -2443,11 +2443,8 @@ dialog.nvui-tl[data-nvui-glass="force"] .nvui-panel {
         var(--nvui-text) calc(100% - var(--nvui-space-4)), transparent 100%);
 }
 
+/* v3.0.0：flex / 对齐 / gap 由按钮组统一规则提供（见 §按钮组），这里只剩容器语义 */
 .nvui-panel-footer {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: var(--nvui-space-2);
     flex-shrink: 0;
     padding: var(--nvui-space-3) var(--nvui-space-4);
     border-top: 1px solid var(--nvui-glass-line);

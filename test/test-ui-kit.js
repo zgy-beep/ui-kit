@@ -1309,6 +1309,22 @@ if (!/width:\s*var\(--nvui-panel-w,\s*min\(var\(--nvui-panel-width\),\s*100%\)\)
 if (!/max-height:\s*var\(--nvui-panel-max-h\)/.test(panelBaseBodies)) panelStructureMissing.push('max-height:--nvui-panel-max-h');
 check('.nvui-panel 面板容器：玻璃底 + 面板自身 backdrop-filter（背后模糊）+ flex 列 + 固定宽高',
     panelStructureMissing.length === 0, `缺少/违规: ${panelStructureMissing.join(', ')}`);
+
+/* v3.0.0 / C2：按钮组三件套的排版声明必须只有一处来源。
+   v2 是四段几乎相同的 flex + gap，改一处要同步四处、行为差异也没人记得住。
+   这条断言把「不许再分叉」写进 CI：命中 display:flex + gap 且同时覆盖
+   .nvui-actions 与 .nvui-btn-row 的规则必须恰好一条，且两个 footer 也在其中。 */
+const btnGroupRules = componentRules.filter((r) => /\.nvui-actions\b/.test(r.selector)
+    && /\.nvui-btn-row\b/.test(r.selector)
+    && /display:\s*flex/.test(r.body));
+check('按钮组排版声明单一来源（.nvui-actions / .nvui-btn-row / 两个 footer 共用一条规则）',
+    btnGroupRules.length === 1
+    && /\.nvui-panel-footer\b/.test(btnGroupRules[0].selector)
+    && /\.nvui-modal-footer\b/.test(btnGroupRules[0].selector)
+    && /gap:\s*var\(--nvui-space-2\)/.test(btnGroupRules[0].body),
+    `命中 ${btnGroupRules.length} 条`);
+check('.nvui-actions 仍是右对齐操作区（零 specificity，下游可覆盖）',
+    componentRules.some((r) => /\.nvui-actions\b/.test(r.selector) && /justify-content:\s*flex-end/.test(r.body)));
 /* v2.7.2：面板玻璃规则必须提升到 dialog.nvui-tl 作用域，才能在真实 ST 中压过其它扩展内嵌的旧版 kit CSS */
 const carrierGlassRule = componentRules.find((r) => /dialog\.nvui-tl\s+\.nvui-panel/.test(r.selector)
     && /color-mix\(in srgb,\s*var\(--nvui-bg\)/.test(r.body)
