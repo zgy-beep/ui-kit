@@ -189,8 +189,14 @@ function recordStressTest(id, name, pass, detail, durationMs) {
         await new Promise(r => setTimeout(r, 100));
         const countAt100After = writeLog.length;
 
-        // Wait another 300ms (total ~400ms since last update): write MUST have fired
-        await new Promise(r => setTimeout(r, 300));
+        /* 最多等 1s 等那一次写入落地。写入时间戳记的是 adapter 完成时刻，
+           不是防抖定时器触发时刻：机器负载高时 250ms 的定时器可能晚到 400ms+
+           （2026-11-16 实测 431ms 假红一次，串行复跑 260ms）。因此用轮询代替
+           固定 sleep，只锁「恰好一次」，不锁精确毫秒。 */
+        const deadline = performance.now() + 1000;
+        while (writeLog.length === 0 && performance.now() < deadline) {
+            await new Promise(r => setTimeout(r, 20));
+        }
         const countAtSettled = writeLog.length;
 
         // Wait another 200ms to verify no trailing duplicate writes
@@ -204,7 +210,7 @@ function recordStressTest(id, name, pass, detail, durationMs) {
         const correctFinalState = lastWrite && lastWrite.val && lastWrite.val.size &&
             lastWrite.val.size.width === 700 && lastWrite.val.size.height === 450;
         const exactOneWrite = countFinal === 1 && countAtSettled === 1;
-        const timingValid = countAtEndUpdates === 0 && countAt100After === 0 && writeDelay >= 240 && writeDelay <= 450;
+        const timingValid = countAtEndUpdates === 0 && countAt100After === 0 && writeDelay >= 240 && writeDelay <= 1000;
 
         return {
             pass: exactOneWrite && timingValid && correctFinalState,
