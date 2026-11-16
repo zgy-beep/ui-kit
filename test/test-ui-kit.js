@@ -2136,8 +2136,11 @@ check('nvui-api: 令牌缓存键含 name 与 scope（不同作用域不串味）
 check('nvui-api: 令牌缓存带签名校验（class / 内联样式变化即重算，不读过期值）',
     /var sig = \(host\.className \|\| ''\)/.test(apiSrc)
     && /if \(hit && hit\.sig === sig\) return hit\.value;/.test(apiSrc));
+/* v2.9.0：setTheme 增了 auto 分支后函数体变长（原窗口 900 字符不够），
+   且 auto 路径的失效发生在 syncAutoTheme() 里 —— 两处都要断言，否则只测到显式分支。 */
 check('nvui-api: setTheme 后主动失效令牌缓存（NEW-10）',
-    /function setTheme\([\s\S]{0,900}invalidateTokenCache\(\);/.test(apiSrc)
+    /function setTheme\([\s\S]{0,2200}invalidateTokenCache\(\);/.test(apiSrc)
+    && /function syncAutoTheme\([\s\S]{0,400}invalidateTokenCache\(\);/.test(apiSrc)
     && /function invalidateTokenCache\(\)/.test(apiSrc));
 check('nvui-api: 令牌缓存可被宿主手动失效（导出 invalidateTokenCache）',
     /invalidateTokenCache:\s*invalidateTokenCache/.test(apiSrc));

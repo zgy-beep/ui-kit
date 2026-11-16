@@ -486,19 +486,95 @@
         tokenCache = Object.create(null);
     }
 
+    /* ---------------------- 自动主题（v2.9.0 / GH-#18 B6） ---------------------- */
+    /*
+     * 下游普遍在写同一套胶水：监听 prefers-color-scheme、判断宿主是否浅色、
+     * 再自己 toggle `.nvui-theme-light`。setTheme('auto') 把它收进来。
+     *
+     * 双信号取**并集**：系统偏好浅色，**或**宿主自己套了 `.nvui-theme-light`
+     * （例如 ST 的浅色皮肤）→ 浅色。任一成立都不该继续给深色面板。
+     *
+     * 两个刻意的取舍：
+     * 1. 宿主信号在「切到 auto 的那一刻」采样，不做 MutationObserver ——
+     *    我们写的就是同一个类名，观察它只会把自己的写入当成宿主意图（实测会出现
+     *    「宿主套了浅色 → auto 保住 → 自己触发 observer → 立刻改回深色」的抖振）；
+     * 2. 采样时排除「本模块自己写的那个类」，否则 setTheme('light') 之后切 auto
+     *    会把上次的显式选择误判成宿主皮肤，系统深色下也回不到深色。
+     */
+    var themeAuto = {
+        host: null,
+        mq: null,
+        onMq: null,
+        active: false,
+        /* 宿主在 auto 生效前的浅色声明（采样一次） */
+        hostLightSignal: false,
+        /* 当前 body 上的 .nvui-theme-light 是不是本模块写的 */
+        selfAppliedLight: false,
+    };
+
+    function teardownAutoTheme() {
+        if (themeAuto.mq && themeAuto.onMq) off(themeAuto.mq, 'change', themeAuto.onMq);
+        themeAuto.mq = null;
+        themeAuto.onMq = null;
+        themeAuto.active = false;
+    }
+
+    function syncAutoTheme() {
+        if (!themeAuto.active || !themeAuto.host) return;
+        var systemLight = !!(themeAuto.mq && themeAuto.mq.matches);
+        var light = systemLight || themeAuto.hostLightSignal;
+        themeAuto.host.classList.toggle('nvui-theme-light', light);
+        themeAuto.selfAppliedLight = light;
+        /* 类名变了就必须让令牌缓存失效，否则 getToken() 还拿旧皮肤的值 */
+        invalidateTokenCache();
+    }
+
+    function applySolidOption(host, options) {
+        if (!options || typeof options.solid !== 'boolean') return;
+        if (options.solid) host.classList.add('nvui-solid');
+        else host.classList.remove('nvui-solid');
+    }
+
     /** 主题/实心切换：仅切类名，不写死任何颜色。
      *  v2.7.2：不再无条件清除 `.nvui-solid`（那是用户主动的实心偏好，不能被切主题抹掉）；
-     *  只有显式传 `options.solid` 时才切换实心类。 */
+     *  只有显式传 `options.solid` 时才切换实心类。
+     *  v2.9.0：新增 `'auto'` —— 跟随系统深浅 + 宿主浅色声明，matchMedia 变更即时生效。 */
     function setTheme(theme, options) {
         var host = (options && options.host) || (isDomAvailable() ? document.body : null);
         if (!host || !host.classList) { warn('setTheme(): 无效 host'); return; }
-        host.classList.remove('nvui-theme-light');
-        if (theme === 'light') host.classList.add('nvui-theme-light');
-        else if (theme && theme !== 'dark') warn('setTheme(): 未知主题');
-        if (options && typeof options.solid === 'boolean') {
-            if (options.solid) host.classList.add('nvui-solid');
-            else host.classList.remove('nvui-solid');
+
+        if (theme === 'auto') {
+            if (!isDomAvailable() || typeof window.matchMedia !== 'function') {
+                warn("setTheme('auto'): 当前环境没有 matchMedia，已回退到 dark");
+                theme = 'dark';
+            } else {
+                teardownAutoTheme();
+                themeAuto.host = host;
+                themeAuto.active = true;
+                /* 采样宿主信号时要排除自己写过的那个类（见上方注释 2） */
+                themeAuto.hostLightSignal = host.classList.contains('nvui-theme-light')
+                    && !themeAuto.selfAppliedLight;
+                themeAuto.mq = window.matchMedia('(prefers-color-scheme: light)');
+                themeAuto.onMq = function () { syncAutoTheme(); };
+                on(themeAuto.mq, 'change', themeAuto.onMq);
+                syncAutoTheme();
+                applySolidOption(host, options);
+                return;
+            }
         }
+
+        /* 显式 light / dark：摘掉 auto 的监听，主权交回调用方 */
+        teardownAutoTheme();
+        host.classList.remove('nvui-theme-light');
+        if (theme === 'light') {
+            host.classList.add('nvui-theme-light');
+            themeAuto.selfAppliedLight = true;
+        } else if (theme === 'dark') {
+            themeAuto.selfAppliedLight = false;
+        } else if (theme) {
+            warn('setTheme(): 未知主题');
+        }
+        applySolidOption(host, options);
         invalidateTokenCache();
     }
 

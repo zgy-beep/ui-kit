@@ -493,7 +493,7 @@ async function checkGitHubRelease() {
 | :--- | :--- |
 | `NVUI.version` | Kit/API 版本（2.8.3） |
 | `NVUI.getToken(name)` | 读取当前作用域的设计令牌值 |
-| `NVUI.setTheme('light'|'dark', { solid })` | 切换浅色 / 实心扁平模式（只切类名） |
+| `NVUI.setTheme('light'|'dark'|'auto', { solid })` | 切换浅色 / 深色 / **跟随系统**（v2.9.0）与实心扁平模式（只切类名）。`'auto'` = `prefers-color-scheme` 或宿主已有的 `.nvui-theme-light` 任一为浅即浅色，系统变更同帧生效；显式 light/dark 会摘掉 auto 监听 |
 | `NVUI.selfCheck({ expect })` | 运行时自检：版本 / CSS / 玻璃 / 载体 z / 宿主模态 / issues |
 | `NVUI.checkCompatibility({ min, max })` | semver 区间兼容判断 |
 | `NVUI.defaults` | 冻结的组件默认值（v2.8.0） |

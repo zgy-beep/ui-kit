@@ -2214,7 +2214,7 @@ console.log(typeof NVUI.createPanel); // 'function'
 | `NVUI.defaultStorageAdapter` | 默认 `localStorage` 适配器（键前缀 `nvui_state_<id>`），可替换为自定义 StorageAdapter | `object` |
 | `NVUI.getToken(name, scope?)` | 读取当前作用域的 CSS 变量值（如 `getToken('--nvui-accent')`）；内置缓存，宿主的 class / 内联样式一变即自动重算 | `string` |
 | `NVUI.invalidateTokenCache()` | 手动让令牌缓存失效；宿主在 kit 之外改样式表且未触发 class / 内联样式变化时调用（`setTheme()` 内部已自动调用） | `void` |
-| `NVUI.setTheme(theme, options?)` | 切换主题 / 实心模式（`theme: 'light'`、`options.solid: true/false`；只切类名，不写颜色）。v2.7.2 起不再无条件清除 `.nvui-solid`：不传 `options.solid` 时保留用户实心偏好 | `void` |
+| `NVUI.setTheme(theme, options?)` | 切换主题 / 实心模式（`theme: 'light'` / `'dark'` / **`'auto'`（v2.9.0）**、`options.solid: true/false`；只切类名，不写颜色）。v2.7.2 起不再无条件清除 `.nvui-solid`：不传 `options.solid` 时保留用户实心偏好。`'auto'` 双信号取并集 —— `prefers-color-scheme` **或** 切到 auto 时宿主已有的 `.nvui-theme-light`（宿主浅色皮肤），`matchMedia` 变更在同一 change 事件内生效；显式 `'light'` / `'dark'` 会摘掉监听，主权交回调用方 | `void` |
 | `NVUI.selfCheck(options?)` | v2.8.0：运行时自检（`kitVersion/cssLoaded/glass/carrierZ/hostModalCount/tokens/issues`）；`expect` 不匹配、CSS 未加载、自动回退会进 `issues`；Node 无 DOM 返回 `no-dom` | `object` |
 | `NVUI.checkCompatibility({ min, max })` | v2.8.0：semver 区间判断（按 major/minor/patch 数值比较） | `{ compatible, actual, reason }` |
 | `NVUI.defaults` | v2.8.0：冻结的组件官方默认值（`switchRow/inputRow/accordion/progress/createPanel/showToast/actions`） | `object` |
