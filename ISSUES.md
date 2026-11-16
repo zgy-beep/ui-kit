@@ -32,6 +32,7 @@
 | [GH-#19](https://github.com/zgy-beep/ui-kit/issues/19) | 线路 C · v3.0.0 内联尺寸停写与命名收敛（C1–C4，破坏性）。 | **CLOSED（v3.0.0，2026-11-16）**：C1 尺寸载体换轨 `5865946`（`test/v300-size-vars.spec.js` 8/8，V2 用同一段下游 CSS 双向证明「变量载体 500px / legacy 载体 860px」）、C2 按钮组归一 `e2cf4e4`、C3 tokens schema 2 `f619a77`、C4 兼容矩阵门禁 `427a50a` + 解析器修复 `f782076`；`verify:all` 9 → 10 步、顶层导出 28 → 29、`MIGRATION-v3.md` 新建。**未做项**：ST 1.20 实机（本机无环境，兼容矩阵只声明到 1.12.0，不承诺未验证版本）。tag `v3.0.0` + Release 3 产物已推，milestone 3 已 closed。 |
 | [GH-#20](https://github.com/zgy-beep/ui-kit/issues/20) | 焦点陷阱尾项误判：`tabindex="-1"` 的未激活 tab 被计入可 Tab 项，纯文本面板一次 Tab 即逃出模态（对应本文件 `#23`）。 | **CLOSED（v2.8.2，2026-11-16）**：tag `v2.8.2` + [Release](https://github.com/zgy-beep/ui-kit/releases/tag/v2.8.2) 已建，关闭评论记录了版本 / commit / 验证数据；按 `MAINTAINING.md` §3.3 第 1 条关闭。 |
 | [GH-#21](https://github.com/zgy-beep/ui-kit/issues/21) | UX 观察 3 条：移动端底部导航项 26px、进度条 `label` 仅 `aria-label` 无可视标签、长内容滚动边缘硬切。 | **CLOSED（v2.9.0，2026-11-16）**：触控 40px 已随 v2.8.2 交付（`7818192`）；进度可视标签与边缘渐隐随 v2.9.0 交付（`e37b446`，`test/issue-21-ux.spec.js` 11/11）。三条全部 additive，关闭评论含取舍说明（mask-image 而非内阴影、可视文本 `aria-hidden` 防重复播报）。 |
+| [GH-#22](https://github.com/zgy-beep/ui-kit/issues/22) | 线路 D · v3.1.0 移除 `data-nvui-legacy-size` 过渡开关（v3.0.0 承诺兑现）。 | **CLOSED（v3.1.0，2026-11-16）**：D1 代码零残留 `d6c26cc`（删 `LEGACY_SIZE_ATTR` / `usesLegacySize` / legacy 分支 + warnOnce，载体只剩 CSS 变量一条路径）；D2 `test/v300-size-vars` 8/8，V2 改直接证明下游 CSS 接管（实测 500/860px）、V3 改防复活断言（设属性后 legacyWarns=0）；D3 文档改「已移除」+ 替代方案。附带修两个夹具：`7e655f4`（v280 的 `max:'3.0.0'` 升位当天失效）、`384835f`（AI-GUIDE 漏 bump 导致 e2e T1-R3-04 红）。tag `v3.1.0` + Release 3 产物已推，milestone 4 closed。 |
 
 > `ROADMAP.md` 于 2026-11-16 补建：此前三个 open issue 均引用该文件，但仓库从未提交过（`git log --all -- ROADMAP.md` 为空），属**死链**，现已修复。
 
@@ -456,6 +457,10 @@
 | 主题跟随 B6（11-16） | `setTheme('auto')` 双信号并集；`themeAuto` 状态 + `teardownAutoTheme/syncAutoTheme`；采样排除自写类；显式主题摘监听 | `v290-theme-auto` 10/10；判据改为「后注册的 change 探针收到事件时类名已更新」；变异：去掉 `hostLightSignal` 时 A4 红 |
 | 调尺寸手柄 B4（11-16） | `createPanel({ resizable })` + `createResizeGrip(ctx)`；Pointer Events + `setPointerCapture`；方向键 ±8 / Shift ±32 / Home 复位；写入一律「内联 px → `applyClamping()`」 | `v290-resize` 11/11；已知边界：高度受 `max-height: 88vh`，只在可收缩区间可调；行数合并 `var disposed/acc` 维持 531 |
 | 表单补齐 B5（11-16） | `inputRow` 的 `textarea` 伪类型（`data-nvui-type`，不覆盖 IDL）+ `rows`；`hint`/`error` 各占独立 `aria-describedby` id | `v290-inputrow` 8/8；组件类 83 → 84（`.nvui-input-msg`）；`is-msg`/`is-error` 状态类 |
+| 线路 D 立项（11-16） | 按 MAINTAINING §2.5 为 v3.1 建 GH-#22 + milestone 4 + ROADMAP §5 线路 D（D1 代码零残留 / D2 开关无效断言 / D3 文档清将来时）；顺手修正上一轮公告模板插在 §5 前的章节乱序 | `npm test` 373/0；commit `8091015` |
+| 移除过渡开关 D1/D2（11-16） | 删 `LEGACY_SIZE_ATTR` / `usesLegacySize()` / legacy 分支 + warnOnce，载体只剩 CSS 变量；V2 改直接证明下游 CSS 接管、V3 改防复活断言（设属性后仍只写变量、legacyWarns=0） | `test:sizevars` 8/8；`verify:all` 10/10（移除前后各跑一次）；commit `d6c26cc` |
+| 夹具二修（11-16） | ① `test-v280-features.js` 的 `max:'3.0.0'` 升到 v3.1 当天失效（v2.9 时只修了 min 半边）；② AI-GUIDE 漏 bump 到 3.1.0，`verify:release` 21 项不查它、e2e T1-R3-04 抓到 | `test:v280` 8/8；`test:e2e` 58/0（修复前 57/58）；commits `7e655f4` / `384835f` |
+| 发布 v3.1.0（11-16） | MINOR：10 处版本 3.1.0、CHANGELOG 实体条目、UPGRADING 新增「3.0.0 → 3.1.0」、README §10.10/§11.4 各加行、ROADMAP 线路 D 标已交付；GH-#22 关闭 + milestone 4 closed | `verify:all` 10/10；373/0；浏览器 455+18+217+12+11+10+9+8+10+11+8+8；实机 35/35 + 19/19；e2e 58/0；`pack` 出 `ui-kit-3.1.0.zip`（259,385 B）；tag + Release 3 产物（body 2256 字符） |
 | 尺寸载体 C1（11-16） | 停写内联 px，改写 `--nvui-panel-w` / `--nvui-panel-h`；`writePanelSize/readPanelSize/clearPanelSize` 三个助手收敛读写；状态 v2 `{ w, h, mode }` + `migrateStateV1toV2()` + `data-nvui-legacy-size` 开关；`applyClamping` 在「两维都读不到 px 但身上挂着尺寸」时清 calc（修掉 v2 的「最大化→还原」残留） | `v300-size-vars` 8/8；V2 用同一段下游 CSS 双向证明（v3 载体 500px / legacy 860px）；`test:api` 29 导出；行数删注释维持 531 |
 | 按钮组归一 C2（11-16） | 四段 `display:flex + align-items + gap` 收成一条 `:where(...)`（零 specificity）；差异只剩「操作区右对齐」与 `.nvui-btn-row` 内按钮等宽；`.nvui-btn-row` 降为 `.nvui-actions` 别名 | `npm test` 372/0（+2 条防分叉断言：同一组必须恰好一条规则、`.nvui-actions` 仍 `flex-end`） |
 | tokens schema v2 C3（11-16） | `scripts/tokens-v1-to-v2.js` 从 CSS 注释生成 `schema` / `meta{group,type,description}` / `groupDescriptions`；`tokens:migrate` / `tokens:check`；值结构逐字节不变 | 111 token / 16 组 / 9 段说明 / 75 个空 description（不编造）；`npm test` 373/0（+1 条 schema 断言）；踩坑：块结束不清 current 会把 `.nvui-theme-light` 整段吸进 dark 表 |
@@ -477,9 +482,10 @@
 | A · 工程化收尾（测试可复跑、门禁可信任） | v2.8.2 / v2.8.3 **已交付** | [#17](https://github.com/zgy-beep/ui-kit/issues/17) | v2.8.2 · 工程化收尾（已 closed） |
 | B · 下游可维护性与可观测性（6 项 additive） | v2.9.0 **已交付** | [#18](https://github.com/zgy-beep/ui-kit/issues/18) | v2.9.0 · 下游可维护性（已 closed） |
 | C · 内联尺寸停写与命名收敛（破坏性 + 迁移器） | v3.0.0 **已交付** | [#19](https://github.com/zgy-beep/ui-kit/issues/19) | v3.0.0 · 尺寸与命名重构（已 closed） |
+| D · 移除过渡尺寸开关（兑现 C 的承诺） | v3.1.0 **已交付** | [#22](https://github.com/zgy-beep/ui-kit/issues/22) | v3.1.0 · 移除 legacy 尺寸开关（已 closed） |
 
-排期原则：**先让断言可信（A）→ 再让下游少写代码（B）→ 最后才动破坏性契约（C）**。三条线路已全部到出口。
+排期原则：**先让断言可信（A）→ 再让下游少写代码（B）→ 最后才动破坏性契约（C）→ 收掉 C 留的过渡开关（D）**。四条线路已全部到出口。
 
-**待立项**：v3.1.0 至少要移除 `data-nvui-legacy-size` 过渡开关（v3.0.0 发布时承诺）；`MIGRATION-v3.md` §6 已写明
-「除此之外 v3.x 内不再有破坏性变更」。另有两项无版本归属的技术债：G-07 语义层 / 社区标签（阻塞在 LLM key
-环境变量，见待办区）、ST 1.20 实机补跑（本机无环境）。
+**未立项 / 无版本归属**：G-07 语义层 / 社区标签（四种 LLM key 环境变量实测全空，见待办区）、
+ST 1.20 实机补跑（本机无环境）。`MIGRATION-v3.md` §6 已写明 v3.x 内不再有破坏性变更；
+v3.1 移除 `data-nvui-legacy-size` 是最后一项，已兑现。
