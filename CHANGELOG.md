@@ -13,13 +13,15 @@
 - 测试整理：7 个零引用历史探针移入 `test/archive/2026-10/`（其余 13 个因被 ISSUES / CHANGELOG 作为复现证据引用而保留原位）。
 - 触控尺寸：移动端底部导航项 `.nvui-bottom-nav-item` 加 `min-height: 40px`（原实测 26px），抽屉整体 +14px；同步 `test/test-ui-kit.js` §5 静态断言与 `test/host/smoke-panel.js` 实机断言（GH-#21 第 1 条）。
 - 测试基线：两套宿主实机冒烟入库为 `test/host/smoke-panel.js`（35 条）+ `test/host/smoke-deep.js`（19 条），入口 `npm run test:host`；新增 `test/README.md` 五类索引。实机基线 35/35 + 19/19。
-- 内部重构（无行为变更）：`createPanel()` 拆出两个模块级 factory，函数体 1433 → **737 行**、嵌套函数 36 → **10 个**，
-  复杂度门禁阈值随之下调到 737（只允许降）：
+- 内部重构（无行为变更）：`createPanel()` 拆出四个模块级 factory，函数体 1433 → **688 行**、嵌套函数 36 → **8 个**，
+  复杂度门禁阈值随之下调到 688（只允许降）：
   1. `createAccordionRegistry(ctx)` —— accordion 子系统 15 个函数 / 283 行，ctx 只暴露 9 个能力；
   2. `createPersistence(ctx)` —— 持久化与视口钳制 7 个函数 / 332 行（读取/防抖落盘/恢复/钳制/清理），
      `tabs` / `keyMap` / `acc` 等依赖以 getter 延迟注入；销毁顺序固定为「先 flush 再关门」；
   3. `createFocusChain(ctx)` —— 焦点链 4 个函数 / 88 行（初始焦点、关闭后归还、末级兜底、
-     面板内首个可聚焦节点），`PANEL_FOCUSABLE` 提升为模块级常量与 `trapTabFocus()` 共用。
+     面板内首个可聚焦节点），`PANEL_FOCUSABLE` 提升为模块级常量与 `trapTabFocus()` 共用；
+  4. `createTabController(ctx)` —— 标签切换 2 个函数 / 54 行，并接管 `activeDom` 这份状态
+     （面板侧只读 `getActiveDom()`），切换只走 `switchTo()` / `setByKey()`。
   导出面、DOM、CSS、状态存储格式零变化；真实宿主 35/35 + 19/19、持久化压力 19/19、e2e 58/58、浏览器 4 spec 全绿。
 - 维护流程：新增 [`MAINTAINING.md`](MAINTAINING.md)，把「何时提交 / 提交信息格式」「版本三态与升位判定树」「GitHub issue 关闭判据与巡查节奏」写成可执行规范；`verify:release` 增加该文档三章存在性校验（19 → 20 项），`npm test` 增加一条同源断言（369 → 370）。同时统一措辞：`CHANGELOG.md` 不再使用 `Unreleased` 标题，「已 bump 未打 tag」记为**待发布**。
 - 关联：GitHub [GH-#20](https://github.com/zgy-beep/ui-kit/issues/20)（发布提交请关联 `Fixes #20`）。GH-#21 的另两条（进度条可视标签、滚动边缘渐隐）**本版不含**，仍待设计确认。

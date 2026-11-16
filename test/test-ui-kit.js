@@ -2062,7 +2062,7 @@ check('nvui-api: active 归一化到确实存在的标签（否则回退第一�
     /if\s*\(!matched\)[\s\S]{0,200}matched = tabs\[0\]/.test(apiSrc));
 check('nvui-api: addNode 找不到标签时回退到可见面板而非 body（NEW-15）',
     /if \(domKey && panes\.get\(domKey\)\) pane = panes\.get\(domKey\);/.test(apiSrc)
-    && /else if \(activeDom && panes\.get\(activeDom\)\) pane = panes\.get\(activeDom\);/.test(apiSrc)
+    && /else if \(activeDomNow && panes\.get\(activeDomNow\)\) pane = panes\.get\(activeDomNow\);/.test(apiSrc)
     && /else if \(tabs\.length && panes\.get\(tabs\[0\]\.domKey\)\) pane = panes\.get\(tabs\[0\]\.domKey\);/.test(apiSrc)
     && /if \(!pane\) pane = body;/.test(apiSrc)
     && !/panes\[activeDom\] \|\| body/.test(apiSrc));
@@ -2357,17 +2357,19 @@ if (!hasDom) {
 
 /* --- 9.7 复杂度冻结（G-01）：createPanel 不得继续膨胀 --- */
 /*
- * 图谱实测：createPanel() 度 67，是全项目唯一枢纽。2026-11-16 P1-1 分两步拆：
+ * 图谱实测：createPanel() 度 67，是全项目唯一枢纽。2026-11-16 P1-1 分四步拆：
  *   第一步：accordion 子系统（15 个函数、283 行）→ createAccordionRegistry(ctx)，
  *           函数体 1433 → 1162 行，嵌套函数 36 → 20 个；
  *   第二步：持久化 / 视口钳制（7 个函数、332 行）→ createPersistence(ctx)，
  *           函数体 1162 → 825 行，嵌套函数 20 → 14 个；
  *   第三步：焦点链（4 个函数、88 行）→ createFocusChain(ctx)，
- *           函数体 825 → 737 行，嵌套函数 14 → 10 个。
+ *           函数体 825 → 737 行，嵌套函数 14 → 10 个；
+ *   第四步：标签切换（2 个函数、54 行）→ createTabController(ctx)，并让该 factory
+ *           独占 activeDom，函数体 737 → 688 行，嵌套函数 10 → 8 个。
  * 阈值随重构下调，**只允许降不允许升**：需要新逻辑时先抽 factory，而不是放宽本条。
  * 27 个导出成员已由 test/test-api-surface.js 的 EXPECTED_EXPORTS 冻结，此处不重复断言。
  */
-const CREATE_PANEL_MAX_LINES = 737;
+const CREATE_PANEL_MAX_LINES = 688;
 const apiLines = apiSrc.split('\n');
 const cpStart = apiLines.findIndex((l) => /^\s*function createPanel\(/.test(l));
 const cpEnd = cpStart < 0 ? -1

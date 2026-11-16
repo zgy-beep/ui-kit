@@ -2322,6 +2322,113 @@
     }
 
 
+    /**
+     * 标签切换子系统（G-01 第四步）。
+     *
+     * 从 createPanel 抽出 setTabByDom / setTab，并让这里成为 activeDom 的
+     * **唯一持有者**：面板侧读 getActiveDom()，切换只走 switchTo()，避免
+     * 「一份状态、两处可写」的老问题。
+     *
+     * ctx 里 tabsNav / bottomNav / tabs / keyMap / panes 全部是 getter：
+     * factory 创建时 DOM 与集合尚未构建（var 提升后是 undefined），传值会
+     * 永久拿到 undefined —— 与 createPersistence 同一个坑。
+     */
+    function createTabController(ctx) {
+        var id = ctx.id;
+        var persist = ctx.persist;
+        var warn = ctx.warn;
+        var syncIndicator = ctx.syncIndicator;
+        var activeDom = null;
+
+        var getTabs = ctx.tabs;
+        var getPanes = ctx.panes;
+
+        /* active 归一化：只接受确实存在于 tabs 的 key，否则回退到第一个（NEW-15） */
+        function resolveInitial(wantActive) {
+            var tabs = getTabs() || [];
+            if (!tabs.length) return null;
+            var want = (wantActive === null || wantActive === undefined) ? '' : String(wantActive);
+            var matched = null;
+            for (var i = 0; i < tabs.length; i++) {
+                if (tabs[i].key === want || tabs[i].domKey === want) { matched = tabs[i]; break; }
+            }
+            if (!matched) {
+                if (want) warn('createPanel(): active "' + want + '" 不存在，已回退到第一个标签');
+                matched = tabs[0];
+            }
+            return matched.domKey;
+        }
+
+        function switchTo(domKey) {
+            var panes = getPanes();
+            if (!panes.get(domKey)) return;
+            var tabs = getTabs() || [];
+            var prevDom = activeDom;
+            activeDom = domKey;
+
+            var tabsNav = ctx.tabsNav();
+            if (tabsNav) {
+                Array.prototype.forEach.call(tabsNav.querySelectorAll('.nvui-tab'), function (tab) {
+                    var on_ = tab.id === id + '-tab-' + domKey;
+                    tab.classList.toggle('is-active', on_);
+                    tab.setAttribute('aria-selected', on_ ? 'true' : 'false');
+                    tab.setAttribute('tabindex', on_ ? '0' : '-1');
+                });
+                if (syncIndicator) syncIndicator(tabsNav, true);
+            }
+
+            var bottomNav = ctx.bottomNav();
+            if (bottomNav) {
+                Array.prototype.forEach.call(bottomNav.querySelectorAll('.nvui-bottom-nav-item'), function (item, index) {
+                    var on_ = tabs[index] && tabs[index].domKey === domKey;
+                    item.classList.toggle('is-active', on_);
+                    if (on_) item.setAttribute('aria-current', 'page');
+                    else item.removeAttribute('aria-current');
+                });
+            }
+
+            /* 只切换「旧 pane → 新 pane」两个元素（NEW-09）：
+               原实现每次全量遍历所有 pane 并逐个 classList.toggle，
+               tabs 数量 N 时切换成本 O(N) 且每个 pane 都触发样式失效。 */
+            var prevPane = panes.get(prevDom);
+            var nextPane = panes.get(domKey);
+            if (prevPane && prevPane !== nextPane) prevPane.classList.remove('is-active');
+            if (nextPane) nextPane.classList.add('is-active');
+
+            if (persist.tabEnabled() && !persist.isRestoring()) persist.schedule();
+        }
+
+        /**
+         * 按调用方给的原始 key 切换标签（对外契约不变）。
+         * 重复 key 取第一个（与 keyMap 一致），非法 key 静默忽略。
+         */
+        function setByKey(key) {
+            if (key === null || key === undefined) return;
+            var raw = String(key);
+            var tabs = getTabs() || [];
+            var domKey = ctx.keyMap().get(raw);
+            if (!domKey) {
+                /* 也允许直接传内部 domKey */
+                for (var i = 0; i < tabs.length; i++) {
+                    if (tabs[i].domKey === raw) { domKey = raw; break; }
+                }
+            }
+            if (!domKey) {
+                warn('setTab(): 未知标签 key "' + raw + '"，已忽略');
+                return;
+            }
+            switchTo(domKey);
+        }
+
+        return {
+            init: function (wantActive) { activeDom = resolveInitial(wantActive); return activeDom; },
+            getActiveDom: function () { return activeDom; },
+            switchTo: switchTo,
+            setByKey: setByKey,
+        };
+    }
+
+
     function createPanel(options) {
         var opts = options || {};
         /* 宿主若全局禁用了 backdrop-filter，先恢复回退态，避免玻璃只剩半透明底色 */
@@ -2346,6 +2453,8 @@
         var acc = null;
         /* 持久化子系统（G-01 第二步）在 DOM 骨架建好后创建，见下 */
         var persist = null;
+        /* 标签控制器（G-01 第四步）：activeDom 由它独占，本函数只读 getActiveDom() */
+        var tabCtl = null;
 
         /* NEW-36：显式设置 closing="" 与 role="presentation"，杜绝 SillyTavern fixToastrForDialogs 劫持注入 */
         var dialogTitleStr = (typeof opts.title === 'symbol') ? '面板' : (opts.title || '面板');
@@ -2371,10 +2480,11 @@
             isDisposed: function () { return disposed; },
             accordion: function () { return acc; },
             tabs: function () { return tabs; },
-            activeDom: function () { return activeDom; },
+            /* tabCtl 在本行之后才创建，故走惰性闭包；bootstrap 时已就绪 */
+            activeDom: function () { return tabCtl ? tabCtl.getActiveDom() : null; },
             keyMap: function () { return keyMap; },
-            setTab: setTab,
-            setTabByDom: setTabByDom,
+            setTab: function (key) { if (tabCtl) tabCtl.setByKey(key); },
+            setTabByDom: function (domKey) { if (tabCtl) tabCtl.switchTo(domKey); },
             tabsNav: function () { return tabsNav; },
             syncTabsIndicator: syncTabsIndicator,
             isSuppressed: function () { return isSuppressedForUpdate; },
@@ -2615,39 +2725,41 @@
             tabs.push({ key: origKey, domKey: domKey, label: t.label, icon: t.icon });
         });
 
-        /* active 归一化：只接受确实存在于 tabs 的 key，否则回退到第一个（NEW-15） */
-        var activeDom = null;     /* 当前激活标签的内部 domKey */
-        if (tabs.length) {
-            var wantActive = (opts.active === null || opts.active === undefined) ? '' : String(opts.active);
-            var matched = null;
-            for (var ti = 0; ti < tabs.length; ti++) {
-                if (tabs[ti].key === wantActive || tabs[ti].domKey === wantActive) { matched = tabs[ti]; break; }
-            }
-            if (!matched) {
-                if (wantActive) warn('createPanel(): active "' + wantActive + '" 不存在，已回退到第一个标签');
-                matched = tabs[0];
-            }
-            activeDom = matched.domKey;
-        }
-        debug('createPanel(): id=' + id + '，标签数=' + tabs.length + '，激活=' + (activeDom || '(无)'));
+        /* 标签控制器（G-01 第四步）：activeDom 从此由它独占。
+           ctx 全部 getter —— 此处 tabsNav / bottomNav 还没建出来。 */
+        tabCtl = createTabController({
+            id: id,
+            persist: persist,
+            tabs: function () { return tabs; },
+            keyMap: function () { return keyMap; },
+            panes: function () { return panes; },
+            tabsNav: function () { return tabsNav; },
+            bottomNav: function () { return bottomNav; },
+            syncIndicator: syncTabsIndicator,
+            warn: warn,
+        });
+        tabCtl.init(opts.active);
+        /* 建 DOM 时用的初始值；运行期一律现读 tabCtl.getActiveDom() */
+        var activeNow = tabCtl.getActiveDom();
+        debug('createPanel(): id=' + id + '，标签数=' + tabs.length + '，激活=' + (activeNow || '(无)'));
 
         if (tabs.length) {
             tabsNav = el('nav', 'nvui-tabs', { role: 'tablist', 'aria-label': '面板分区' });
             tabsNav.appendChild(el('span', 'nvui-tabs-indicator', { 'aria-hidden': 'true' }));
             tabs.forEach(function (t) {
-                var tab = el('button', 'nvui-tab' + (t.domKey === activeDom ? ' is-active' : ''), {
+                var tab = el('button', 'nvui-tab' + (t.domKey === activeNow ? ' is-active' : ''), {
                     type: 'button', role: 'tab', id: id + '-tab-' + t.domKey,
                     'data-tab': t.key,
                     'data-key': t.key,
-                    'aria-selected': t.domKey === activeDom ? 'true' : 'false',
+                    'aria-selected': t.domKey === activeNow ? 'true' : 'false',
                     'aria-controls': id + '-pane-' + t.domKey,
-                    tabindex: t.domKey === activeDom ? '0' : '-1',
+                    tabindex: t.domKey === activeNow ? '0' : '-1',
                 });
                 var ic = iconNode(t.icon);
                 if (ic) tab.appendChild(ic);
                 var tabLabelStr = (typeof t.label === 'symbol' || typeof t.key === 'symbol') ? '标签' : String(t.label || t.key);
                 tab.appendChild(document.createTextNode(tabLabelStr));
-                on(tab, 'click', function () { setTabByDom(t.domKey); });
+                on(tab, 'click', function () { tabCtl.switchTo(t.domKey); });
                 tabsNav.appendChild(tab);
             });
             /* NEW-41：符合 WAI-ARIA APG Tabs Pattern 的方向键与 Home/End 键盘导航 */
@@ -2655,7 +2767,7 @@
                 if (!tabs.length) return;
                 var curIdx = -1;
                 for (var i = 0; i < tabs.length; i++) {
-                    if (tabs[i].domKey === activeDom) { curIdx = i; break; }
+                    if (tabs[i].domKey === tabCtl.getActiveDom()) { curIdx = i; break; }
                 }
                 var nextIdx = -1;
                 if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
@@ -2669,7 +2781,7 @@
                 }
                 if (nextIdx !== -1 && nextIdx !== curIdx) {
                     e.preventDefault();
-                    setTabByDom(tabs[nextIdx].domKey);
+                    tabCtl.switchTo(tabs[nextIdx].domKey);
                     var targetTab = tabsNav.querySelector('#' + id + '-tab-' + tabs[nextIdx].domKey);
                     if (targetTab && typeof targetTab.focus === 'function') targetTab.focus();
                 }
@@ -2680,7 +2792,7 @@
         var body = el('div', 'nvui-panel-body');
         panes = new Map();
         tabs.forEach(function (t) {
-            var pane = el('div', 'nvui-tabpane' + (t.domKey === activeDom ? ' is-active' : ''), {
+            var pane = el('div', 'nvui-tabpane' + (t.domKey === activeNow ? ' is-active' : ''), {
                 role: 'tabpanel', id: id + '-pane-' + t.domKey, 'aria-labelledby': id + '-tab-' + t.domKey,
             });
             panes.set(t.domKey, pane);
@@ -2708,16 +2820,16 @@
         if (tabs.length) {
             bottomNav = el('nav', 'nvui-bottom-nav', { 'aria-label': '面板分区（手机）' });
             tabs.forEach(function (t) {
-                var item = el('button', 'nvui-bottom-nav-item' + (t.domKey === activeDom ? ' is-active' : ''), {
+                var item = el('button', 'nvui-bottom-nav-item' + (t.domKey === activeNow ? ' is-active' : ''), {
                     type: 'button', 'aria-label': t.label || t.key,
                     'data-tab': t.key,
                     'data-key': t.key,
                 });
-                if (t.domKey === activeDom) item.setAttribute('aria-current', 'page');
+                if (t.domKey === activeNow) item.setAttribute('aria-current', 'page');
                 var ic = iconNode(t.icon);
                 if (ic) item.appendChild(ic);
                 item.appendChild(el('span', null, { text: t.label || t.key }));
-                on(item, 'click', function () { setTabByDom(t.domKey); });
+                on(item, 'click', function () { tabCtl.switchTo(t.domKey); });
                 bottomNav.appendChild(item);
             });
             panel.appendChild(bottomNav);
@@ -2753,61 +2865,6 @@
         }
 
         persist.bootstrap();
-
-        /** 按 domKey 切换标签（内部用） */
-        function setTabByDom(domKey) {
-            if (!panes.get(domKey)) return;
-            var prevDom = activeDom;
-            activeDom = domKey;
-            if (tabsNav) {
-                Array.prototype.forEach.call(tabsNav.querySelectorAll('.nvui-tab'), function (tab) {
-                    var on_ = tab.id === id + '-tab-' + domKey;
-                    tab.classList.toggle('is-active', on_);
-                    tab.setAttribute('aria-selected', on_ ? 'true' : 'false');
-                    tab.setAttribute('tabindex', on_ ? '0' : '-1');
-                });
-                syncTabsIndicator(tabsNav, true);
-            }
-            if (bottomNav) {
-                Array.prototype.forEach.call(bottomNav.querySelectorAll('.nvui-bottom-nav-item'), function (item, index) {
-                    var on_ = tabs[index] && tabs[index].domKey === domKey;
-                    item.classList.toggle('is-active', on_);
-                    if (on_) item.setAttribute('aria-current', 'page');
-                    else item.removeAttribute('aria-current');
-                });
-            }
-            /* 只切换「旧 pane → 新 pane」两个元素（NEW-09）：
-               原实现每次全量遍历所有 pane 并逐个 classList.toggle，
-               tabs 数量 N 时切换成本 O(N) 且每个 pane 都触发样式失效。 */
-            var prevPane = panes.get(prevDom);
-            var nextPane = panes.get(domKey);
-            if (prevPane && prevPane !== nextPane) prevPane.classList.remove('is-active');
-            if (nextPane) nextPane.classList.add('is-active');
-            if (persist.tabEnabled() && !persist.isRestoring()) {
-                persist.schedule();
-            }
-        }
-
-        /**
-         * 按调用方给的原始 key 切换标签（对外契约不变）。
-         * 重复 key 取第一个（与 keyMap 一致），非法 key 静默忽略。
-         */
-        function setTab(key) {
-            if (key === null || key === undefined) return;
-            var raw = String(key);
-            var domKey = keyMap.get(raw);
-            if (!domKey) {
-                /* 也允许直接传内部 domKey */
-                for (var i = 0; i < tabs.length; i++) {
-                    if (tabs[i].domKey === raw) { domKey = raw; break; }
-                }
-            }
-            if (!domKey) {
-                warn('setTab(): 未知标签 key "' + raw + '"，已忽略');
-                return;
-            }
-            setTabByDom(domKey);
-        }
 
         /** 在 scope 内取第一个「焦点陷阱认可」的可聚焦元素 */
         function openPanel() {
@@ -2851,7 +2908,7 @@
             panel: panel,
             id: id,
             closeBtn: function () { return closeBtn; },
-            activeDom: function () { return activeDom; },
+            activeDom: function () { return tabCtl ? tabCtl.getActiveDom() : null; },
             panes: function () { return panes; },
             opener: function () { return opener; },
             focusFallback: function () { return opts.focusFallback; },
@@ -2896,8 +2953,9 @@
                且同样满足报告的真正诉求 —— 绝不落到 body（body 不属于任何 tabpane，
                内容会既不在导航语义下、也不在任何标签的可见区域内）。 */
             var pane = null;
+            var activeDomNow = tabCtl.getActiveDom();
             if (domKey && panes.get(domKey)) pane = panes.get(domKey);
-            else if (activeDom && panes.get(activeDom)) pane = panes.get(activeDom);
+            else if (activeDomNow && panes.get(activeDomNow)) pane = panes.get(activeDomNow);
             else if (tabs.length && panes.get(tabs[0].domKey)) pane = panes.get(tabs[0].domKey);
             if (!pane) pane = body;
             append(pane, node);
@@ -2978,7 +3036,7 @@
             open: openPanel,
             close: closePanel,
             destroy: destroy,
-            setTab: setTab,
+            setTab: tabCtl.setByKey,
             showUpdate: showUpdate,
             syncIndicator: function () { if (tabsNav) syncTabsIndicator(tabsNav, false); },
             addNode: addNode,
@@ -3046,7 +3104,7 @@
             get: function () {
                 if (!tabs.length) return null;
                 for (var i = 0; i < tabs.length; i++) {
-                    if (tabs[i].domKey === activeDom) {
+                    if (tabs[i].domKey === tabCtl.getActiveDom()) {
                         return tabs[i].key;
                     }
                 }
