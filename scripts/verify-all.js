@@ -7,7 +7,7 @@
  * 不报错；任何断言失败都以非零退出码结束。
  *
  * 顺序固定：
- *   test → test:api → test:v280 → downstream:check → verify:release
+ *   test → test:api → test:v280 → test:compat → downstream:check → verify:release
  *   → pack + 产物校验 → test:browser → test:stress → test:e2e
  *
  * 用法：
@@ -41,6 +41,7 @@ const steps = [
     { name: 'test', label: '静态规范（npm test）', cmd: ['npm', ['test']] },
     { name: 'api', label: '导出面冻结（test:api）', cmd: ['npm', ['run', 'test:api']] },
     { name: 'v280', label: 'v2.8.x 契约（test:v280）', cmd: ['npm', ['run', 'test:v280']] },
+    { name: 'compat', label: '兼容矩阵（test:compat）', cmd: ['npm', ['run', 'test:compat']] },
     { name: 'downstream', label: '下游 4 资产自检（downstream:check）', cmd: ['npm', ['run', 'downstream:check']] },
     { name: 'release', label: '发布一致性（verify:release）', cmd: ['npm', ['run', 'verify:release']] },
     { name: 'pack', label: `打包 + 产物校验 v${VERSION}`, cmd: ['npm', ['run', 'pack']], verify: verifyArtifacts },

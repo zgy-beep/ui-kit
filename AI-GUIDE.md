@@ -405,6 +405,24 @@ async function checkGitHubRelease() {
 - `--nvui-panel-width: 720px`（定义在 `tokens.css` 与 `tokens.json`）：经过人体工学与真实酒馆界面视线分布测试，720px 比原 880px 更加紧凑舒适，彻底杜绝大屏幕两侧空旷无内容的割裂感。
 - `createPanel(opts)` 支持传入 `opts.width`（如 `width: 640` 或 `width: 760`）：运行时引擎会基于 Viewport Clamping 将自定义宽度钳制在屏幕可用安全区内；手机端（<=600px）强制回退为 100% 抽屉模式。
 
+### 2.7 面板尺寸：写变量，别写内联 px（v3.0.0）
+
+`createPanel` 不再往面板上写内联 `style.width/height`，改成写两个 CSS 变量：
+
+| 变量 | 含义 |
+| :--- | :--- |
+| `--nvui-panel-w` | 面板宽度（`px` 或 `calc(...)`） |
+| `--nvui-panel-h` | 面板高度（同上） |
+
+`.nvui-panel` 的规则是 `width: var(--nvui-panel-w, min(var(--nvui-panel-width), 100%))` —— 变量留空就回落到 kit 默认值，所以「没设变量」与 v2.x「没有内联宽高」视觉完全一致。带来两个直接后果：
+
+- **下游终于能接管尺寸**：你的 `.nvui-panel { width: 500px }` 现在真的生效（v2.x 里它一定被内联 px 压住，只能靠 `!important`）；
+- **想显式设尺寸**：`panel.style.setProperty('--nvui-panel-w', '640px')`。直接写内联 `style.width` 也仍然有效（内联比类规则强），kit 读状态时会先读变量、读不到再回退读内联，不会读漏。
+
+布局状态格式同步升到 **v2**：`{ version: 2, size: { w, h, mode } }`，`mode` 取 `normal` / `maximized` / `width-only` / `off`。旧格式 `{ version: 1, size: { width, height, isMaximized } }` 由 `NVUI.migrateStateV1toV2()` 自动读入，**落盘一律写 v2**，下游不需要自己判断版本。完整迁移步骤见 [MIGRATION-v3.md](MIGRATION-v3.md)。
+
+过渡期若必须回到内联 px（例如宿主有 CSS 依赖 `style.width` 做动画），给面板元素或 `<html>` 加 `data-nvui-legacy-size` 即可，kit 会告警一次并按老方式写。**该开关 v3.1 移除**，不要在新代码里用。
+
 ---
 
 ## 3. 其它软件如何规范复用
@@ -496,6 +514,7 @@ async function checkGitHubRelease() {
 | `NVUI.setTheme('light'|'dark'|'auto', { solid })` | 切换浅色 / 深色 / **跟随系统**（v2.9.0）与实心扁平模式（只切类名）。`'auto'` = `prefers-color-scheme` 或宿主已有的 `.nvui-theme-light` 任一为浅即浅色，系统变更同帧生效；显式 light/dark 会摘掉 auto 监听 |
 | `NVUI.selfCheck({ expect })` | 运行时自检：版本 / CSS / 玻璃 / 载体 z / 宿主模态 / issues |
 | `NVUI.checkCompatibility({ min, max })` | semver 区间兼容判断 |
+| `NVUI.migrateStateV1toV2(state)` | v3.0.0 布局状态迁移器：`{ version:1, size:{ width, height, isMaximized } }` → `{ version:2, size:{ w, h, mode } }`。幂等（已是 v2 原样返回）、不改入参；`setLayoutState` 与存档读取已内置调用，通常只需在下游自己存过状态时显式用 |
 | `NVUI.defaults` | 冻结的组件默认值（v2.8.0） |
 | `NVUI.clearLayoutState(id, storageAdapter)` | 清理指定面板在持久化存储中的尺寸/位置/状态记忆 |
 | `NVUI.clampPanelLayout(savedSize, savedPos, options)` | 跨屏幕多分辨率视口越界钳制计算引擎（保证桌面与移动端安全贴边，避免关闭按钮不可达） |
@@ -510,7 +529,7 @@ async function checkGitHubRelease() {
 | `NVUI.accordion({ title, summary, open, content })` | 折叠分组 |
 | `NVUI.progress({ value, variant, indeterminate })` | 进度条（返回元素带 `setValue`） |
 | `persist.size: 'width-only'` | v2.9.0（GH-#18 B3）尺寸持久化第三态：只记宽，`height` 恒 `null`、最大化不记；`true` / `false` 行为不变。非法字符串按 `true` 处理并告警 |
-| `panel.getLayoutState()` / `panel.setLayoutState(state, { silent })` | v2.9.0（GH-#18 B1）布局状态读写：get 返回 `{ version, size, tab, accordion }` 游离副本（无 `timestamp`），set 只写内存 + 一次落盘（不切换当前视图）；`silent: true` 不写存储；`persist` 关掉的维度强制 `null` |
+| `panel.getLayoutState()` / `panel.setLayoutState(state, { silent })` | v2.9.0（GH-#18 B1）布局状态读写：get 返回 `{ version: 2, size: { w, h, mode }, tab, accordion }` 游离副本（无 `timestamp`，v3.0.0 起为 v2 形状），set 只写内存 + 一次落盘（不切换当前视图）；`silent: true` 不写存储；`persist` 关掉的维度强制 `null`。set 接受 v1 / v2 两种入参 |
 | `NVUI.createPanel(options)` | 完整面板（见 §2.2），支持 persist/themeToggle/onThemeChange/update/width/**glass** 等，返回 `{ open, close, destroy, setTab, syncIndicator, addSwitch, addInput, addAccordion, addProgress, addNode, addSectionTitle, showUpdate, trackAccordion, adoptAccordions, clearLayoutState, getLayoutState, setLayoutState, setSize, setMaximized, setGlassMode, getGlassState }` |
 | `panel.trackAccordion(node, id?, options?)` | 接管 `innerHTML` 注入的**单个** `.nvui-acc`（v2.6.0，GitHub #11）。默认**不**绑点击，`{ bind: true }` 才由 kit 提供开合；返回实际 id，幂等；键按**原始字符串**保存（中文 / 非 ASCII 不折叠，`__proto__` 等特殊键安全）；显式 / DOM / data 键被活动节点占用时告警并返回 `null`（自动键才追加序号）；非 `.nvui-acc` / 跨面板返回 `null` |
 | `panel.adoptAccordions(root, options?)` | 批量接管容器内 `.nvui-acc`（含 root 自身），返回本次新增数量；重复调用返回 `0`；拒绝 `document` / `body` |
@@ -528,6 +547,7 @@ async function checkGitHubRelease() {
 - **MINOR（小版本 · 2.X.0）**：用于向下兼容的新能力（新增 Token 如 `--nvui-z-layer`、新增组件类如 `.nvui-checkbox`、新增可选 API 如 `countHostModals`、在 `createPanel` 中新增可选参数如 `persist`/`themeToggle`、新增实例方法如 `showUpdate`/`trackAccordion`）。**必须保持 100% 向后兼容**，既有插件直接覆盖无感升级。
 - **MAJOR（大版本 · X.0.0）**：仅用于破坏性变更（重命名/删除 Token、修改核心 CSS 类名、改变公开 API 必需参数签名、破坏 DOM 必需层级）。必须向用户明确告知破坏性影响并提供迁移指南。
 - **发版检查红线（十处对齐）**：版本变更时必须同时原子更新 10 处声明（package.json / tokens.json / tokens.css 文件头 + `--nvui-kit-version` / components.css / nvui-api.js / preview.html / README / AI-GUIDE / CHANGELOG），且 4 资产文件与 `st-extension-template/ui-kit/` 保持 MD5 逐字节一致，`npm test` 必须全绿。完整清单与格式见 README §11.2，可用 `npm run verify:release` 自动检查。
+- **兼容矩阵红线**：README §11.5 那张表不是说明文字，是 `npm run test:compat` 的校验对象 —— 当前大版本线（`vX.0.0`）那一行必须存在，宿主最低版本要等于 `manifest.minimum_client_version`、Node 最低版本要等于 `package.json engines.node`。**新开一条大版本线必须当天补行**，否则 CI 直接红。
 
 ### 6.2 历史版本与兼容基准
 

@@ -7,8 +7,10 @@
 | 入口 | 脚本 | 说明 |
 | :--- | :--- | :--- |
 | `npm test` | `test-ui-kit.js` | 规范守护主体：文件结构、令牌清单、组件三方覆盖、CSS 红线、版本一致性、复杂度冻结、模板自洽 |
-| `npm run test:api` | `test-api-surface.js` | 导出面冻结（27 顶层导出 + 控制器方法） |
+| `npm run test:api` | `test-api-surface.js` | 导出面冻结（29 顶层导出 + 控制器方法） |
 | `npm run test:v280` | `test-v280-features.js` | v2.8.x 功能契约（selfCheck / defaults / force 玻璃） |
+| `npm run test:compat` | `test-compat-matrix.js` | 兼容矩阵硬门禁：README §11.5 当前大版本线那行 ↔ `manifest.minimum_client_version` ↔ `package.json engines.node` ↔ `checkCompatibility` / `migrateStateV1toV2` 四方自洽 |
+| `npm run tokens:check` | `scripts/tokens-v1-to-v2.js --check` | `tokens.json` schema 2 元信息与 `tokens.css` 注释是否漂移（`tokens:migrate` 重新生成） |
 | `npm run verify:release` | `scripts/verify-release.js` | 发布一致性：版本自洽、模板 MD5、CDN tag、CHANGELOG / README 时间线；`--self-test` 做反向验证 |
 
 ## 2. 浏览器 spec（需 Chrome + `playwright-core`，无需 ST 宿主）
@@ -18,8 +20,8 @@
 
 | 入口 | 脚本 |
 | :--- | :--- |
-| `npm run test:browser` | `test-issues-9-10-forms.js` → `test-issue-11-accordion.js` → `issue-12-optgroup-dark-theme.spec.js` → `issue-13-14-focus-escape.spec.js` → `issue-16-persist-size.js`（12）→ `issue-21-ux.spec.js`（11）→ `v290-layout-state.spec.js`（10）→ `v290-width-only.spec.js`（9）→ `v290-diagnostics.spec.js`（8）→ `v290-theme-auto.spec.js`（10）→ `v290-resize.spec.js`（11）→ `v290-inputrow.spec.js`（8） |
-| `npm run test:issue16` / `test:issue21` / `test:layout` / `test:widthonly` / `test:diagnostics` / `test:theme` / `test:resize` / `test:inputrow` | 单跑某一条回归（改持久化 / 进度条 / 滚动行为 / 布局导入导出 / 尺寸三态 / 诊断快照 / 主题跟随系统 / 调尺寸手柄 / 输入行时） |
+| `npm run test:browser` | `test-issues-9-10-forms.js` → `test-issue-11-accordion.js` → `issue-12-optgroup-dark-theme.spec.js` → `issue-13-14-focus-escape.spec.js` → `issue-16-persist-size.js`（12）→ `issue-21-ux.spec.js`（11）→ `v290-layout-state.spec.js`（10）→ `v290-width-only.spec.js`（9）→ `v290-diagnostics.spec.js`（8）→ `v290-theme-auto.spec.js`（10）→ `v290-resize.spec.js`（11）→ `v290-inputrow.spec.js`（8）→ `v300-size-vars.spec.js`（8） |
+| `npm run test:issue16` / `test:issue21` / `test:layout` / `test:widthonly` / `test:diagnostics` / `test:theme` / `test:resize` / `test:inputrow` / `test:sizevars` | 单跑某一条回归（改持久化 / 进度条 / 滚动行为 / 布局导入导出 / 尺寸三态 / 诊断快照 / 主题跟随系统 / 调尺寸手柄 / 输入行 / 尺寸载体与状态迁移时） |
 | `npm run test:stress` | `stress-m1-persistence.js`（19，持久化/损坏数据/竞态）→ `stress-m2-header.js`（15，头部控制流） |
 | `npm run test:e2e` | `test-e2e-v250.js`（58，v2.5.0 全路径） |
 | `npm run test:glass` | `st-glass-transparency.js` |

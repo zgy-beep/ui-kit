@@ -1887,6 +1887,27 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 
 > 兼容性约定：修 bug / 调单个 token 值 / 动效打磨 → 补丁；新增组件 / 令牌 / 可选文件 / 可选 API → 小版本；重命名或删除类与令牌、修改 DOM 契约 → 大版本，并同步迁移对照表与测试金标准。
 
+### 11.5 兼容矩阵（硬门禁）
+
+这张表不是说明文字，是 `npm run test:compat` 的校验对象：**当前版本那一行必须存在**，
+且该行声明的宿主最低版本要与 `st-extension-template/manifest.json` 的
+`minimum_client_version` 逐字一致、Node 最低版本要与 `package.json` 的 `engines.node`
+一致。任一不符 CI 直接红 —— 发版时忘了补行，门禁会拦。
+
+| Kit | 宿主最低（ST `minimum_client_version`） | Node 最低（`engines.node`） | 依据 |
+| :--- | :--- | :--- | :--- |
+| v3.0.0 | 1.12.0 | >=18.0.0 | `<dialog>` + `showModal()`、`:where()`、`color-mix()`、`mask-image`；尺寸走 CSS 变量（需 `Element.style.setProperty` 变量支持，即所有现代浏览器） |
+| v2.0.0 | 1.12.0 | >=18.0.0 | 同上（v2 系列不含 `mask-image` 依赖） |
+
+三条实现约定：
+
+1. **不猜宿主版本**：`minimum_client_version` 只写「确实用到的 API 从哪个版本开始有」，
+   不承诺没实测过的版本；新版本若引入更新的 API，这一行必须跟着动。
+2. **运行时可自查**：下游在初始化时调 `NVUI.checkCompatibility({ min: '3.0.0' })`，
+   低于该版本会返回 `compatible: false` 并给出原因，而不是等到界面错位才发现。
+3. **矩阵只管「能不能跑」**：能不能用某个具体组件（例如 `resizable`）仍看该组件是否
+   在当前 kit 版本里 —— 版本号和能力清单是两件事。
+
 ## 12. SillyTavern 插件面板布局标准（桌面 / 手机）
 
 很多 SillyTavern 插件都需要一个「设置面板」。本章给出一套**跨桌面/手机共用同一份 DOM** 的排列标准：

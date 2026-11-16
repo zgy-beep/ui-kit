@@ -19,6 +19,7 @@
     "test": "node test/test-ui-kit.js",
     "test:api": "node test/test-api-surface.js",
     "test:v280": "node test/test-v280-features.js",
+    "test:compat": "node test/test-compat-matrix.js",
     "test:browser": "node test/test-issues-9-10-forms.js && node test/test-issue-11-accordion.js && node test/issue-12-optgroup-dark-theme.spec.js && node test/issue-13-14-focus-escape.spec.js && node test/issue-16-persist-size.js && node test/issue-21-ux.spec.js && node test/v290-layout-state.spec.js && node test/v290-width-only.spec.js && node test/v290-diagnostics.spec.js && node test/v290-theme-auto.spec.js && node test/v290-resize.spec.js && node test/v290-inputrow.spec.js && node test/v300-size-vars.spec.js",
     "test:issue16": "node test/issue-16-persist-size.js",
     "test:glass": "node test/st-glass-transparency.js",
@@ -42,6 +43,9 @@
     "test:sizevars": "node test/v300-size-vars.spec.js",
     "tokens:migrate": "node scripts/tokens-v1-to-v2.js",
     "tokens:check": "node scripts/tokens-v1-to-v2.js --check"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "devDependencies": {
     "playwright-core": "^1.64.0"

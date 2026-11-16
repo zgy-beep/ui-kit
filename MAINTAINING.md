@@ -80,7 +80,8 @@ Fixes: #N           ← 真正关闭该 issue 时才写
 2. body 的 `Tests:` 行**必须写实测数字**，不允许写「tests pass」；
 3. 涉及 `createPanel` 或任一 factory 的重构，`Tests:` 必须含 `test:stress`；
 4. 涉及焦点/生命周期/Esc 栈，`Tests:` 必须含 `test:browser` 与 `test:host`（宿主在线时）；
-5. 提交前 `npm test` 必须通过。主干单人维护，**不接受红着提交**。
+5. 改动 `README §11.5` 兼容矩阵、`package.json engines.node` 或 `manifest.minimum_client_version`，`Tests:` 必须含 `test:compat`；
+6. 提交前 `npm test` 必须通过。主干单人维护，**不接受红着提交**。
 
 ### 1.3 提交与 issue 的绑定
 
@@ -139,9 +140,9 @@ Fixes: #N           ← 真正关闭该 issue 时才写
 ### 2.4 发布动作（顺序固定，不许跳步）
 
 ```bash
-npm test && npm run test:api && npm run test:v280 && npm run test:stress
-npm run test:browser            # 改过 CSS / API / 焦点时
-npm run test:host               # 宿主在线时
+npm run verify:all              # 唯一门禁入口：10 步（test/api/v280/compat/downstream/
+                                # verify:release/pack 产物校验/browser/stress/e2e）
+npm run test:host               # 宿主在线时（不在 verify:all 里，需要真实 ST）
 npm run verify:release -- --self-test
 npm run pack                    # 产出 ui-kit-X.Y.Z.zip
 git tag -a vX.Y.Z -m "vX.Y.Z"
@@ -149,7 +150,12 @@ git push --follow-tags
 gh release create vX.Y.Z --title "vX.Y.Z" --notes-file <notes>
 ```
 
+`verify:all` 缺 Chrome 或缺 `playwright-core` 时，后三段（browser / stress / e2e）报 SKIP 并返回 0 —— 这种情况下**必须**在有 Chrome 的机器上补跑一遍三段，不能拿 SKIP 当通过。
+
 Release notes 必含四块：**版本定位 / 核心更新与缺陷（列 GH 编号）/ 兼容性说明 / 自动化验证数据**（真实数字）。
+`gh release create` 若报「同 tag 的 Release 已存在」，是 CI 的 release job 抢先建了占位：用
+`gh release edit vX.Y.Z --notes-file <notes>` 覆盖正文、`gh release upload vX.Y.Z <files> --clobber` 重传产物。
+**绝不要**把 workflow 改回 `action-gh-release` + `generate_release_notes`（v2.8.3 实测会把正文整段换成 Full Changelog）。
 
 发布后立刻做三件事：① 关闭本版已修 issue（§3.3）；② `ROADMAP.md`「已发布」区追加一行；③ `README §11.4` 时间线补行（`verify:release` 会校验）。
 
