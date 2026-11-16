@@ -36,8 +36,10 @@ check('selfCheck 在 Node 无 DOM 安全返回 no-dom', nodeCheck.ok === false
     && nodeCheck.issues.includes('no-dom') && nodeCheck.kitVersion === VERSION);
 check(`tokens.css 包含 --nvui-kit-version ${VERSION}`,
     new RegExp(`--nvui-kit-version:\\s*"?${VERSION.replace(/\./g, '\\.')}`).test(tokens));
+/* v3.0.0 起 .nvui-actions 的 flex / gap 并入按钮组统一规则（`:where(...)` 内），
+   因此不能再断言字面量 `.nvui-actions {`；判据改为「它确实在那条统一规则里」。 */
 check('CSS 包含 .nvui-actions 与正文相邻按钮默认间距',
-    /\.nvui-actions\s*\{/.test(css)
+    /:where\([^)]*\.nvui-actions[^)]*\)\s*\{/.test(css)
     && /:where\([^)]*\)\s*>\s*\.nvui-btn\s*\+\s*\.nvui-btn/.test(css));
 check('CSS 包含 force 玻璃作用域与 4 条 !important',
     /dialog\.nvui-tl\[data-nvui-glass="force"\]\s+\.nvui-panel/.test(css)
