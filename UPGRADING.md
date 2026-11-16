@@ -1,6 +1,46 @@
-# UPGRADING · v2.9.0
+# UPGRADING · v3.0.0
 
-本文件是**常青升级指南**：当前版本是 v2.9.0。历史大版本差异见 [MIGRATION-v2.md](MIGRATION-v2.md)。
+本文件是**常青升级指南**：当前版本是 v3.0.0。**v3.0.0 是 MAJOR，四类破坏性变更的完整对照见
+[MIGRATION-v3.md](MIGRATION-v3.md)**；再往前的历史版本差异见 [MIGRATION-v2.md](MIGRATION-v2.md)。
+下文各节按版本从新到旧排列，历史小节保留其**当时**的版本号，不要拿它当当前版本。
+
+## 2.9.0 → 3.0.0
+
+v3.0.0 是 **MAJOR**。它改的不是能力而是**契约**：面板尺寸的载体、布局状态格式、按钮组的声明方式、
+`tokens.json` 的结构。四类变更的杀伤力差别很大 —— **只覆盖 4 资产、不碰下面四类的下游不用改代码**。
+
+| # | 变了什么 | 谁必须动 | 怎么改 |
+| :--- | :--- | :--- | :--- |
+| C1 | 面板尺寸由内联 `style.width/height` 改为 CSS 变量 `--nvui-panel-w` / `--nvui-panel-h`；状态格式 `{ version: 1, size: { width, height, isMaximized } }` → `{ version: 2, size: { w, h, mode } }` | 读 `panel.style.width/height` 的下游；自己解析 / 存档布局状态的下游 | 改读变量或 `panel.getLayoutState().size`；存档过 v1 的跑一次 `NVUI.migrateStateV1toV2()`（内置读取路径已自动迁移）。**用 CSS 覆盖面板宽度的下游从这版起才真的生效** |
+| C2 | `.nvui-actions` / `.nvui-btn-row` / 两个 footer 的四段规则归一为一条 `:where(...)`（零 specificity） | 一般不用动 | `.nvui-btn-row` 在 v3.x 内是 `.nvui-actions` 的别名。可见差异：窄屏按钮换行而非溢出、`.nvui-btn-row` 不再被默认拉伸对齐 |
+| C3 | `tokens.json` 升 schema 2：新增 `schema` / `meta{group,type,description}` / `groupDescriptions`，**`dark` / `light` 的值结构与键顺序逐字节不变** | 遍历 `tokens.json` 顶层键当令牌名的下游 | 改成遍历 `json.dark` / `json.light`。只按 key 取值的不用动 |
+| C4 | 新增 `engines.node: >=18.0.0` 与 README §11.5 兼容矩阵硬门禁 | 构建 / 测试脚本还在 Node 16 的下游 | 升级 Node（只影响开发期脚本，浏览器运行时无关）；可选地在初始化时调 `NVUI.checkCompatibility({ min: '3.0.0' })` 自查 |
+
+**过渡开关**：若你的宿主 CSS / 动画硬依赖 `panel.style.width`，给面板元素或 `<html>` 加
+`data-nvui-legacy-size`，kit 会告警一次并按 v2 方式写内联 px。**该开关 v3.1 移除**。
+
+### 覆盖资产
+
+```
+tokens.css
+components.css
+nvui-api.js
+tokens.json
+```
+
+保持 `tokens.css` 在 `components.css` 之前，CSS 先于 JS；4 个必须是同一版本（`--nvui-kit-version` 与
+`NVUI.version` 都应为 `3.0.0`）。CSS 与 JS **都要换**：只换 CSS 会缺 `migrateStateV1toV2`，
+只换 JS 会缺新的尺寸变量回落与按钮组统一规则。
+
+### 验收清单
+
+1. `NVUI.version === '3.0.0'`，`NVUI.selfCheck({ expect: '3.0.0' })` 干净；
+2. `NVUI.diagnostics().status === 'ok'`，`assets.tokensCss === '3.0.0'`，`assets.componentsCss === true`；
+3. `node ui-kit/test/downstream-check.js` exit 0（4 资产一致性）；
+4. 面板宽度仍是期望值 —— 尤其检查「以前靠内联 px 生效、现在靠 CSS 默认值」的场景；
+5. 有 `nvui_state_<id>` 旧存档的机器上打开面板一次，再读存储：`size` 已是 `{ w, h, mode }`；
+6. 面板能拖 / 能拉（若开了 `resizable`）、最大化与还原后宽度正确回落；
+7. 零 pageerror；深 / 浅两主题目检。
 
 ## 2.8.3 → 2.9.0
 
@@ -133,7 +173,7 @@ tokens.json
 ### 2. 版本自检
 
 ```js
-const r = NVUI.selfCheck({ expect: '2.9.0' });
+const r = NVUI.selfCheck({ expect: '2.8.0' });
 if (!r.ok) console.warn('[my-plugin] ui-kit', r.issues);
 ```
 
@@ -177,8 +217,8 @@ panel.getGlassState();
 
 ### 6. 验收清单
 
-1. 4 资产同版本；`NVUI.version === '2.9.0'`；
-2. `NVUI.selfCheck({ expect: '2.9.0' })` 无 `version-mismatch` / `css-not-loaded`；
+1. 4 资产同版本；`NVUI.version === '2.8.0'`；
+2. `NVUI.selfCheck({ expect: '2.8.0' })` 无 `version-mismatch` / `css-not-loaded`；
 3. `node ui-kit/test/downstream-check.js` exit 0；
 4. 面板/弹窗/吐司/折叠/表单冒烟，零 pageerror；
 5. 检查相邻按钮间距、`.nvui-actions`、玻璃 auto/force/solid 三态；

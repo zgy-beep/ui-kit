@@ -60,7 +60,13 @@ else ok('preview.html 标题');
 if (!read('CHANGELOG.md').includes(`## v${version}`)) fail(`CHANGELOG 缺少 v${version} 条目`);
 else ok('CHANGELOG 条目');
 
-for (const doc of ['UPGRADING.md', 'MIGRATION-v2.md']) {
+/* 升级文档：UPGRADING 是常青入口，MIGRATION-v2 是 v2 全系速查。
+   v3 起每开一个 MAJOR 都要有一份 MIGRATION-v<major>.md —— 破坏性变更不能只写在 CHANGELOG 里。
+   判据跟着 major 走，升到 v4 时要求的是 MIGRATION-v4.md，不用改这段代码。 */
+const docList = ['UPGRADING.md', 'MIGRATION-v2.md'];
+const majorVersion = Number(version.split('.')[0]);
+if (majorVersion >= 3) docList.push(`MIGRATION-v${majorVersion}.md`);
+for (const doc of docList) {
     if (!fs.existsSync(path.join(ROOT, doc))) fail(`缺少升级文档 ${doc}`);
     else ok(`升级文档 ${doc}`);
 }

@@ -1,9 +1,11 @@
 # MIGRATION-v2 · v2.0 → v2.9 历史
 
 本文件只记录**跨版本差异的要点**；当前版本升级步骤见 [UPGRADING.md](UPGRADING.md)，日常变更见 [CHANGELOG.md](CHANGELOG.md)。
+**v3.0.0 及之后见 [MIGRATION-v3.md](MIGRATION-v3.md)**（那是本项目的第一次 MAJOR 契约变更）。
 
 | 版本 | 类型 | 下游需要做什么 |
 | :--- | :--- | :--- |
+| v3.0.0 | MAJOR | **见 [MIGRATION-v3.md](MIGRATION-v3.md)**：尺寸载体换 CSS 变量、状态格式 v2、按钮组归一、`tokens.json` schema 2 |
 | v2.9.0 | MINOR | 覆盖 4 资产；全部为 opt-in 增量（布局导入导出、`persist.size: 'width-only'`、`NVUI.diagnostics()`、`setTheme('auto')`、`resizable` 调尺寸手柄、`inputRow` 的 `textarea`/`hint`/`error`）；组件类 81 → 84、顶层导出 27 → 28，无 API / DOM / 状态格式破坏 |
 | v2.0.0 | MAJOR | 按 v2 设计语言重做 DOM 结构与类名；一次性迁移 |
 | v2.1.x | MINOR/PATCH | 覆盖资产；新增面板布局标准与尺寸 token |

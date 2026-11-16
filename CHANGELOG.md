@@ -6,6 +6,106 @@
 - 新增组件 / 新增 token（不破坏既有 DOM 与取值）：小版本（2.x.0）
 - 重命名类 / token、删除 token、修改 DOM 契约：大版本（x.0.0）
 
+## v3.0.0（2026-11-16）· 尺寸载体换轨 + 命名收敛 + 令牌元信息 + 兼容矩阵门禁（MAJOR）
+
+> 大版本，线路 C（GitHub [GH-#19](https://github.com/zgy-beep/ui-kit/issues/19)）四项随本版交付。
+> **四类破坏性变更**，逐条对照 [MIGRATION-v3.md](MIGRATION-v3.md)：① 面板尺寸不再写内联 px；
+> ② 布局状态格式 v1 → v2；③ 四套按钮组规则归一（`.nvui-btn-row` 降为别名）；④ `tokens.json` schema 2。
+> **不变的**：token 取值（111 / 47）、组件类（84）、关键帧（16）、`!important`（18）、DOM 必需层级、
+> `.nvui-*` 类名与 `is-*` 状态类。顶层导出 **28 → 29**（+`migrateStateV1toV2`）。
+> 只覆盖 4 资产、不碰上述四类的下游**不用改代码**。
+>
+> 最小升级动作：覆盖 4 资产 → `node test/downstream-check.js` → 跑一遍自己的界面测试。
+
+### C1 · 尺寸载体：内联 px → CSS 变量
+
+- `createPanel` 不再写 `panel.style.width/height`，改写 `--nvui-panel-w` / `--nvui-panel-h`；
+  CSS 侧 `width: var(--nvui-panel-w, min(var(--nvui-panel-width), 100%))`、
+  `height: var(--nvui-panel-h, var(--nvui-panel-max-h))`。
+  **变量留空即回落默认值**，所以「没设变量」与 v2.x「没有内联宽高」视觉完全一致。
+- **为什么必须动**：内联样式是作者级声明，下游永远抢不过 —— 想用 CSS 把面板调窄只剩 `!important`，
+  而本 kit 明令禁止（全库预算 18 条，全留给宿主隔离 / 降级）。#16「`persist.size: false` 仍回写历史
+  高度」只是这个矛盾最刺眼的症状，v2.8.1 / v2.9.0 两次都只能绕着它打补丁。v3.0 直接把载体换掉。
+- 三个助手收敛所有读写：`writePanelSize()` / `readPanelSize()` / `clearPanelSize()`。`readPanelSize()`
+  **变量优先、回退内联** —— 下游直接写 `style.width = '900px'` 仍然有效（内联比类规则强），
+  `getLayoutState().size.w` 也读得回来（spec V5 守着）。
+- **状态格式 v2**：`{ version: 2, size: { w, h, mode } }`，`mode` = `normal` / `maximized` /
+  `width-only` / `off`。`mode` 合并了 v1 的 `isMaximized`：最大化本质是二维状态，留独立布尔会让
+  「w / h 还有没有意义」取决于另一个字段，迟早写出 `{ w: 400, h: 800, mode: 'maximized' }`。
+- **`NVUI.migrateStateV1toV2()`**：幂等、不改入参、非对象返回 `null`。`applyLoadedState()` 与
+  `setLayoutState()` 都已内置调用，**v1 存档自动可读，落盘一律写 v2**；下游自己存过状态的可以显式用。
+- **`data-nvui-legacy-size` 过渡开关**（面板元素或 `<html>` 上）：仍写内联 px 并 `warnOnce`（全局只告警
+  一次，不是每次调用刷屏）。**v3.1 移除**，只为给下游一版时间改代码。
+- 顺手修掉一个 v2 就有的缺陷：**「最大化 → 还原」后宽度一直挂着 `calc(100vw - 32px)`**。
+  `applyClamping()` 读不到 px 目标时直接 return，从不清那条 calc。v3.0 在「两个维度都读不到 px、
+  身上却还挂着尺寸」时显式 `clearPanelSize()`，把主权交回 CSS 默认值（spec V6）。
+
+### C2 · 按钮组：四段规则归一
+
+- `.nvui-actions` / `.nvui-btn-row` / `.nvui-panel-footer` / `.nvui-modal-footer` 此前各写一遍
+  `display:flex + align-items + gap`，改一处要同步四处的行为差异没人记得住（v2.8.0 加 `.nvui-actions`
+  时就漏同步过一次）。现收成一条 `:where(...)`：**零 specificity**，下游一条普通规则就能改回左对齐 /
+  自定义 gap，不必 `!important`、不必比权重。
+- 差异只保留两处：操作区右对齐（`.nvui-actions` + 两个 footer）、`.nvui-btn-row` 内按钮等宽
+  （`flex: 1 1 140px`，移动端仍 100%）。`.nvui-btn-row` 在 v3.x 内是 `.nvui-actions` 的别名，v4 再议移除。
+- **可见行为差异（都是修 bug）**：`flex-wrap: wrap` 与 `align-items: center` 现在对两个 footer 一致生效
+  —— 窄屏按钮**换行**而不是溢出；`.nvui-btn-row` 不再被默认拉伸对齐。
+
+### C3 · `tokens.json` schema 2
+
+- 值结构**一动没动**：`dark` / `light` 仍是 `{token: value}` 扁平表，键顺序逐字节保持原样
+  （`JSON.stringify` 前后比对通过）。改结构会让所有下游解析器当场失效，这次要解决的只是「缺元信息」。
+- 新增 `schema: 2`、`meta`（每 token 一条 `{ group, type, description }`）与 `groupDescriptions`
+  （每个分组一段散文说明）。结果：111 token / 16 组 / 9 段分组说明；**75 个 token 在 CSS 里没有单独
+  注释，`description` 是空字符串**（说明见 `groupDescriptions`），不编造。
+- 分组与描述**从 `tokens.css` 注释里取**，不另写一套文档 —— `tokens.css` 仍是唯一出处。一条注释统管
+  紧邻连续多个 token 的写法也照搬（「输入控件底 / 行内代码底 / 遮罩底」就是一个注释管四行）。
+- 新增 `scripts/tokens-v1-to-v2.js`：`npm run tokens:migrate` 生成 / 刷新，`npm run tokens:check` 只校验。
+  27 类值 → 10 个类型词表（color / length / duration / easing / number / font / shadow / alias / keyword / other）。
+- 两处踩过的坑写进脚本注释：**块结束时（缩进深度回到 0）必须把 current 清掉**，否则 `.nvui-theme-light`
+  整段会被吸进深色表（实测把 `--nvui-bg` 写成 `#f7f8fc`）；空行要清 `pendingComment`，否则上游注释跨段传染。
+- **注意**：顶层多了 `schema` / `meta` / `groupDescriptions` 等键，遍历顶层键当令牌名的下游要改成遍历
+  `dark` / `light`。
+
+### C4 · 兼容矩阵硬门禁
+
+- README §11.5 新增兼容矩阵表，它不是说明文字，是 `npm run test:compat` 的校验对象：
+  **当前大版本线那一行必须存在**，宿主最低版本 === `st-extension-template/manifest.json` 的
+  `minimum_client_version`（逐字），Node 最低版本 === `package.json engines.node`。
+- 判据按**大版本线**（`vX.0.0`）而不是逐版本一行：补丁不会每次改最小宿主版本，逐版本补行只会逼人
+  复制粘贴，最后必然漂移。将来真有版本单独抬高下限时再加判据。
+- 同时断言 `checkCompatibility({ min: 当前版本 })` 通过、`{ min: '99.0.0' }` 不通过（矩阵不会把未来
+  版本蒙成可用），以及 `migrateStateV1toV2` 的规格（w / h / mode）。
+- `package.json` 新增 `"engines": { "node": ">=18.0.0" }` —— 这是本来就成立的事实，只是此前没声明。
+
+### 工程
+
+- `createPanel` 行数门禁**未放宽**，仍 531：C1 接入 `writePanelSize()` 时靠删注释行与合并声明换行数，
+  三次改动（初始钳制 / resize 手柄 / 控制器 `setSize`）都是「删冗余换行数」。
+- `npm run verify:all` 9 步 → **10 步**，compat 插在 v280 之后、downstream 之前；
+  `MAINTAINING.md` §2.4 改用 `verify:all` 作为唯一门禁入口（此前还在列单条命令，与实际收敛后的入口不一致），
+  并写清「SKIP 不算通过」与「`gh release create` 撞占位时用 `release edit` + `upload --clobber`」。
+- 新增 `test/v300-size-vars.spec.js`（8 项）与 `test/test-compat-matrix.js`（9 项），各自注册单跑入口
+  `test:sizevars` / `test:compat`。V2 是 C1 的**存在理由**：同一段下游 CSS `.nvui-panel { width: 500px }`
+  在 v3 载体下真实宽 500，在 `data-nvui-legacy-size` 下被内联 px 压住为 860 —— 一条 spec 同时证明
+  「新行为生效」与「开关真的回到旧行为」。
+- 65 处尺寸读取全部改成「变量优先 + 回退内联」（`issue-16` / `v290-*` / `stress-*` / `e2e` / `issue-11`）。
+- 修 `test-v280-features.js` 的按钮组断言：C2 之后 `.nvui-actions` 不再有字面量块，判据改为
+  「它确实在那条 `:where()` 里」。
+
+### 验证
+
+`npm run verify:all` **10/10**；`npm test` 373/0；`test:api` **29 导出**冻结通过；`test:v280` 8/8；
+`test:compat` 9 项全 PASS；浏览器 **455 + 18 + 217 + 12 + 11 + 10 + 9 + 8 + 10 + 11 + 8 + 8**（13 套）；
+`test:stress` 19 + 15；`test:e2e` 58/0；`verify:release` **21 项**（新增 `MIGRATION-v3.md` 存在性）+ `--self-test` 3/3；
+真实宿主 `test:host` 35/35 + 19/19。
+
+### 关联
+
+GitHub [GH-#19](https://github.com/zgy-beep/ui-kit/issues/19) 线路 C 的 C1–C4 随本版交付并关闭。
+`MIGRATION-v3.md` 为新建；`MIGRATION-v2.md` 转为历史速查。GH-#16 的根因（内联 px 与下游 CSS 抢优先级）
+在本版被消掉，v2.8.1 的 `persist.size: false` 语义继续由 `test/issue-16-persist-size.js` 12 项守护。
+
 ## v2.9.0（2026-11-16）· 布局可搬运 + 尺寸三态 + 运行时可诊断 + 主题/尺寸/表单三项交互（MINOR）
 
 > 小版本，**全部为 opt-in 增量**：不传新参数的既有调用行为、DOM 结构、`nvui_state_v1` 状态格式、
