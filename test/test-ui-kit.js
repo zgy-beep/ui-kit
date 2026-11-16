@@ -2352,11 +2352,13 @@ if (!hasDom) {
  *   第一步：accordion 子系统（15 个函数、283 行）→ createAccordionRegistry(ctx)，
  *           函数体 1433 → 1162 行，嵌套函数 36 → 20 个；
  *   第二步：持久化 / 视口钳制（7 个函数、332 行）→ createPersistence(ctx)，
- *           函数体 1162 → 825 行，嵌套函数 20 → 14 个。
+ *           函数体 1162 → 825 行，嵌套函数 20 → 14 个；
+ *   第三步：焦点链（4 个函数、88 行）→ createFocusChain(ctx)，
+ *           函数体 825 → 737 行，嵌套函数 14 → 10 个。
  * 阈值随重构下调，**只允许降不允许升**：需要新逻辑时先抽 factory，而不是放宽本条。
  * 27 个导出成员已由 test/test-api-surface.js 的 EXPECTED_EXPORTS 冻结，此处不重复断言。
  */
-const CREATE_PANEL_MAX_LINES = 825;
+const CREATE_PANEL_MAX_LINES = 737;
 const apiLines = apiSrc.split('\n');
 const cpStart = apiLines.findIndex((l) => /^\s*function createPanel\(/.test(l));
 const cpEnd = cpStart < 0 ? -1

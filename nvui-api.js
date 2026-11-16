@@ -364,6 +364,9 @@
      * 「后面还有下一站」而放行默认 Tab —— 原生序列此时已走完，焦点直接落到宿主页面
      * （复现：纯文本面板从激活 tab 按一次 Tab 即逃出面板）。
      */
+    /* 面板内可 Tab 的元素（focus trap 与初始焦点共用一份，避免两处选择器漂移） */
+    var PANEL_FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
     function trapTabFocus(event, panel, focusableSelector) {
         var items = Array.prototype.filter.call(
             panel.querySelectorAll(focusableSelector),
@@ -2198,6 +2201,127 @@
         };
     }
 
+    /* ---------------------- 焦点链（G-01 第三步） ---------------------- */
+    /*
+     * 从 createPanel() 抽出的四条焦点路径：初始焦点 / 关闭后归还 / 末级兜底 /
+     * 面板内首个可聚焦节点。它们共同构成 aria-modal 的行为契约 ——
+     * 任何一条断了，键盘焦点就会掉到 BODY，读屏却仍按模态处理。
+     *
+     * ctx 全部是 getter：factory 在 closeBtn / panes 初始化之前创建，
+     * 且 activeDom 会随切 tab 变化，传值必然拿到旧值或 undefined。
+     */
+    function createFocusChain(ctx) {
+        var panel = ctx.panel;
+        var id = ctx.id;
+
+        function firstTrapFocusable(scope) {
+            if (!scope || typeof scope.querySelectorAll !== 'function') return null;
+            var list = scope.querySelectorAll(PANEL_FOCUSABLE);
+            for (var i = 0; i < list.length; i++) {
+                if (isTrapFocusable(list[i])) return list[i];
+            }
+            return null;
+        }
+
+        /**
+         * 打开面板后的初始焦点（Issue #13）。
+         * 只在**当前激活 pane** 里选目标：持久化恢复到非首 tab 时，
+         * 不能在整块 panel 里找 .is-primary —— 那会命中隐藏 pane，
+         * focus() 静默失败后焦点停在 Kit 载体上。
+         * 回退链：当前 pane 的 primary → 当前 pane 首个可见控件 →
+         * 当前 tab 按钮 → panel 内其它 primary → 关闭按钮 → 面板容器。
+         */
+        function focusBody() {
+            requestAnimationFrame(function () {
+                var activeDom = ctx.activeDom();
+                var pane = activeDom ? ctx.panes().get(activeDom) : null;
+                var target = null;
+                if (pane) {
+                    var primary = q('.nvui-btn.is-primary', pane);
+                    if (primary && isTrapFocusable(primary)) target = primary;
+                    if (!target) target = firstTrapFocusable(pane);
+                }
+                if (!target && activeDom) {
+                    var tabBtn = document.getElementById(id + '-tab-' + activeDom);
+                    if (tabBtn && isTrapFocusable(tabBtn)) target = tabBtn;
+                }
+                if (!target) {
+                    var anyPrimary = q('.nvui-btn.is-primary', panel);
+                    if (anyPrimary && isTrapFocusable(anyPrimary)) target = anyPrimary;
+                }
+                var closeBtn = ctx.closeBtn();
+                if (!target && closeBtn && isTrapFocusable(closeBtn)) target = closeBtn;
+                if (target && typeof target.focus === 'function') {
+                    target.focus();
+                    if (document.activeElement === target) return;
+                }
+                /* 末级兜底：面板容器本身，确保焦点不留在 Kit 载体 / BODY */
+                if (!panel.hasAttribute('tabindex')) panel.setAttribute('tabindex', '-1');
+                if (typeof panel.focus === 'function' && isFocusable(panel)) panel.focus();
+            });
+        }
+
+        /**
+         * 焦点归还：优先还给触发元素。
+         * 但触发元素可能已经不可聚焦了 —— 典型场景是 SillyTavern 的 wand 扩展菜单：
+         * 点击菜单项后菜单会自动收起，触发按钮变成不可见，focus() 静默失败，
+         * 焦点就掉到了 body，键盘用户彻底失去位置。
+         * 所以这里做三级兜底：触发元素 -> 备用元素(focusFallback) -> 面板容器。
+         */
+        function restoreFocus() {
+            var opener = ctx.opener();
+            if (opener && typeof opener.focus === 'function' && isFocusable(opener)) {
+                opener.focus();
+                if (document.activeElement === opener) return;
+            }
+            var fb = ctx.focusFallback();
+            var target = null;
+            if (typeof fb === 'string') {
+                target = resolveFocusFallback(fb);
+            } else if (fb && typeof fb.focus === 'function') {
+                target = fb;
+            }
+            if (target && isFocusable(target)) {
+                target.focus();
+                if (document.activeElement === target) return;
+            }
+            /* 第三级：面板容器。
+               注意此时 overlay 已被 hidden / dialog 已 close，
+               面板容器不在渲染树里，focus() 会静默失败 —— 焦点就会掉到 BODY。
+               所以这里先做可见性判定，失败则继续降级。 */
+            if (typeof panel.focus === 'function' && isFocusable(panel)) {
+                if (!panel.hasAttribute('tabindex')) panel.setAttribute('tabindex', '-1');
+                panel.focus();
+                if (document.activeElement === panel) return;
+            }
+            /* 第四级（NEW-03 补强）：焦点归还链全部落空时，
+               绝不能让焦点掉到 BODY —— 键盘用户会彻底失去位置。
+               这里退到宿主文档里第一个「可见且可聚焦」的元素上。 */
+            focusFirstVisible();
+        }
+
+        /**
+         * 把焦点交给宿主页面里第一个可见可聚焦的元素（末级兜底）。
+         * 若宿主页面一个都没有，则保持现状（焦点留在 BODY）并告警。
+         */
+        function focusFirstVisible() {
+            var list = document.querySelectorAll('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+            for (var i = 0; i < list.length; i++) {
+                var cand = list[i];
+                if (!cand || !isFocusable(cand)) continue;
+                try { cand.focus(); } catch (err) { continue; }
+                if (document.activeElement === cand) return;
+            }
+            warn('restoreFocus(): 所有焦点归还兜底均不可用，焦点可能停留在 body');
+        }
+
+        return {
+            focusBody: focusBody,
+            restoreFocus: restoreFocus,
+        };
+    }
+
+
     function createPanel(options) {
         var opts = options || {};
         /* 宿主若全局禁用了 backdrop-filter，先恢复回退态，避免玻璃只剩半透明底色 */
@@ -2686,51 +2810,6 @@
         }
 
         /** 在 scope 内取第一个「焦点陷阱认可」的可聚焦元素 */
-        function firstTrapFocusable(scope) {
-            if (!scope || typeof scope.querySelectorAll !== 'function') return null;
-            var list = scope.querySelectorAll(FOCUSABLE);
-            for (var i = 0; i < list.length; i++) {
-                if (isTrapFocusable(list[i])) return list[i];
-            }
-            return null;
-        }
-
-        /**
-         * 打开面板后的初始焦点（Issue #13）。
-         * 只在**当前激活 pane** 里选目标：持久化恢复到非首 tab 时，
-         * 不能在整块 panel 里找 .is-primary —— 那会命中隐藏 pane，
-         * focus() 静默失败后焦点停在 Kit 载体上。
-         * 回退链：当前 pane 的 primary → 当前 pane 首个可见控件 →
-         * 当前 tab 按钮 → panel 内其它 primary → 关闭按钮 → 面板容器。
-         */
-        function focusBody() {
-            requestAnimationFrame(function () {
-                var pane = activeDom ? panes.get(activeDom) : null;
-                var target = null;
-                if (pane) {
-                    var primary = q('.nvui-btn.is-primary', pane);
-                    if (primary && isTrapFocusable(primary)) target = primary;
-                    if (!target) target = firstTrapFocusable(pane);
-                }
-                if (!target && activeDom) {
-                    var tabBtn = document.getElementById(id + '-tab-' + activeDom);
-                    if (tabBtn && isTrapFocusable(tabBtn)) target = tabBtn;
-                }
-                if (!target) {
-                    var anyPrimary = q('.nvui-btn.is-primary', panel);
-                    if (anyPrimary && isTrapFocusable(anyPrimary)) target = anyPrimary;
-                }
-                if (!target && closeBtn && isTrapFocusable(closeBtn)) target = closeBtn;
-                if (target && typeof target.focus === 'function') {
-                    target.focus();
-                    if (document.activeElement === target) return;
-                }
-                /* 末级兜底：面板容器本身，确保焦点不留在 Kit 载体 / BODY */
-                if (!panel.hasAttribute('tabindex')) panel.setAttribute('tabindex', '-1');
-                if (typeof panel.focus === 'function' && isFocusable(panel)) panel.focus();
-            });
-        }
-
         function openPanel() {
             opener = document.activeElement;
             overlay.classList.remove('is-closing');
@@ -2743,7 +2822,7 @@
                 updateThemeToggleUi(isCurrentLight());
             }
             persist.onOpen();
-            focusBody();
+            focusChain.focusBody();
             if (tabsNav) {
                 setTimeout(function () { syncTabsIndicator(tabsNav, false); }, 0);
             }
@@ -2752,63 +2831,10 @@
         function closePanel() {
             persist.onClose();
             closeLayer(dialog, overlay, function () {
-                restoreFocus();
+                focusChain.restoreFocus();
                 opener = null;
                 if (typeof opts.onClose === 'function') opts.onClose();
             });
-        }
-
-        /**
-         * 焦点归还：优先还给触发元素。
-         * 但触发元素可能已经不可聚焦了 —— 典型场景是 SillyTavern 的 wand 扩展菜单：
-         * 点击菜单项后菜单会自动收起，触发按钮变成不可见，focus() 静默失败，
-         * 焦点就掉到了 body，键盘用户彻底失去位置。
-         * 所以这里做三级兜底：触发元素 -> 备用元素(focusFallback) -> 面板容器。
-         */
-        function restoreFocus() {
-            if (opener && typeof opener.focus === 'function' && isFocusable(opener)) {
-                opener.focus();
-                if (document.activeElement === opener) return;
-            }
-            var fb = opts.focusFallback;
-            var target = null;
-            if (typeof fb === 'string') {
-                target = resolveFocusFallback(fb);
-            } else if (fb && typeof fb.focus === 'function') {
-                target = fb;
-            }
-            if (target && isFocusable(target)) {
-                target.focus();
-                if (document.activeElement === target) return;
-            }
-            /* 第三级：面板容器。
-               注意此时 overlay 已被 hidden / dialog 已 close，
-               面板容器不在渲染树里，focus() 会静默失败 —— 焦点就会掉到 BODY。
-               所以这里先做可见性判定，失败则继续降级。 */
-            if (typeof panel.focus === 'function' && isFocusable(panel)) {
-                if (!panel.hasAttribute('tabindex')) panel.setAttribute('tabindex', '-1');
-                panel.focus();
-                if (document.activeElement === panel) return;
-            }
-            /* 第四级（NEW-03 补强）：焦点归还链全部落空时，
-               绝不能让焦点掉到 BODY —— 键盘用户会彻底失去位置。
-               这里退到宿主文档里第一个「可见且可聚焦」的元素上。 */
-            focusFirstVisible();
-        }
-
-        /**
-         * 把焦点交给宿主页面里第一个可见可聚焦的元素（末级兜底）。
-         * 若宿主页面一个都没有，则保持现状（焦点留在 BODY）并告警。
-         */
-        function focusFirstVisible() {
-            var list = document.querySelectorAll('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
-            for (var i = 0; i < list.length; i++) {
-                var cand = list[i];
-                if (!cand || !isFocusable(cand)) continue;
-                try { cand.focus(); } catch (err) { continue; }
-                if (document.activeElement === cand) return;
-            }
-            warn('restoreFocus(): 所有焦点归还兜底均不可用，焦点可能停留在 body');
         }
 
         on(closeBtn, 'click', closePanel);
@@ -2819,10 +2845,20 @@
            面板声明了 aria-modal="true"，就必须真的把键盘焦点圈在面板内，
            否则读屏按模态处理、键盘却能跑到背景页 —— 声明与行为不符。
            Tab / Shift+Tab 的循环判定抽到模块级 trapTabFocus()，避免 createPanel 继续膨胀。 */
-        var FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+        /* G-01 第三步：焦点链抽到模块级 createFocusChain；closeBtn / panes 此刻已就绪，
+           activeDom 会随切 tab 变化，故仍以 getter 传入。 */
+        var focusChain = createFocusChain({
+            panel: panel,
+            id: id,
+            closeBtn: function () { return closeBtn; },
+            activeDom: function () { return activeDom; },
+            panes: function () { return panes; },
+            opener: function () { return opener; },
+            focusFallback: function () { return opts.focusFallback; },
+        });
         on(panel, 'keydown', function (event) {
             if (event.key !== 'Tab' || overlay.hidden) return;
-            trapTabFocus(event, panel, FOCUSABLE);
+            trapTabFocus(event, panel, PANEL_FOCUSABLE);
         });
 
         /* Esc 关闭：走全局单例调度器，而不是给每个面板挂一个永久的

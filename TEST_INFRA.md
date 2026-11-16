@@ -92,7 +92,7 @@ Knowledge-graph finding: three lifecycle paths out of `createPanel()` are `INFER
 `indirect_call` edges, not explicit `calls` edges. Per §1 (Opaque-Box Verification),
 tests must not assert internal symbols directly; each path is covered by an observable
 behaviour instead. **Any change to `createPanel()`（G-01 两步拆分后为
-`nvui-api.js` L2201–L3025、825 行）MUST run all scripts listed below** — this is the
+`nvui-api.js` L2325–L3061、737 行）MUST run all scripts listed below** — this is the
 missing "change → which regression" mapping that made the coupling a blind spot.
 accordion 与持久化已抽到模块级 `createAccordionRegistry()` / `createPersistence()`，
 改这两个 factory 时按同样清单执行（持久化另加 `test/stress-m1-persistence.js`）。
