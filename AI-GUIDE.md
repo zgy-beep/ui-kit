@@ -528,7 +528,8 @@ async function checkGitHubRelease() {
 
 ### 6.2 历史版本与兼容基准
 
-- 当前：**v2.8.3**（焦点陷阱修正 + 移动端触控 40px + 实机基线入库 + `createPanel` 七步拆分 1433 → 531 行；含 v2.8.1 的 #16 尺寸隔离语义。token 111 / 组件类 81 / `!important` 18）。
+- 当前：**v2.8.3**（焦点陷阱修正 + 移动端触控 40px + 实机基线入库 + `createPanel` 七步拆分 1433 → 531 行；含 v2.8.1 的 #16 尺寸隔离语义。token 111 / 组件类 82 / `!important` 18）。
+- 开发中：**v2.9.0**（GH-#21 两条已落地：`progress({ showLabel, showValue })` 可视标签、面板 body 溢出边缘渐隐 `data-nvui-fade`；B1–B6 未开始）。
 - 上一版：**v2.8.1**（PATCH：修 GitHub #16 —— `persist: { size: false }` 现在完全不参与尺寸持久化：不再把历史存档里的 px 高宽写回内联样式，`flushPersistSave()` 主动落 `size: null`；`persist.size: true` 行为不变。无 token / 组件类 / `!important` / 公开 API / 状态格式变更）。
 - 上一版：**v2.8.0**（下游 DX + 组件默认值 + Fast UI 玻璃模式：新增 `--nvui-kit-version`、`selfCheck`/`checkCompatibility`/`defaults`、`.nvui-actions`、`createPanel({ glass })` 与面板控制器 `setGlassMode/getGlassState`；相邻按钮 8px 默认间距；`force` 仅面板级 opt-in。token 111 / 组件类 81 / `!important` 18）。
 - 上一版：**v2.7.2**（玻璃透明感修复：面板保持透明 + 自身 `backdrop-filter` 背后模糊；宿主禁用模糊时 97% 近不透明回退；探测三态化并可自愈）。

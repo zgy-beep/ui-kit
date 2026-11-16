@@ -1434,6 +1434,15 @@ panel.adoptAccordions(panel.body); // 默认不绑定点击，只接管持久化
 <div class="nvui-progress is-indeterminate" role="progressbar" aria-label="正在准备">
     <span class="nvui-progress-bar"></span>
 </div>
+
+<!-- 可选：带可视标题 / 数值（v2.9.0，GH-#21） -->
+<div class="nvui-progress-field">
+    <span data-nvui-part="label" aria-hidden="true">导出进度</span>
+    <span data-nvui-part="value" aria-hidden="true">42%</span>
+    <div class="nvui-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="42" aria-label="导出进度">
+        <span class="nvui-progress-bar" style="width: 42%"></span>
+    </div>
+</div>
 ```
 
 | 类名 / 状态 | 说明 |
@@ -1443,8 +1452,10 @@ panel.adoptAccordions(panel.body); // 默认不绑定点击，只接管持久化
 | `.nvui-progress.is-indeterminate` | 不确定进度：条宽 40%，循环平移 + `scaleX` 呼吸 |
 | `.nvui-progress.is-ok` / `.is-warn` / `.is-danger` | 语义变体：条色改为 ok / warn / danger |
 | `.nvui-progress.is-idle` / `.is-complete` | 进度 0% / 100% 时停掉扫光；`NVUI.progress().setValue()` 自动维护，手写 DOM 时按需手动加 |
+| `.nvui-progress-field` | **v2.9.0 新增**：带可视标题 / 数值的外层容器（网格第一行放 `[data-nvui-part="label"]` 与 `[data-nvui-part="value"]`，第二行是整行轨道）。仅 `progress({ showLabel, showValue })` 生成；手写 DOM 时直接套这层即可，可视文本请自行 `aria-hidden="true"`（语义由轨道的 `role=progressbar` 承担） |
 
 规则：确定进度必须带 `role="progressbar"` + `aria-valuemin` / `aria-valuemax` / `aria-valuenow`；不确定进度至少给 `aria-label`；进度条不放在玻璃上；数值更新频率高于 10Hz 时不要做宽度过渡；不要用扫光表达真实进度值。无障碍：数值变化要同步 `aria-valuenow`，读屏用户才能感知进度。
+**可视标签**：`progress({ showLabel: true, showValue: true })` 会额外渲染可视标题与百分比；这两段文本带 `aria-hidden="true"`，语义仍由轨道的 `role="progressbar"` + `aria-valuenow` 承担，避免读屏把同一进度播报两遍。默认关闭，既有调用的 DOM 与返回值不变。
 
 ### 7.14 吐司
 
@@ -1736,7 +1747,7 @@ v2.1.1 是**补丁版本**：只调整 token 取值与滚动/尺寸行为，无�
 | 玻璃边 / 内高光 | 深 0.06 / 0.04；浅 0.35 / 0.45 | 深 0.03 / 0.03；浅 0.18 / 0.30 |
 | 焦点环 | 2px，输入框额外叠内圈 `inset accent-line` | **单圈 1.5px**，删除内圈 `box-shadow`（v2.2.0 起恢复为单圈 2px 整数像素） |
 | 面板尺寸 | `max-height`，内容少时面板变矮 | **固定高度**（桌面 `88vh` / 手机 `92dvh`），折叠展开不跳变（固定尺寸） |
-| 滚动条 | 显示系统滚动条 | `.nvui-panel-body` / `.nvui-modal-body` 隐藏滚动条（`scrollbar-width: none` + `::-webkit-scrollbar`），**滚动能力保留** |
+| 滚动条 | 显示系统滚动条 | `.nvui-panel-body` / `.nvui-modal-body` 隐藏滚动条（`scrollbar-width: none` + `::-webkit-scrollbar`），**滚动能力保留**；面板 body 在内容超出时按滚动位置给 `data-nvui-fade`（`top` / `bottom` / `both`） 加 `mask-image` 边缘渐隐（v2.9.0，GH-#21），下游可用 `--nvui-scroll-fade: 0px` 关闭 |
 
 **升级动作**：覆盖两个 CSS；删掉业务自写的输入框 `box-shadow: inset ...` 叠边（只留统一焦点环）；面板高度改为固定 + 隐藏滚动条；运行 `npm test`。
 
@@ -1927,7 +1938,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 | `.nvui-panel-header` | 标题栏：标题 + 右侧操作区，`justify-content:space-between`，底部直线分隔，`flex-shrink:0` |
 | `.nvui-panel-title` | 面板标题：`--nvui-fs-2xl` 粗体、单行省略；`aria-labelledby` 指向它 |
 | `.nvui-panel-actions` | 右侧操作区（`.nvui-icon-btn` 组，含关闭按钮），`flex-shrink:0` |
-| `.nvui-panel-body` | 内容区：`flex:1 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain`；**全面板唯一滚动层** |
+| `.nvui-panel-body` | 内容区：`flex:1 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain`；**全面板唯一滚动层**；内容溢出时自动加 `data-nvui-fade`（`top` / `bottom` / `both`）做边缘渐隐 |
 | `.nvui-panel-footer` | 可选底部操作区：右对齐按钮组，顶部直线分隔，`flex-shrink:0` |
 | `.nvui-panel-heading` | 内容区顶部「分区标题 + 版本徽标」行；内部 `.nvui-section-title` 占满剩余宽度 |
 | `.nvui-sheet-handle` | 仅手机显示的拖拽把手：40×4、pill 圆角；桌面 `display:none`；加 `aria-hidden="true"` |
@@ -2219,7 +2230,7 @@ console.log(typeof NVUI.createPanel); // 'function'
 | `NVUI.switchRow(options)` | 生成胶囊开关行（`label` / `value` / `disabled` / `feature` / `onChange`） | `HTMLElement` |
 | `NVUI.inputRow(options)` | 生成输入行（`label` / `type` / `value` / `placeholder` / `min` / `max` / `step` / `disabled` / `onChange`；`type: 'path'` 为伪类型） | `HTMLElement`（`row.input` 指向 input） |
 | `NVUI.accordion(options)` | 生成折叠分组（`title` / `summary` / `open` / `content[]`） | `HTMLElement`（带 `setOpen` / `setSummary`） |
-| `NVUI.progress(options)` | 生成进度条（`value` / `label` / `variant` / `indeterminate`） | `HTMLElement`（带 `setValue`） |
+| `NVUI.progress(options)` | 生成进度条（`value` / `label` / `variant` / `indeterminate` / `showLabel` / `showValue`） | `HTMLElement`（带 `setValue`）；开启 `showLabel` / `showValue` 时返回 `.nvui-progress-field` 容器，容器同样带 `setValue`，轨道在 `container.track` |
 | `NVUI.createPanel(options)` | 生成完整插件面板（标题栏 + 顶部 tabs + 内容区 + 可选 footer + 手机底部导航） | 控制器对象（见下） |
 | `NVUI.showToast(options)` | 生成吐司（`message` / `type` / `duration` / `icon` / `dismissible`；自动创建吐司顶层载体） | `{ element, dismiss }` |
 

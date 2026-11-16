@@ -19,7 +19,7 @@
     "test": "node test/test-ui-kit.js",
     "test:api": "node test/test-api-surface.js",
     "test:v280": "node test/test-v280-features.js",
-    "test:browser": "node test/test-issues-9-10-forms.js && node test/test-issue-11-accordion.js && node test/issue-12-optgroup-dark-theme.spec.js && node test/issue-13-14-focus-escape.spec.js && node test/issue-16-persist-size.js",
+    "test:browser": "node test/test-issues-9-10-forms.js && node test/test-issue-11-accordion.js && node test/issue-12-optgroup-dark-theme.spec.js && node test/issue-13-14-focus-escape.spec.js && node test/issue-16-persist-size.js && node test/issue-21-ux.spec.js",
     "test:issue16": "node test/issue-16-persist-size.js",
     "test:glass": "node test/st-glass-transparency.js",
     "test:e2e": "node test/test-e2e-v250.js",
@@ -31,7 +31,8 @@
     "verify:release": "node scripts/verify-release.js",
     "pack": "node scripts/pack.js",
     "downstream:check": "node test/downstream-check.js",
-    "verify:all": "node scripts/verify-all.js"
+    "verify:all": "node scripts/verify-all.js",
+    "test:issue21": "node test/issue-21-ux.spec.js"
   },
   "devDependencies": {
     "playwright-core": "^1.64.0"

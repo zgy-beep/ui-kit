@@ -1474,6 +1474,33 @@ dialog.nvui-tl.nvui-theme-light select.nvui-input,
     animation: nvui-progress-indeterminate var(--nvui-shimmer-duration) var(--nvui-ease-standard) infinite;
 }
 
+/* v2.9.0（GH-#21 第 2 条）：可选可视标题与数值。
+   默认不生成；由 progress({ showLabel: true, showValue: true }) 产出外层容器，
+   轨道仍是原来的 .nvui-progress，既有 DOM / 类名 / aria 全部不变。
+   可视文本由 JS 标 aria-hidden —— 语义由轨道的 role=progressbar + aria-valuenow 承担。 */
+.nvui-progress-field {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--nvui-space-1) var(--nvui-space-2);
+}
+
+.nvui-progress-field > .nvui-progress {
+    flex: 1 1 100%;
+}
+
+.nvui-progress-field > [data-nvui-part="label"] {
+    font-size: var(--nvui-fs-xs);
+    color: var(--nvui-text-2);
+}
+
+.nvui-progress-field > [data-nvui-part="value"] {
+    margin-left: auto;
+    font-size: var(--nvui-fs-xs);
+    color: var(--nvui-text-2);
+    font-variant-numeric: tabular-nums;
+}
+
 /* ==========================================================================
  * 13. 悬浮面板（常驻入口 / 小工具窗；popover 级玻璃）
  * --------------------------------------------------------------------------
@@ -2304,6 +2331,29 @@ dialog.nvui-tl[data-nvui-glass="force"] .nvui-panel {
 
 .nvui-panel-body::-webkit-scrollbar {
     display: none;
+}
+
+/* v2.9.0（GH-#21 第 3 条）：内容溢出时上下边缘渐隐，提示「还有内容」。
+   面板 body 自 v2.1.1 起隐藏滚动条，没有渐隐时纯视觉用户看不出可滚动。
+   data-nvui-fade 由 nvui-api.js 的 createScrollFade() 按滚动位置维护：
+   top = 上方还有内容，bottom = 下方还有内容，both = 两侧都有。
+   渐隐尺寸直接用 --nvui-space-4（16px），不新增 token；下游写
+   `.nvui-panel-body[data-nvui-fade] { mask-image: none; }` 即可关掉。 */
+.nvui-panel-body[data-nvui-fade="top"] {
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, var(--nvui-text) var(--nvui-space-4));
+    mask-image: linear-gradient(to bottom, transparent 0, var(--nvui-text) var(--nvui-space-4));
+}
+
+.nvui-panel-body[data-nvui-fade="bottom"] {
+    -webkit-mask-image: linear-gradient(to top, transparent 0, var(--nvui-text) var(--nvui-space-4));
+    mask-image: linear-gradient(to top, transparent 0, var(--nvui-text) var(--nvui-space-4));
+}
+
+.nvui-panel-body[data-nvui-fade="both"] {
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, var(--nvui-text) var(--nvui-space-4),
+        var(--nvui-text) calc(100% - var(--nvui-space-4)), transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0, var(--nvui-text) var(--nvui-space-4),
+        var(--nvui-text) calc(100% - var(--nvui-space-4)), transparent 100%);
 }
 
 .nvui-panel-footer {

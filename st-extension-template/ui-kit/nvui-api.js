@@ -1023,12 +1023,38 @@
             syncActivity(initial);
         }
         track.appendChild(bar);
+        var valueNode = null;
         track.setValue = function (v) {
             var n = normalizeProgressValue(v);
             bar.style.width = n + '%';
             track.setAttribute('aria-valuenow', String(n));
+            if (valueNode) valueNode.textContent = n + '%';
             syncActivity(n);
         };
+        /* v2.9.0（GH-#21 第 2 条）：可选可视标题 / 数值，默认关闭。
+           关闭时返回值仍是 .nvui-progress 轨道，既有调用零变化；
+           开启时返回 .nvui-progress-field 容器（内含轨道），容器同样带 setValue()。
+           可视文本一律 aria-hidden —— 语义仍由轨道的 role=progressbar + aria-valuenow
+           承担，否则读屏会把同一进度播报两遍。 */
+        if (opts.showLabel || opts.showValue) {
+            var field = el('div', 'nvui-progress-field');
+            if (opts.showLabel) {
+                field.appendChild(el('span', null, {
+                    'data-nvui-part': 'label',
+                    text: (typeof opts.label === 'symbol' || !opts.label) ? '' : String(opts.label),
+                    'aria-hidden': 'true',
+                }));
+            }
+            /* 不确定进度没有确切数值：aria-valuenow 为 null，可视数值也不应编一个 */
+            if (opts.showValue && !opts.indeterminate) {
+                valueNode = el('span', null, { 'data-nvui-part': 'value', text: initial + '%', 'aria-hidden': 'true' });
+                field.appendChild(valueNode);
+            }
+            field.appendChild(track);
+            field.track = track;
+            field.setValue = function (v) { track.setValue(v); };
+            return field;
+        }
         return track;
     }
 
@@ -2565,6 +2591,63 @@
      * panes / activeDom / acc / isDisposed 全部以 getter 注入：factory 创建时
      * panes 还是空 Map，acc 也可能尚未挂完。
      */
+    /* ---------------------- 滚动边缘渐隐（v2.9.0，GH-#21 第 3 条） ---------------------- */
+    /*
+     * 面板 body 按 v2.1.1 的取舍隐藏了滚动条（scrollbar-width: none），内容超高时
+     * 界面上没有任何「还能往下滚」的提示。这里只做一件事：按滚动位置给 body 打
+     * data-nvui-fade="top|bottom|both"，渐隐本身全部交给 CSS（mask-image）。
+     *
+     * 刻意不做的事：不写内联样式（下游可用 --nvui-scroll-fade: 0px 关掉）、
+     * 不改 DOM 结构、不监听 window resize（body 尺寸变化由 ResizeObserver 覆盖）。
+     */
+    function createScrollFade(body) {
+        var raf = null;
+        var observer = null;
+        var disposed = false;
+
+        function compute() {
+            if (disposed) return;
+            var top = body.scrollTop > 1;
+            var bottom = body.scrollTop + body.clientHeight < body.scrollHeight - 1;
+            var mode = (top && bottom) ? 'both' : top ? 'top' : bottom ? 'bottom' : '';
+            if (mode) body.setAttribute('data-nvui-fade', mode);
+            else body.removeAttribute('data-nvui-fade');
+        }
+
+        function schedule() {
+            if (disposed || raf) return;
+            raf = requestAnimationFrame(function () { raf = null; compute(); });
+        }
+
+        if (!body || !isDomAvailable()) {
+            return { sync: function () {}, dispose: function () {} };
+        }
+
+        on(body, 'scroll', schedule, { passive: true });
+        /* 面板打开（display 变化）、切 tab（隐藏/显示 pane）、追加内容都会改变
+           body 或 pane 的尺寸；只 observe body 抓不到「pane 变高但 body 不变」。 */
+        if (typeof ResizeObserver !== 'undefined') {
+            try {
+                observer = new ResizeObserver(schedule);
+                observer.observe(body);
+                for (var i = 0; i < body.children.length; i++) observer.observe(body.children[i]);
+            } catch (e) {
+                observer = null;
+            }
+        }
+        compute();
+
+        return {
+            sync: schedule,
+            dispose: function () {
+                disposed = true;
+                if (raf) { cancelAnimationFrame(raf); raf = null; }
+                try { body.removeEventListener('scroll', schedule); } catch (e) {}
+                if (observer) { try { observer.disconnect(); } catch (e) {} observer = null; }
+            },
+        };
+    }
+
     function createPaneWriter(ctx) {
         var body = ctx.body;
         var persist = ctx.persist;
@@ -2940,7 +3023,6 @@
         }
 
         var body = el('div', 'nvui-panel-body');
-        panes = new Map();
         tabs.forEach(function (t) {
             var pane = el('div', 'nvui-tabpane' + (t.domKey === activeNow ? ' is-active' : ''), {
                 role: 'tabpanel', id: id + '-pane-' + t.domKey, 'aria-labelledby': id + '-tab-' + t.domKey,
@@ -2949,7 +3031,7 @@
             body.appendChild(pane);
         });
         panel.appendChild(body);
-
+        var scrollFade = createScrollFade(body);   /* 同 body 生命周期，destroy 时 dispose */
         /* 可选底部操作区 */
         if (opts.footer && opts.footer.length) {
             var footer = el('div', 'nvui-panel-footer');
@@ -3136,6 +3218,7 @@
             persist.cleanup();
             disposed = true;
             acc.unbindAll();
+            scrollFade.dispose();
             if (typeof opts.destroy === 'function') opts.destroy();
         }
 
