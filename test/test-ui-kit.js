@@ -480,6 +480,21 @@ check('tokens.json 与 tokens.css 解析结果逐值一致（dark 111 / light 47
     && tokensJsonDrift.length === 0,
     tokensJsonDrift.slice(0, 6).join(' | '));
 
+/* v3.0.0 / C3：tokens.json schema v2 = 值结构不变 + 每个 token 一条元信息。
+   值结构刻意没动（dark/light 仍是扁平映射），所以下游解析器零改动；
+   新增的 meta 让「令牌面板 / 类型校验 / AI 按语义挑 token」有东西可读。 */
+const TOKEN_TYPES = ['color', 'length', 'duration', 'easing', 'number', 'font', 'shadow', 'alias', 'keyword', 'other'];
+const metaMissing = tokensJson.schema === 2 && tokensJson.meta
+    ? Object.keys(tokensJson.dark).filter((k) => !tokensJson.meta[k]
+        || !tokensJson.meta[k].group || !tokensJson.meta[k].type
+        || TOKEN_TYPES.indexOf(tokensJson.meta[k].type) === -1)
+    : ['<缺少 schema 2 或 meta>'];
+const metaGroups = tokensJson.meta ? new Set(Object.values(tokensJson.meta).map((m) => m.group)) : new Set();
+check('tokens.json schema v2：meta 覆盖全部 token，group/type 齐全且类型在词表内',
+    tokensJson.schema === 2 && !!tokensJson.groupDescriptions
+    && metaMissing.length === 0 && metaGroups.size >= 8,
+    `缺 ${metaMissing.length} 项（${metaMissing.slice(0, 4).join(', ')}）/ ${metaGroups.size} 组`);
+
 const usedVars = new Set([...componentsClean.matchAll(/var\(\s*(--nvui-[\w-]+)/g)].map((m) => m[1]));
 /**
  * JS 运行时写入的几何变量（契约 §13.5.1：由 JS 计算标签位置后 setProperty 写入），

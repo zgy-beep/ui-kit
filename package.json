@@ -39,7 +39,9 @@
     "test:theme": "node test/v290-theme-auto.spec.js",
     "test:resize": "node test/v290-resize.spec.js",
     "test:inputrow": "node test/v290-inputrow.spec.js",
-    "test:sizevars": "node test/v300-size-vars.spec.js"
+    "test:sizevars": "node test/v300-size-vars.spec.js",
+    "tokens:migrate": "node scripts/tokens-v1-to-v2.js",
+    "tokens:check": "node scripts/tokens-v1-to-v2.js --check"
   },
   "devDependencies": {
     "playwright-core": "^1.64.0"
