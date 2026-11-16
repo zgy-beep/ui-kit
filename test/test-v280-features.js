@@ -27,9 +27,9 @@ check(`版本 ${VERSION} 与 selfCheck/checkCompatibility/defaults 导出`,
 check('defaults 冻结且覆盖 7 个组件默认值', Object.isFrozen(api.defaults)
     && ['switchRow', 'inputRow', 'accordion', 'progress', 'createPanel', 'showToast', 'actions']
         .every((k) => !!api.defaults[k]));
-/* 「要求的最低版本高于当前版本」必须判为不兼容。这里刻意用 99.0.0 而不是「下一个
-   版本号」：写死 2.9.0 会在升到 2.9.0 的那天自己失效（实测 v2.9.0 收口时红过一次）。 */
-check('checkCompatibility min/max 语义', api.checkCompatibility({ min: '2.7.0', max: '3.0.0' }).compatible
+/* 上界同样不能用「当前大版本」：max:'3.0.0' 在 v3.0 时通过，升到 v3.1 当天就红
+   （实测）。min 与 max 两边都采用不可能的边界值 —— 低到一定兼容、高到一定不兼容。 */
+check('checkCompatibility min/max 语义', api.checkCompatibility({ min: '2.7.0', max: '99.0.0' }).compatible
     && !api.checkCompatibility({ min: '99.0.0' }).compatible);
 const nodeCheck = api.selfCheck({ expect: VERSION });
 check('selfCheck 在 Node 无 DOM 安全返回 no-dom', nodeCheck.ok === false
