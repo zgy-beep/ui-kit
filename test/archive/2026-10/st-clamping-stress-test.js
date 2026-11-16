@@ -29,7 +29,7 @@ function resolvePlaywright() {
 const { chromium } = resolvePlaywright();
 const CHROME_PATH = process.env.ST_CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const HOST_URL = process.env.ST_HOST_URL || 'http://127.0.0.1:8000/';
-const KIT_ROOT = path.resolve(__dirname, '..');
+const KIT_ROOT = path.resolve(__dirname, '..', '..', '..');
 
 const results = [];
 

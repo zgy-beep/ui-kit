@@ -76,6 +76,32 @@ for (const name of ['tokens.css', 'components.css', 'nvui-api.js', 'tokens.json'
     else ok(`模板 ${name} MD5`);
 }
 
+/* README §11.4 版本时间线：必须含当前版本行。
+   反向验证用 --self-test：把合成文本喂给同一判定函数，证明「版本写错时会红」。 */
+function hasTimelineRow(text, v) {
+    const i = text.indexOf('### 11.4');
+    if (i === -1) return false;
+    return text.slice(i).includes(`| v${v} |`);
+}
+const readmeSrc = read('README.md');
+if (!hasTimelineRow(readmeSrc, version)) fail(`README §11.4 版本时间线缺少 v${version} 行`);
+else ok('README §11.4 时间线');
+
+if (process.argv.includes('--self-test')) {
+    const cases = [
+        ['### 11.4 版本时间线（摘要）\n\n| v1.2.3 | 2026-01-01 |', '1.2.3', true],
+        ['### 11.4 版本时间线（摘要）\n\n| v1.2.4 | 2026-01-01 |', '1.2.3', false],
+        ['## 11. 版本管理\n\n无时间线', '1.2.3', false],
+    ];
+    let bad = 0;
+    cases.forEach(([text, v, expect], idx) => {
+        const got = hasTimelineRow(text, v);
+        if (got !== expect) { bad++; console.error(`  SELFTEST FAIL case ${idx + 1}: got ${got}, expect ${expect}`); }
+    });
+    if (bad) process.exit(1);
+    console.log(`  SELFTEST PASS ${cases.length}/${cases.length}（写错版本必红）`);
+}
+
 const cdnRe = new RegExp(`@v?${version.replace(/\./g, '\\.')}`, 'g');
 const cdnCount = (read('README.md').match(cdnRe) || []).length;
 if (cdnCount < 3) fail(`README CDN 示例未锁定 @v${version}（命中 ${cdnCount} 次）`);

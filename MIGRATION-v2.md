@@ -15,6 +15,7 @@
 | v2.7.1 | PATCH | 覆盖资产；浏览器回归稳定性 |
 | v2.7.2 | PATCH | 覆盖资产；玻璃透明感修复、97% Fast UI 回退、状态探测自愈 |
 | v2.8.0 | MINOR | 覆盖 4 资产；新增版本 token / 自检 / defaults / `.nvui-actions` / `glass` 模式；见 UPGRADING |
+| v2.8.1 | PATCH | 覆盖 4 资产；焦点陷阱尾项修正、移动端导航 40px 触控、宿主实机基线入库 |
 
 ## 兼容承诺
 

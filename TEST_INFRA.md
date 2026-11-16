@@ -86,6 +86,58 @@ node test/issue-13-14-focus-escape.spec.js
 | F-17 | Independent `.nvui-checkbox` (16px, `:checked` / `:indeterminate`, host `::before` suppression) | Issue #10 | v2.6.0 | local `test/test-issues-9-10-forms.js` | — | — | browser context matrix |
 | F-18 | Injected accordion adoption (`trackAccordion` / `adoptAccordions`, raw keys, idempotent re-render) | Issue #11 | v2.6.0 | local `test/test-issue-11-accordion.js` | — | — | re-render / close-rebuild / CJK keys / destroy |
 
+### 3.1 Implicit coupling map (G-02, 2026-11-13)
+
+Knowledge-graph finding: three lifecycle paths out of `createPanel()` are `INFERRED`
+`indirect_call` edges, not explicit `calls` edges. Per §1 (Opaque-Box Verification),
+tests must not assert internal symbols directly; each path is covered by an observable
+behaviour instead. **Any change to `createPanel()`（G-01 两步拆分后为
+`nvui-api.js` L2201–L3025、825 行）MUST run all scripts listed below** — this is the
+missing "change → which regression" mapping that made the coupling a blind spot.
+accordion 与持久化已抽到模块级 `createAccordionRegistry()` / `createPersistence()`，
+改这两个 factory 时按同样清单执行（持久化另加 `test/stress-m1-persistence.js`）。
+
+**必跑入口**：`npm run test:host`（`test/host/smoke-panel.js` 35 条 + `test/host/smoke-deep.js` 19 条）
+与 `npm run test:browser`（4 个 spec）；另有三条**可直接跑、无需 lab 扩展**的历史回归，
+改动持久化 / 头部控制流时必须加跑：`npm run test:stress`（`stress-m1-persistence` 19 条 +
+`stress-m2-header` 15 条，含异步存储、损坏数据、初始化竞态）、`npm run test:e2e`（58 条）。
+下表 `test/st-*.js` 保留为历史实机脚本，但它们依赖
+宿主侧 `window.__NVUI_LAB__`（lab 扩展），ST 1.19.0 默认不带，**不能作为唯一门禁**。
+
+| Graph path (INFERRED) | Community bridge | Observable behaviour | Existing assertion |
+| :--- | :--- | :--- | :--- |
+| `createPanel() → isTrapFocusable()` | C7 → C32 | Tab / Shift+Tab stay inside the panel; focus returns to the opener on close | `test/st-live-check.js` ("focus trap 生效", "焦点归还正确"); `test/issue-13-14-focus-escape.spec.js` |
+| `createPanel() → destroy()` | C7 → C21 | dialog count drops after destroy; `keydown` listeners do not accumulate across panels | `test/st-live-check.js` ("destroy() 清理 DOM", "Esc 单例 + 无监听器泄漏"); `test/st-destroy-close-check.js` (11 cases) |
+| `createPanel() → openPanel()` | C7 → C27 | Esc closes and restores focus; overlay exit animation is not truncated by a child `animationend` | `test/st-live-check.js` ("冒泡截断已修复", "焦点归还正确") |
+
+> No new test code was added: all three observable behaviours were already asserted.
+> The gap was documentation-only. Two further INFERRED bridges (`warn() → logAt()`,
+> `createPanel() → debug()`) are logging paths and carry no lifecycle risk.
+> Community ids bind to the de-noised `graphify-out/graph.json` built 2026-11-13 16:31
+> (900 nodes / 1366 edges / 57 communities); rebuilding the graph reassigns ids.
+> Source: `graphify-out/.graphify_analysis.json` → `surprises`.
+
+### 3.2 实机基线快照（G-01 重构前，2026-11-16）
+
+`createPanel()` 内部重组（P1-1）前冻结的**可观察行为基线**。任何改动后重跑 `npm run test:host`，
+逐条比对；数字下降即视为回归，必须定位到具体断言而不是调整期望值。
+
+| 套件 | 位置 | 结果 | 覆盖 |
+| :--- | :--- | :--- | :--- |
+| 主套 35 条 | `test/host/smoke-panel.js` | **35 / 35** | 面板骨架、z-index 命中栈、玻璃探测、tab / 折叠 / 持久化、焦点与 Esc、吐司、宿主模态让位、destroy 清理、浅色、移动端 390×844、360×640、减弱动效、底部导航触控尺寸 |
+| 深水区 19 条 | `test/host/smoke-deep.js` | **19 / 19** | 长内容滚动 + sticky footer、footer 按钮回调、双面板堆叠与 Esc 只关顶层、4 条吐司堆叠不重叠、Fast UI 回退与恢复、360 宽无横向滚动、长标题不溢出 |
+
+环境：SillyTavern 1.19.0（`06bde939f`）+ Chrome，宿主 `127.0.0.1:8000` 返回 200；
+注入仓库当前 `nvui-api.js`。**已入库**，入口 `npm run test:host`（2026-11-16，G-08）。
+截图与 JSON 产物默认写 `st-lab-out/host/`（gitignore），可用 `NVUI_HOST_OUT` 覆盖。
+
+**重构后复验（2026-11-16，G-01 第一步）**：`createPanel()` 内 accordion 子系统抽成
+`createAccordionRegistry(ctx)` 后重跑同一套，结果 **35/35 + 19/19**，与基线逐条一致；
+同时浏览器 4 spec（455 + 18 + 217 + 15）全绿。基线因此可作为后续拆持久化 / 焦点 / 玻璃的对照。
+
+前置条件：真实宿主在跑、Chrome 存在、`playwright-core` 可解析。缺任一条件时脚本以
+退出码 2 结束并打印修复命令，不会被误当成断言失败（Roadmap A2 的验收口径之一）。
+
 ---
 
 ## 4. 4-Tier Test Methodology & Specification Details

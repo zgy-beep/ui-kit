@@ -6,6 +6,21 @@
 - 新增组件 / 新增 token（不破坏既有 DOM 与取值）：小版本（2.x.0）
 - 重命名类 / token、删除 token、修改 DOM 契约：大版本（x.0.0）
 
+## v2.8.1（2026-11-16）· 焦点陷阱修正 + 触控尺寸 + 测试基线（PATCH）
+
+- 修复：`createPanel()` 的焦点陷阱把 `tabindex="-1"` 的未激活 tab 也算作可 Tab 项，导致纯文本面板从激活 tab 按一次 Tab 时误判「后面还有下一站」而放行默认 Tab，焦点直接逃到宿主页面（违反 `aria-modal` 契约）。现仅统计原生 Tab 序列内的节点，并对「焦点落在 `tabindex=-1` 节点」按 DOM 顺序兜底；`Tab / Shift+Tab` 逻辑抽到模块级 `trapTabFocus()`，`createPanel()` 行数维持复杂度冻结上限内。
+- 回归：`test/issue-13-14-focus-escape.spec.js` 新增 T1b（纯文本面板：激活 tab / 点选非激活 tab 后各按一次 Tab 均须留在面板内），root + template 双资产 15/15。
+- 测试整理：7 个零引用历史探针移入 `test/archive/2026-10/`（其余 13 个因被 ISSUES / CHANGELOG 作为复现证据引用而保留原位）。
+- 触控尺寸：移动端底部导航项 `.nvui-bottom-nav-item` 加 `min-height: 40px`（原实测 26px），抽屉整体 +14px；同步 `test/test-ui-kit.js` §5 静态断言与 `test/host/smoke-panel.js` 实机断言（GH-#21 第 1 条）。
+- 测试基线：两套宿主实机冒烟入库为 `test/host/smoke-panel.js`（35 条）+ `test/host/smoke-deep.js`（19 条），入口 `npm run test:host`；新增 `test/README.md` 五类索引。实机基线 35/35 + 19/19。
+- 内部重构（无行为变更）：`createPanel()` 拆出两个模块级 factory，函数体 1433 → **825 行**、嵌套函数 36 → **14 个**，
+  复杂度门禁阈值随之下调到 825（只允许降）：
+  1. `createAccordionRegistry(ctx)` —— accordion 子系统 15 个函数 / 283 行，ctx 只暴露 9 个能力；
+  2. `createPersistence(ctx)` —— 持久化与视口钳制 7 个函数 / 332 行（读取/防抖落盘/恢复/钳制/清理），
+     `tabs` / `keyMap` / `acc` 等依赖以 getter 延迟注入；销毁顺序固定为「先 flush 再关门」。
+  导出面、DOM、CSS、状态存储格式零变化；真实宿主 35/35 + 19/19、持久化压力 19/19、e2e 58/58、浏览器 4 spec 全绿。
+- 关联：GitHub [GH-#20](https://github.com/zgy-beep/ui-kit/issues/20)（发布提交请关联 `Fixes #20`）。GH-#21 的另两条（进度条可视标签、滚动边缘渐隐）**本版不含**，仍待设计确认。
+
 ## v2.8.0（2026-10-26）· 下游 DX + 组件默认值 + Fast UI 玻璃模式（MINOR）
 
 > 小版本，additive：新增 3 个顶层导出（`selfCheck` / `checkCompatibility` / `defaults`）与面板控制器方法；新增 `--nvui-kit-version`、`.nvui-actions`、`glass` 模式；无删除/改名。下游覆盖 4 个运行资产即可升级。

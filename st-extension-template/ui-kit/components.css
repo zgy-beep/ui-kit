@@ -1,7 +1,7 @@
 /**
  * SillyTavern 插件通用 UI Kit · 组件样式
  * ------------------------------------------------------------------
- * 版本：ui-kit v2.8.0；依赖：tokens.css（必须先引入或先拼进来）
+ * 版本：ui-kit v2.8.1；依赖：tokens.css（必须先引入或先拼进来）
  *
  * 本目录是独立项目（自带 package.json / LICENSE / CHANGELOG / test/），
  * 可整目录复制/移动到任意文件夹或仓库，不依赖任何外部文件。
@@ -2445,6 +2445,11 @@ dialog.nvui-tl[data-nvui-glass="force"] .nvui-panel {
         gap: 2px;
         flex: 1 1 0;
         min-width: 0;
+        /* 触控尺寸下限（2026-11-16，GH-#21）：26px 满足 WCAG 2.5.8 AA 的 24px，
+           但低于 iOS 44pt / Material 48dp 的拇指建议。折中取 40px，
+           抽屉整体仅 +14px，不挤压内容区。改动需同步 test-ui-kit.js §5 与
+           test/host/smoke-panel.js 的实机断言。 */
+        min-height: 40px;
         padding: var(--nvui-space-15) 0;
         border: none;
         border-radius: var(--nvui-radius-sm);

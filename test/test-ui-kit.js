@@ -1414,6 +1414,17 @@ const badClassTokens = [...classTokens].filter((c) => !c.startsWith('nvui-') && 
 check('组件选择器中的类名只允许 nvui-* 与 is-* 状态类', badClassTokens.length === 0,
     badClassTokens.join(', '));
 
+/* 触控尺寸下限（2026-11-16，GH-#21）：移动端底部导航项不得低于 40px。
+ * 26px 满足 WCAG 2.5.8 AA 的 24px，但低于 iOS 44pt / Material 48dp 的拇指建议；
+ * 本项目折中取 40px。改动必须同步本条与 test/host/smoke-panel.js 的实机断言。 */
+const navItemRule = (() => {
+    const i = componentsClean.indexOf('.nvui-bottom-nav-item {');
+    if (i === -1) return '';
+    return componentsClean.slice(i, componentsClean.indexOf('}', i) + 1);
+})();
+check('移动端底部导航项 min-height ≥ 40px（触控尺寸下限，GH-#21）',
+    /min-height:\s*40px/.test(navItemRule), navItemRule.slice(0, 90).replace(/\s+/g, ' '));
+
 /* v2.8.0：!important 预算 14 → 18，新增第 ④ 类「force 玻璃」4 条。
  * 18 = ① checkbox 宿主 ::before 压制 2
  *      + ② reduced-motion 降级 5
@@ -2251,12 +2262,15 @@ check('nvui-api: clearLayoutState 遇到 storage 抛错时安全吸收不穿透'
 })());
 
 check('nvui-api: createPanel 控制器导出 clearLayoutState 实例清理方法',
-    /clearLayoutState:\s*panelClearLayoutState/.test(apiSrc));
+    /clearLayoutState:\s*persist\.clearLayout/.test(apiSrc));
 
 /* --- v2.6.0：折叠条接管入口（GitHub #11） --- */
+/* G-01：accordion 子系统抽出后入口变成 `acc.track`（成员表达式），
+ * 这里只断言「控制器上仍导出这两个入口」，不锁定具体实现形态；
+ * 行为契约由 test-issue-11-accordion.js 的 18 条 Chromium 回归覆盖。 */
 check('nvui-api: createPanel 控制器导出 trackAccordion / adoptAccordions（#11 公开入口）',
-    /trackAccordion:\s*[A-Za-z_$][\w$]*,/.test(apiSrc)
-    && /adoptAccordions:\s*[A-Za-z_$][\w$]*,/.test(apiSrc));
+    /trackAccordion:\s*[\w$][\w$.]*,/.test(apiSrc)
+    && /adoptAccordions:\s*[\w$][\w$.]*,/.test(apiSrc));
 check('nvui-api: 接管入口只挂在面板实例上（顶层 factory API 仍为 11 个，不扩张全局导出面）',
     API_FUNCTIONS.length === 11
     && typeof nvuiApi.trackAccordion === 'undefined'
@@ -2279,11 +2293,16 @@ check('nvui-api: clampPanelLayout 离线/Node 安全（无 DOM 时返回默认�
     return res && res.isMobile === false && res.width === null && res.styleWidth === '';
 })());
 
-check('nvui-api: 状态持久化内置 250ms 写入防抖与生命周期 flushPersistSave 冲刷',
-    /schedulePersistSave/.test(apiSrc)
-    && /250/.test(apiSrc)
-    && /flushPersistSave/.test(apiSrc)
-    && /cleanupPersist/.test(apiSrc));
+/* G-01 第二步：持久化子系统已抽成模块级 createPersistence(ctx)。
+ * 断言「语义仍在 + 边界已封装」，不再锁定它挂在 createPanel 内部。 */
+check('nvui-api: 状态持久化由 createPersistence 封装，内置 250ms 防抖与生命周期 flush 冲刷',
+    /function createPersistence\(ctx\)/.test(apiSrc)
+    && /PERSIST_DEBOUNCE_MS/.test(apiSrc)
+    && /function schedulePersistSave\(\)/.test(apiSrc)
+    && /function flushPersistSave\(force\)/.test(apiSrc)
+    && /function cleanup\(\)/.test(apiSrc)
+    && /persist\.bootstrap\(\)/.test(apiSrc)
+    && /persist\.cleanup\(\)/.test(apiSrc));
 
 /* 9.7c 头部操作流规范排序与 themeToggle / onThemeChange */
 check('nvui-api: 头部操作流严格保证 [自定义 actions...] -> [themeToggle] -> [closeBtn] 顺序',
@@ -2326,6 +2345,27 @@ if (!hasDom) {
     // 说明：真正的 DOM 行为验证由 test/st-live-check.js 在真实 SillyTavern 宿主中执行。
     console.log('[SKIP] DOM 行为断言交由 test/st-live-check.js（真实 ST 宿主）执行');
 }
+
+/* --- 9.7 复杂度冻结（G-01）：createPanel 不得继续膨胀 --- */
+/*
+ * 图谱实测：createPanel() 度 67，是全项目唯一枢纽。2026-11-16 P1-1 分两步拆：
+ *   第一步：accordion 子系统（15 个函数、283 行）→ createAccordionRegistry(ctx)，
+ *           函数体 1433 → 1162 行，嵌套函数 36 → 20 个；
+ *   第二步：持久化 / 视口钳制（7 个函数、332 行）→ createPersistence(ctx)，
+ *           函数体 1162 → 825 行，嵌套函数 20 → 14 个。
+ * 阈值随重构下调，**只允许降不允许升**：需要新逻辑时先抽 factory，而不是放宽本条。
+ * 27 个导出成员已由 test/test-api-surface.js 的 EXPECTED_EXPORTS 冻结，此处不重复断言。
+ */
+const CREATE_PANEL_MAX_LINES = 825;
+const apiLines = apiSrc.split('\n');
+const cpStart = apiLines.findIndex((l) => /^\s*function createPanel\(/.test(l));
+const cpEnd = cpStart < 0 ? -1
+    : apiLines.findIndex((l, i) => i > cpStart && l.startsWith('    /*') && l.includes('吐司'));
+const cpLineCount = cpEnd > cpStart ? cpEnd - cpStart : -1;
+check('nvui-api: createPanel() 函数体不超过复杂度冻结上限（防单函数继续膨胀）',
+    cpStart >= 0 && cpEnd > cpStart && cpLineCount <= CREATE_PANEL_MAX_LINES,
+    `实测 ${cpLineCount} 行 / 上限 ${CREATE_PANEL_MAX_LINES} 行（L${cpStart + 1}–L${cpEnd}）`,
+    true);
 
 // ==================== 10. ST 扩展模板自洽 ====================
 console.log('\n=== 10. ST 扩展模板自洽 ===');

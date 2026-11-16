@@ -1,6 +1,14 @@
-# UPGRADING · v2.8.0
+# UPGRADING · v2.8.1
 
-本文件是**常青升级指南**：当前版本是 v2.8.0。历史大版本差异见 [MIGRATION-v2.md](MIGRATION-v2.md)。
+本文件是**常青升级指南**：当前版本是 v2.8.1。历史大版本差异见 [MIGRATION-v2.md](MIGRATION-v2.md)。
+
+## 2.8.0 → 2.8.1
+
+v2.8.1 是 **PATCH**：无公开 API、类名、token 取值或 `nvui_state_v1` 状态格式变化，覆盖 4 资产即可。
+
+- **焦点陷阱修正**：`tabindex="-1"` 的未激活 tab 不再计入可 Tab 项，纯文本面板按 Tab 不会逃出模态（GH-#20）。
+- **触控尺寸（视觉变化）**：移动端底部导航项 `min-height: 40px`（原 26px），抽屉整体 +14px（GH-#21）。
+- **测试基线**：`test/host/` 两套实机冒烟入库，入口 `npm run test:host`；不改运行时行为。
 
 ## 2.7.2 → 2.8.0
 

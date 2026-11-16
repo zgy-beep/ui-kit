@@ -313,6 +313,50 @@ async function installPageHelpers(page) {
         });
 
         /* ------------------------------------------------------------------
+         * T1b: 纯文本面板（内容区没有表单控件）—— 从激活 tab 按一次 Tab 不得逃出
+         *      回归：未激活 tab 是 tabindex="-1"，若被当成 trap 尾项，激活 tab
+         *      会被误判为「不是最后一站」而放行默认 Tab；原生序列已走完，
+         *      焦点直接落到宿主页面（2026-11-16 实机冒烟发现）。
+         * ------------------------------------------------------------------ */
+        await runCase(asset.label + '-T1b', '纯文本面板：激活 tab 按 Tab 仍留在面板内', async () => {
+            const setup = await page.evaluate(async () => {
+                window.__cleanup();
+                localStorage.clear();
+                const p = NVUI.createPanel({
+                    id: 't13-plain', mount: document.body,
+                    tabs: [{ key: 'a', label: 'A' }, { key: 'b', label: 'B' }],
+                });
+                window.__kitPanel = p;
+                p.addSectionTitle('a', '只有文字');
+                p.open();
+                await window.__wait(400);
+                const tabA = document.getElementById('t13-plain-tab-a');
+                tabA.focus();
+                return {
+                    focused: document.activeElement === tabA,
+                    tabindexA: tabA.getAttribute('tabindex'),
+                    tabindexB: document.getElementById('t13-plain-tab-b').getAttribute('tabindex'),
+                };
+            });
+            await page.keyboard.press('Tab');
+            const afterTab = await page.evaluate(() => window.__active());
+            /* 再点非激活 tab（会激活并聚焦），确认随后 Tab 同样不逃出 */
+            await page.evaluate(() => document.getElementById('t13-plain-tab-b').click());
+            await page.waitForTimeout(250);
+            await page.keyboard.press('Tab');
+            const afterClickTab = await page.evaluate(() => window.__active());
+
+            const pass = setup.focused === true
+                && setup.tabindexA === '0'
+                && setup.tabindexB === '-1'
+                && afterTab.inPanel === true
+                && afterTab.isBody === false
+                && afterClickTab.inPanel === true
+                && afterClickTab.isBody === false;
+            return { pass, detail: JSON.stringify({ setup, afterTab, afterClickTab }) };
+        });
+
+        /* ------------------------------------------------------------------
          * T2: 收起时焦点从正文回收到折叠触发器
          * ------------------------------------------------------------------ */
         await runCase(asset.label + '-T2', '收起折叠体时焦点回收到触发器', async () => {

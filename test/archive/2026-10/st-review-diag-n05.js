@@ -10,7 +10,7 @@
  */
 'use strict';
 
-const h = require('./st-review-harness');
+const h = require('../../st-review-harness');
 
 (async () => {
     const ctx = await h.launch();

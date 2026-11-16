@@ -19,11 +19,20 @@
 
 ## 当前 GitHub 维护
 
-| GitHub Issue | 问题与证据 | 修复状态 |
-| :--- | :--- | :--- |
-| [#15](https://github.com/zgy-beep/ui-kit/issues/15) | v2.7.0 forms 浏览器回归一次并行运行得到 453/455，半选 checkbox 背景和横杠透明度读到过渡中间帧；串行复跑 455/455。 | v2.7.1 修复与验收通过：等待两项计算样式终值并保留最终断言；三份并行 forms 各 455/455。发布提交关联 `Fixes #15`。 |
+> **编号约定（2026-11-16 修正）**：本文件「已修复」「待办」区的 `#N` 是**维护者序号**，与 GitHub issue 编号是两套独立序列。
+> 跨文件提到 GitHub 时一律写 `GH-#N` 或完整 URL。已确认的同项映射：`#1`→GH#1、`#17`→GH#4、`#18`→GH#9、`#19`→GH#10、`#20`→GH#11、`#23`→GH#20。
+> 历史上因两套编号混用，`#17`~`#23` 一度被误读为 GitHub 编号，本轮已补映射表修正。
 
----
+| GitHub Issue | 问题与证据 | 状态 |
+| :--- | :--- | :--- |
+| [GH-#15](https://github.com/zgy-beep/ui-kit/issues/15) | v2.7.0 forms 浏览器回归一次并行运行得到 453/455，半选 checkbox 背景和横杠透明度读到过渡中间帧；串行复跑 455/455。 | **已关闭**（v2.7.1）：等待两项计算样式终值并保留最终断言；三份并行 forms 各 455/455。发布提交关联 `Fixes #15`。 |
+| [GH-#17](https://github.com/zgy-beep/ui-kit/issues/17) | 线路 A · v2.8.2 工程化收尾（A1–A5）。2026-11-16 复核：A1 / A2 / A3 **未开始**，A4 **部分完成**、A5 **已完成**。 | **OPEN**（进行中）：A4 已归档 7 个零引用探针（`test/*.js` 50 → 43）；A5 已补 README §11.4 时间线与 `--self-test` 反向验证。issue 勾选与进度段已同步。 |
+| [GH-#18](https://github.com/zgy-beep/ui-kit/issues/18) | 线路 B · v2.9.0 下游可维护性与可观测性（B1–B6，全 additive）。 | **OPEN**（未开始）：无线程内提交；`ROADMAP.md` 已补建并记录顺序建议 B1 → B3 → B2 → B6 → B4 / B5。 |
+| [GH-#19](https://github.com/zgy-beep/ui-kit/issues/19) | 线路 C · v3.0.0 内联尺寸停写与命名收敛（C1–C4，破坏性）。 | **OPEN**（未开始）：需迁移器与下游公告；`ROADMAP.md` 已记录「读 `panel.style.width/height` 的下游代码会失效」。 |
+| [GH-#20](https://github.com/zgy-beep/ui-kit/issues/20) | 焦点陷阱尾项误判：`tabindex="-1"` 的未激活 tab 被计入可 Tab 项，纯文本面板一次 Tab 即逃出模态（对应本文件 `#23`）。 | **OPEN · 已修复未发布**：代码与回归已落地，`CHANGELOG.md` 的 `Unreleased` 有记录；v2.8.1 发布提交关联 `Fixes #20` 后关闭。 |
+| [GH-#21](https://github.com/zgy-beep/ui-kit/issues/21) | UX 观察 3 条：移动端底部导航项 26px、进度条 `label` 仅 `aria-label` 无可视标签、长内容滚动边缘硬切。 | **OPEN · 待设计确认**：三条均未改代码，验收口径与取舍已写在 issue；对应本文件「需求与特性规划」区的三条「（冒烟观察 2026-11-16）」。 |
+
+> `ROADMAP.md` 于 2026-11-16 补建：此前三个 open issue 均引用该文件，但仓库从未提交过（`git log --all -- ROADMAP.md` 为空），属**死链**，现已修复。
 
 ## 已修复
 
@@ -40,14 +49,24 @@
 | 13 | `prefers-reduced-motion` 门禁只覆盖 `.nvui-scope *` / `dialog.nvui-tl *`，宿主容器内未加 `.nvui-scope` 时组件动画不会降级（无障碍红线被绕过） | P2 无障碍 | 已修复 | `components.css` reduced-motion 块（原 L2069-2072）。宿主把 kit 组件挂进自己的容器却没加 `.nvui-scope` → 层 1 通配不生效 → 组件动画照常播放 | 降级块改为**两层**：层 1 保留 `.nvui-scope *` / `dialog.nvui-tl *` 通配（覆盖作用域内的自定义子元素），层 2 用 `:is(...)` **逐个点名 27 个自身带 animation/transition 的 kit 类**（含 `::before`/`::after` 变体 + `.nvui-stagger > *` + 开关 checkbox）。**未新增 `!important`**（仍 5 个，预算 ≤ 8 保持不变）。回归断言：扫描 `components.css` 里所有带 `animation:`/`transition:` 的规则，提取其 kit 基类，逐一断言出现在降级块选择器中 |
 | 14 | `preview.html` 的 `replayMotion` 逐节点读 `offsetWidth` 强制回流（N 节点 = N 次同步布局）；滚动监听（`capture: true`）未节流，一次滚动触发数十次回调 | P3 性能 | 已修复 | `preview.html` 原 `replayMotion` 内 `void node.offsetWidth`（逐节点）+ `window.addEventListener('scroll', repositionTip, true)` 直接调用 | `replayMotion` 改为「批量摘类 → 全局只读一次 `document.body.offsetWidth` → 批量挂回」，并对 stagger 子项单独触发回流（子项数远小于摘类节点数）；`repositionTip` 用 `requestAnimationFrame` 合并为每帧至多一次。回归断言：断言重播函数不含 `void node.offsetWidth` 且含 `void document.body.offsetWidth`；断言滚动处理含 `requestAnimationFrame` + `repositionRaf` |
 | 15 | 宿主 `body.no-blur` 全局禁用 `backdrop-filter` 时，kit 玻璃只剩半透明底色，下层文字透出重影 | P2 视觉 | 已修复 | 宿主规则实为 `body.no-blur * { backdrop-filter: unset !important }`（`public/css/toggle-dependent.css` L368）。浏览器**仍支持** backdrop-filter，故 `@supports not` 降级块不触发 → 玻璃底色半透明 → 下层文字直接透出 | `nvui-api.js` 新增 `detectGlassSupport()` / `syncGlassFallback()`：**造隐藏 `.nvui-glass` 探针读渲染后的实际计算值**（`getComputedStyle().backdropFilter`），为 `none` 即判定被外部禁用 → 自动给根节点挂 `.nvui-solid` 实心回退。不猜宿主类名（避免耦合）。`createPanel()` / `showToast()` 已内置调用。实机 `test/st-glass-fallback-check.js` **9/9 全绿**：宿主 no-blur 下探测值 = `none`、面板背景 = `rgb(22,26,36)`（不透明）、移除 no-blur 后探测值恢复 `blur(20px) saturate(1.5)`、全程零控制台错误（v2.7.2 起改为 `.nvui-glass-fallback` 97% 近不透明回退，见 #21/#22） |
-| 21 | 面板「没有玻璃透明感」：面板虽然半透明，但透明度不足且背后模糊不够，视觉上不像玻璃 | P2 视觉 | 已修复（v2.7.2） | 真实 ST 实机对照：玻璃态 = 透明面板 + 面板背后强模糊。面板态单独采用更透的玻璃：遮罩 `color-mix(--nvui-bg 20%)` + `blur(24px)`，面板 `color-mix(--nvui-bg 30%)` + token 柔光 + `blur(48px) saturate(190%) brightness(1.12)`；浅色 62% 底；窄屏降档。面板/遮罩规则提升到 `dialog.nvui-tl` 作用域，压过真实 ST 中其它扩展内嵌的旧版 kit CSS | `.nvui-overlay.is-panel` / `.nvui-panel` 使用面板态高透明玻璃 + 强 blur；`dialog.nvui-tl` 作用域副本保证多扩展共存时生效；`.nvui-solid`/Fast UI 回退/减少透明度降级仍可覆盖。面板态为视觉优先档（极亮宿主不承诺 text-2 AA）；新增 `test/st-glass-transparency.js` 与真实宿主 21 项断言 |
-| 22 | 玻璃探测时序死锁 + 不可逆：kit CSS 未就绪时调用 `syncGlassFallback()` 永久缓存 false 并挂 `.nvui-solid`；`.nvui-solid .nvui-glass` 反压探针，导致 CSS 就绪后 `{force:true}` 仍返回 false、无法恢复；另有 `setTheme()` 误清用户实心偏好、`open()` 不重探的反向缺陷 | **P1 正确性** | 已修复（v2.7.2） | CDP 复现：CSS 未注入时 `{supported:false, html:'nvui-solid'}`；注入 CSS 后 `{supported:false}` 且面板 `rgb(22,26,36)`、`backdrop-filter:none`；真实 ST `fast_ui_mode` 默认 true（body.no-blur），首装 `showToast()` 即可触发并永久实心；`setTheme()` 只清 body 类、自动回退在 html，两边状态失联 | 探测三态化（supported/unsupported/unknown）：unknown（CSS 未就绪）不缓存、不落回退，按「根/body class + reduce 偏好 + CSS 就绪 + 用户实心」签名重探（定时器 / load / fonts.ready / `openLayer()` / 媒体变化）；探测前临时摘掉 `.nvui-solid` 与 `.nvui-glass-fallback` 避免自锁；宿主禁模糊时改挂可逆的 `.nvui-glass-fallback`（97% token 派生近不透明档），支持恢复后自动移除；`setTheme()` 不再无条件清 `.nvui-solid`；`openLayer()` 增加重探。新增 `test/st-glass-transparency.js` 覆盖时序竞争与回退可逆 |
-
 | 17 | 宿主 `showModal()` 模态期间，kit 浮层被压住且**完全无法交互**（用户点了没反应，无任何视觉提示）；且 v2.3.0 README §13.5.1 对照表 F 行「`popover=manual` 能压过一切」为**错误论断** | P1 交互 / P1 文档 | 已修复 | 实机探针（`/tmp/probe-carrier*.js`，真实 ST 宿主）：① `popover="manual"` 无论 show 先后**都压不过** `showModal()` 模态；② 普通 div + `z-index:2147483647` 同样不行；③ 根因**不是 z-index**，而是 `showModal()` 给**整页**加 `inert`，`inert` 元素不参与命中测试（`elementsFromPoint` 不返回），也无法获得焦点 | **改为「主动让位」而非硬压**：① `components.css` 新增降级态 `dialog.nvui-tl.is-host-modal`（`pointer-events:none` + `opacity:0.35` + `grayscale(0.6)`，子浮层一并让位）；② `nvui-api.js` 新增 `countHostModals()` / `syncHostModalState()` / `getCarrierState()`；③ 装幂等 watcher（`MutationObserver` 监听 `dialog[open]` + 捕获 `close`），宿主模态**动态开关**时自动降级/还原；④ README §13.5.1 F 行更正 + 新增 §13.7。实机 `test/st-carrier-host-modal-check.js` **18/18 全绿**。GitHub Issue #4 |
-
 | 18 | 宿主主题以「元素选择器 + `!important`」重写全局表单控件，浅色主题下 `.nvui-input` 呈「深底深字」不可读 | P1 宿主兼容 | 已修复（v2.6.0） | GitHub Issue #9 附 Chromium 实测：`input.nvui-input` 背景 `rgb(46,46,52)`（宿主深色）/ 文字 `rgb(31,36,48)`（kit 深色），同刻 `--nvui-input-bg` 本身正确。本地静态核对：`.nvui-input` 为裸类（0,1,0）、无隔离层、`select option` 无皮肤，`nvui-api.js` 中 `nvui-scope` 出现 0 次 | `components.css` 新增 §7.1 宿主表单隔离：仅 `dialog.nvui-tl` + `.nvui-panel` 双载体、7 条 `!important`（基础 `background`/`color`/`border` 3、`select margin` 1、`:hover background` 1、`option background`/`color` 2），值全走 token 或明确 reset；`:hover` 同作用域还原。`test/test-ui-kit.js` 预算 8 → 14，并新增分类计数 / 双载体选择器 / 精确属性值断言。验证入口：`node test/test-issues-9-10-forms.js`。**GitHub：随 v2.6.0 发布提交关闭（`Fixes #9`）** |
 | 19 | 缺少独立 checkbox 组件：批量选择场景每个下游插件都要自绘宿主隔离 | P2 组件缺失 | 已修复（v2.6.0） | GitHub Issue #10 附下游插件自绘 CSS（`appearance:none` + 显式宽高 + 压 `::before`）。本地核对：`components.css` 无 `.nvui-checkbox`，宿主隔离只覆盖 `.nvui-switch-row` | 新增 `.nvui-checkbox[type="checkbox"]`：16×16、`:checked` / `:indeterminate`、焦点环走 token、`::after` 纯 CSS 对勾；**复用既有 `::before` 压制、不新增 `!important`**；组件类 78 → 79；`preview.html` 补全选 / 半选 / 禁用示例；README §7.5.1 补文档。验证入口：`node test/test-issues-9-10-forms.js`（16px 几何 / `::before` 抑制 / 半选 / 焦点与 Space / disabled）。**GitHub：随 v2.6.0 发布提交关闭（`Fixes #10`）** |
 | 20 | `innerHTML` 注入的 `.nvui-acc` 无法进入 `accList`，`persist.accordion` 静默存成 `{}`（重开面板状态丢失） | P1 持久化 | 已修复（v2.6.0） | GitHub Issue #11 附浏览器实测 storage 内容（`accordion: {}` 而同份 `size`/`tab` 正常）。本地复核：原 `addNode` 注册门槛要求节点自带 `setOpen`（仅工厂产物满足），`trackAccordion` 为闭包私有、控制器无公开入口 | 新增 `panel.trackAccordion(node, id?, options?)` 与 `panel.adoptAccordions(root, options?)`：键按**原始字符串**保存（中文 / 非 ASCII 键不再折叠，`__proto__` 等特殊键安全存取）；**显式 / DOM / data 键被活动节点占用时告警并返回 `null`**，自动键与工厂标题兜底键才追加序号；同键旧节点已脱离面板时由新节点替换；注册幂等；**默认不接管点击**（`{ bind: true }` opt-in）；跨面板 / `document` / `body` 边界拒绝；`destroy()` 解绑并停止落盘；沿用既有 `nvui_state_*` 状态格式。验证入口：`node test/test-issue-11-accordion.js`（真实 Chromium）。**GitHub：随 v2.6.0 发布提交关闭（`Fixes #11`）** |
+| 21 | 面板「没有玻璃透明感」：面板虽然半透明，但透明度不足且背后模糊不够，视觉上不像玻璃 | P2 视觉 | 已修复（v2.7.2） | 真实 ST 实机对照：玻璃态 = 透明面板 + 面板背后强模糊。面板态单独采用更透的玻璃：遮罩 `color-mix(--nvui-bg 20%)` + `blur(24px)`，面板 `color-mix(--nvui-bg 30%)` + token 柔光 + `blur(48px) saturate(190%) brightness(1.12)`；浅色 62% 底；窄屏降档。面板/遮罩规则提升到 `dialog.nvui-tl` 作用域，压过真实 ST 中其它扩展内嵌的旧版 kit CSS | `.nvui-overlay.is-panel` / `.nvui-panel` 使用面板态高透明玻璃 + 强 blur；`dialog.nvui-tl` 作用域副本保证多扩展共存时生效；`.nvui-solid`/Fast UI 回退/减少透明度降级仍可覆盖。面板态为视觉优先档（极亮宿主不承诺 text-2 AA）；新增 `test/st-glass-transparency.js` 与真实宿主 21 项断言 |
+| 22 | 玻璃探测时序死锁 + 不可逆：kit CSS 未就绪时调用 `syncGlassFallback()` 永久缓存 false 并挂 `.nvui-solid`；`.nvui-solid .nvui-glass` 反压探针，导致 CSS 就绪后 `{force:true}` 仍返回 false、无法恢复；另有 `setTheme()` 误清用户实心偏好、`open()` 不重探的反向缺陷 | **P1 正确性** | 已修复（v2.7.2） | CDP 复现：CSS 未注入时 `{supported:false, html:'nvui-solid'}`；注入 CSS 后 `{supported:false}` 且面板 `rgb(22,26,36)`、`backdrop-filter:none`；真实 ST `fast_ui_mode` 默认 true（body.no-blur），首装 `showToast()` 即可触发并永久实心；`setTheme()` 只清 body 类、自动回退在 html，两边状态失联 | 探测三态化（supported/unsupported/unknown）：unknown（CSS 未就绪）不缓存、不落回退，按「根/body class + reduce 偏好 + CSS 就绪 + 用户实心」签名重探（定时器 / load / fonts.ready / `openLayer()` / 媒体变化）；探测前临时摘掉 `.nvui-solid` 与 `.nvui-glass-fallback` 避免自锁；宿主禁模糊时改挂可逆的 `.nvui-glass-fallback`（97% token 派生近不透明档），支持恢复后自动移除；`setTheme()` 不再无条件清 `.nvui-solid`；`openLayer()` 增加重探。新增 `test/st-glass-transparency.js` 覆盖时序竞争与回退可逆 |
+| 23 | 焦点陷阱尾项误判：`tabindex="-1"` 的未激活 tab 被计入可 Tab 项，纯文本面板从激活 tab 按一次 Tab 即逃出模态，焦点落到宿主页面 | **P1 可访问性** | 已修复（未发布，见 CHANGELOG Unreleased） | 2026-11-16 实机（ST 1.19.0 / Chrome，1440×900）：trap items 含 `repro-tab-b ti=-1`；焦点在激活 tab（`ti=0`）按一次 Tab 后 `document.activeElement` 变为宿主 `body.drop_target`（`inPanel=false`）；三 tab 面板同样复现。根因：`last` 取到 `ti=-1` 项 → `current !== last` → 放行默认 Tab，而原生序列已无下一站 | `trapTabFocus()` 抽到模块级：只统计 `tabIndex >= 0` 的节点；焦点在容器或 `tabindex=-1` 节点时用 `compareDocumentPosition` 判断该方向是否还有下一站，无则回卷。`test/issue-13-14-focus-escape.spec.js` 新增 T1b；root + template **15/15**，静态门禁 **368/368**，模板已同步 **GitHub GH-#20**（2026-11-16 建，发布后关）。 |
+
+### 2026-11-13 图谱批次结项（G-02 / G-03 / G-04 / G-08，工具链项，无版本变更）
+
+> 这四项属**内部工具链 / 文档 / 测试**闭环，不涉及运行时代码与发布版本，按批次约定不写 CHANGELOG、不升版本号。
+
+| # | 问题 | 严重度 | 状态 | 证据 | 修复 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| G-02 | 焦点囚笼 / 销毁 / 打开三条生命周期路径与 `createPanel` 之间只有 INFERRED `indirect_call`，无显式契约，也缺少「改动 createPanel 必跑哪条回归」的映射 | P2 正确性风险 | 已关闭（2026-11-16） | 去噪后 `.graphify_analysis.json` 的 `surprises` 中三条为 `createPanel → isTrapFocusable`（C7→C32）、`→ destroy`（C7→C21）、`→ openPanel`（C7→C27），均 INFERRED。核查发现缺口**只在文档**：行为断言已存在于 `test/st-live-check.js`（6 项）、`test/st-destroy-close-check.js`（11 条）、`test/issue-13-14-focus-escape.spec.js`（真实 Tab / Shift+Tab / Esc） | `TEST_INFRA.md` 新增 §3.1「Implicit coupling map (G-02)」：三条「可观察行为 ↔ 路径」映射 + 「改动 `createPanel` 必跑脚本」约定；按 §1 黑盒原则**不断言内部符号**，测试脚本零改动 |
+| G-03 | 知识图谱只含 AST、文档未进图；`GRAPH_REPORT.md` / 社区标签 / 建议问题缺失，构建止于建图 | P3 工具链 | 已关闭（2026-11-16，语义层另立 G-07） | 原 `graphify-out/` 只有 `graph.json` / `.graphify_analysis.json` / `manifest.json`，`questions` 为 `null`。**更正 11-13 的判断**：当时记录「`cluster-only` 会重算社区 id、作废引用」，实测否证——900 节点副本上重跑，**900/900 社区 id 完全不变**（`createPanel` 仍 C7），同一张图的聚类是确定性的 | `graphify cluster-only . --no-label` 生成 `GRAPH_REPORT.md`（10.6 KB：Corpus Check / Summary / Community Hubs / God Nodes / Surprising Connections / Import Cycles / 57 社区），`graph.html` 同步重导出（665 KB）；`.graphify_analysis.json` 的 `questions` 由 `null` → **7 条**（1 桥接 + 1 INFERRED 复核 + 5 低内聚）。社区标签仍为 `Community N` 占位，连同语义层转 G-07 |
+| G-04 | 模板内嵌的 4 资产副本使图谱节点翻倍、社区成对镜像，god nodes 与 surprising connections 全部重复计数 | P3 工具链 | 已关闭（2026-11-16） | 去噪前两份 `nvui-api.js` 各 120 节点，社区 C4/C6、C7/C8、C12/C13 为镜像对，god nodes 前三名成对（67/67、23/23、20/20）。副本本身**不是 bug**：`scripts/sync-template.js` L14 同步、`scripts/verify-release.js` L68–77 逐个 MD5 校验保护 | 排除配置持久化为 `graphify-out/.graphify_build.json`（`{"excludes":["st-extension-template/ui-kit/"],"code_only":true}`），`graphify extract . --code-only --force --exclude st-extension-template/ui-kit/` 重建：**1021→900 节点 / 1714→1366 边 / 64→57 社区 / 模板残留 0**，god nodes 不再成对；2026-11-16 复验结果一致。仓库零新增文件（配置在已 gitignore 的 `graphify-out/` 内），`graph.html` 已重导出；不影响 `verify:release` 的文件级 MD5 校验 |
+| G-08 | §3.1 的「改动 `createPanel` 必跑脚本」实际不可执行：`st-live-check.js` / `st-destroy-close-check.js` 依赖宿主侧 `window.__NVUI_LAB__`（lab 扩展），ST 1.19.0 默认不带；替代冒烟脚本又放在 gitignore 目录、未入库 | P2 测试可复跑性 | 已关闭（2026-11-16，部分采纳） | 实机：宿主已加载 `NVUI 2.8.0` 但 `window.__NVUI_LAB__ === undefined`，两份脚本首条断言即失败；`st-lab-out/smoke/` 两套虽能跑（54 条），但不在版本控制内 | 两套冒烟整理入库为 `test/host/smoke-panel.js`（35 条）+ `test/host/smoke-deep.js`（19 条）：路径改 `__dirname` 派生、Chrome 多候选探测、`playwright-core` 缺失时打印修复命令并以退出码 2 退出、版本断言改为读 `package.json`；入口 `npm run test:host`。新增 `test/README.md` 五类索引；`TEST_INFRA.md` §3.1 必跑入口改为 `test:host` + `test:browser`，§3.2 基线更新为 35/35 + 19/19。lab 扩展依赖留在 Roadmap A2（GH-#17）跟踪 |
 
 ---
 
@@ -56,9 +75,20 @@
 > 规则：疑似问题先登记在此区并写明**复现证据**（文件路径 + 行号 / 实机观测数据），
 > 不允许凭印象下结论。确认是真问题后再转「已修复」或「已确认-不修」。
 
+> **2026-11-13 图谱梳理批次**：编号 `G-01` ~ `G-07`（G = Graphify），与 GitHub Issue `#N`、历史 `NEW-N` 编号互不冲突。
+> 初始来源为 `graphify-out/graph.json`（1021 节点 / 1714 边 / 64 社区）；**16:31 去噪重建后为 900 节点 / 1366 边 / 57 社区**，
+> 文中社区编号一律以重建后的图为准。这批是**内部架构 / 工具链维护项**，不涉及公开行为与使用体验，按规则 3 暂不开 GitHub Issue。
+> 本批标记「已关闭」/「已修复」仅表示内部工作闭环，**不涉及发布版本与运行时代码变更，故不写 CHANGELOG、不升版本号**
+> （与规则 2 的代码 bug 流程区分）。完整方案与执行记录见文末「架构优化方案」章节。
+> **2026-11-16 维护（一）**：`G-02` / `G-03` / `G-04` 已结项关闭，记录移入上方「已修复」区的「2026-11-13 图谱批次结项」表；`G-06` 经实测判定为上游提取器限制，转入「已确认-不修」区；语义层与社区标签另立 `G-07`。
+> **2026-11-16 维护（二）**：本表剩 2 项。`G-01` 已具备实机基线（见 `TEST_INFRA.md` §3.2）并完成前两步内部重组；`G-07` 为语义层。均无在办工作，故状态一律为「待办」而非「修复中」。
+> 上一轮的 5 项（#8 / #9 / #10 / #12 / #16）已全部经实机测量判定「已确认-不修」，转入下方对应区块。
+
 | # | 问题 | 严重度 | 状态 | 证据 / 说明 |
 | :--- | :--- | :--- | :--- | :--- |
-| — | **暂无待办** | — | — | 上一轮登记的 5 项（#8 / #9 / #10 / #12 / #16）已全部经**实机测量**判定为「已确认-不修」，转入下方「已确认-不修」区并附实测数据。新问题请先按上方规则登记到本区。 |
+| G-01 | `createPanel()` 曾是单函数 1433 行 / 36 个嵌套函数的巨型闭包，图谱中唯一枢纽节点（度 67），承担 4 类职责 | P2 可维护性 | 待办（**第二步已完成 2026-11-16**） | 重构前：`nvui-api.js` L1480 定义、函数体 1433 行、20 个 `function` 声明（含 `var f = function` 共 36 个）、全文件 3118 行。**第一步**：accordion 子系统 15 函数 / 283 行 → 模块级 `createAccordionRegistry(ctx)`（ctx 9 个能力），1433 → 1162 行、嵌套 36 → 20。**第二步**：持久化 / 视口钳制 7 函数 / 332 行 → 模块级 `createPersistence(ctx)`（bootstrap / onOpen / onClose / cleanup / clearLayout + 4 个谓词），1162 → **825 行**、嵌套 20 → **14 个**，门禁阈值 1162 → 825（只允许降）。**关键约束**：`tabs` / `keyMap` / `acc` 在 factory 创建时尚未初始化，ctx 必须以 **getter** 注入，否则拿到 `undefined`；销毁顺序 `persist.cleanup()`（内先 flush）→ `disposed=true`，反了最后一次状态会被拦掉。验证：静态 369/369、持久化压力 19/19、头部压力 15/15、e2e 58/58、浏览器 4 spec 全绿、真实宿主 `npm run test:host` **35/35 + 19/19**（与重构前逐条一致）。**仍剩 3 类未抽**：焦点/生命周期（8 函数）、玻璃（1）、节点构建（2） |
+| G-05 | `test/` 历史上 20 个一次性探针与正式门禁混放 | P3 可维护性 | 已关闭（2026-11-16，部分采纳） | 复核引用关系后**只归档 7 个零引用脚本**：`challenge-m2-2` / `gate2-challenger-m2-2` / `st-clamping-stress-test` / `st-review-diag-n03` / `n05` / `n07` / `st-toplayer-probe2`；其余 13 个被 `ISSUES.md` / `CHANGELOG.md` 作为缺陷复现证据引用（如 `st-review-repro.js` 被 `st-review-verify.js` 依赖），移动会断历史链。已 `git mv` 至 `test/archive/2026-10/`，修正 3 处 `path.resolve(__dirname, "..")` → `"../../.."` 与 3 处 `require("./st-review-harness")` → `"../../st-review-harness"`，`node --check` 全通过，并补归档 README 说明判据。`test/` 根脚本 50 → 43，`npm test` 仍 368/368。 |
+| G-07 | 图谱缺语义层与可读社区标签：文档（README / AUDIT / AI-GUIDE）未进图，57 个社区仍是 `Community N` 占位 | P3 工具链 | 待办 | 11-16 生成 `GRAPH_REPORT.md` 时用 `--no-label` 保留占位，因本机无 `GEMINI_API_KEY` / `GOOGLE_API_KEY`，`graphify label` 需 LLM 后端；文档约 523 KB / 5.5k 行，全量语义提取成本过高。**建议分级**：先只接 `AI-GUIDE.md` + `README.md` §13，验证 doc↔code 关联是否够用，再决定是否全量。`tokens.json` 因 G-06 的文件名启发式无法进图，不列入。 |
 
 
 ---
@@ -150,6 +180,7 @@
 | **NEW-08**（2026-10-20 新增） | `syncTabsIndicator` 读 4 个 offset 属性造成强制同步布局 → **不改** | 实测（严格按 README §13.6 判据，看**帧间隔**而非累计布局耗时）：baseline p95 = **16.80ms** / switching p95 = **16.80ms**，**差 0.00ms**；超 16.7ms×1.5 帧预算的帧数 = **0**，长帧 = **0** → **不可感知卡顿**。与 #9（tabs 指示器）历史结论一致，改造需破坏 README §7.7 的 CSS 变量契约，收益不成立 |
 | **NEW-21**（2026-10-20 新增） | `preview.html` 的 URL 参数可能构成反射型 XSS → **不成立** | 全量 grep 确认 `preview.html` **0 处** `innerHTML` / `outerHTML` / `insertAdjacentHTML` / `document.write` / `eval`，文本一律走 `textContent`；URL 参数仅用于 `params.get(...) === 'light' / '1'` 严格白名单比较后 `classList.add`，`?toast=` 经 `TOAST_META[type] \|\| TOAST_META.info` 白名单兜底。**否定性结论** |
 | **NEW-23**（2026-10-20 新增） | 路径遍历 / 敏感信息硬编码 → **不成立** | 全项目**无任何文件系统操作**（`nvui-api.js` 零 fs 调用，`preview.html` 纯前端）→ **无路径遍历面**；全仓 grep `C:\Users` / `D:\Github` / `T:\Github` **0 命中**，`api_key` / `secret` / `password` / `bearer` **0 命中**（`package.json` 的 `author: "zgy-beep"` 是公开署名）。**否定性结论** |
+| **G-06**（2026-11-16 新增） | CSS / 令牌层无法进图 → **不修**（上游提取器限制，非配置问题） | 实测三条：① `.css` 不在 `graphify/detect.py` 的 `CODE_EXTENSIONS`，临时目录单文件测试输出 `1 file(s) not classified ... a.css`；② `components.css` / `style.css` / `tokens.css` 的 `classify_file()` 均返回 `None`，而 `.graphifyrc` 的 `language.<ext>` 只能重映射到**已有提取器**的语言（无 CSS 提取器，强行映射即误解析）；③ `tokens.json` 分类为 `FileType.CODE` 但 `_is_sensitive()` 返回 `True`，命中泛化关键字 `(?<![a-zA-Z0-9])tokens?(?![a-zA-Z])` 叠加 `_SECRET_PRONE_DATA_EXTS`（含 `.json`），且无白名单开关；同样的 `tokens.md` 因仅 `_PROSE_EXTS` 豁免而不触发。**替代方案**：令牌 ↔ 组件覆盖由 `test/test-ui-kit.js` §1–§3 静态守护，临时查询 `grep -o "var(--nvui-[a-z0-9-]*" components.css \| sort \| uniq -c`；不为图谱改资产名（`tokens.json` 是公开契约，改名连带 sync / verify / 文档） |
 
 ### 由待办转入的 5 项（附实机测量数据）
 
@@ -178,6 +209,9 @@
 | [Issue #6](https://github.com/zgy-beep/ui-kit/issues/6) | 面板头部交互 | 预置主题切换按钮（`themeToggle`）与版本更新提示按钮（`update` / `panel.showUpdate`）：规范右上角标准操作流（Actions → 主题切换 → 关闭）及左上角版本更新动态点亮入口 | v2.5.0 | **Closed (v2.5.0)**：全量实现并实机验证。规范操作流标准次序（`.nvui-panel-actions` 严格保证 `[自定义 actions...]` -> `[themeToggle]` -> `[closeBtn]`）；预置主题切换按钮（日/月图标平滑过渡动效、直连 `NVUI.setTheme` 切换 `.nvui-theme-light` 并失效 Token 缓存、联动 `onThemeChange` 回调）；标题区预置版本更新提示胶囊（`opts.update` 静态配置与 `panel.showUpdate` 动态点亮/隐藏/更新接口）；严格遵守 WAI-ARIA APG 无障碍规范（`role="button"`, `tabindex="0"`, 键盘 Enter/Space 触发）、纯文本注入（杜绝 XSS）与 Flat Glass 无实体外描边红线。 |
 | [Issue #10](https://github.com/zgy-beep/ui-kit/issues/10) | 组件层 | 独立复选框 `.nvui-checkbox`：批量选择场景的 16px 小方块，自带宿主隔离，支持 `:checked` / `:indeterminate`，避免每个下游插件自绘 | v2.6.0 | **Implemented (v2.6.0)**：组件、示例与文档已落地并在 Chromium 回归中验证；GitHub issue 由本次发布提交关闭（`Fixes #10`）；同批的 #9 / #11 见「已修复」表第 18 / 20 行。 |
 | —（规划） | 表单作用域 | opt-in `.nvui-form-scope`：自定义普通容器显式加类后，既有 `.nvui-input` 的 input / select / textarea / option 共享既有 7 条宿主表单隔离；默认双载体不变，非 kit 控件不接管，不创建定位 / 遮罩 / 模态，`!important` 预算仍 14 | v2.7.0 | **已打 tag，本地验收通过**：Codex 独立复验静态门禁 362/362、forms 455/455、accordion 18/18、reporting 31/31、本地 E2E 52 PASS / 0 FAIL / 6 SKIP（真实宿主未执行）；模板 4 资产已同步。详见 `CHANGELOG.md` 的 v2.7.0 条目。announce API 与尺寸令牌扩展暂缓。 |
+| —（冒烟观察 2026-11-16） | 移动端底部导航 | `.nvui-bottom-nav-item` 在 390×844 实测高 **26px**（图标 + 2 字标签，padding 仅 `space-15`） | 待定 | **仅观察，未改**：满足 WCAG 2.5.8 AA 下限（24px），但低于 iOS 44pt / Material 48dp 的拇指建议。若改 `min-height: 40–44px`，抽屉整体高 +14~18px，属视觉取舍，需设计确认后再动 |
+| —（冒烟观察 2026-11-16） | 进度条 | `progress({ label, value })` 的 `label` 只落到 `aria-label`，视觉上只有一条 4px 进度线，没有标题与数值 | 待定 | **仅观察，未改**：符合 §7.13（规范只要求 `aria-*`，不要求可视标签）；但纯视觉用户无法判断「这是什么进度 / 完成多少」。建议加可选 `showLabel` / `showValue`（默认关闭，不破坏既有契约） |
+| —（冒烟观察 2026-11-16） | 长内容滚动 | 面板 body 滚动时内容在 tabs 下沿与 footer 上沿硬切（正常裁剪，无渐隐/阴影提示） | 待定 | **仅观察，未改**：滚动、sticky footer、页面不跟随滚动均实测通过；建议加 `mask-image` 边缘渐隐或 1px 内阴影，提示「还有内容」，属纯视觉增强 |
 
 ### v2.5.0 特性结项与关闭明细 (Feature Resolution Details)
 
@@ -286,3 +320,123 @@
 
 运行环境：本机 SillyTavern `T:\Github\SillyTavern\APP\SillyTavern`（v1.19.0，http://127.0.0.1:8000）。
 用 `playwright-core` 直连本机 Chrome（`NODE_PATH` 注入模块解析路径）。
+
+---
+
+## 架构优化方案（2026-11-13 图谱梳理）
+
+> 对应待办条目 `G-01` ~ `G-07`。方案按「零契约变更」边界设计，理由见下方红线。
+> 文中社区编号（C5 / C7 / C9 / C21 / C27 / C32 等）绑定 **2026-11-13 16:31 去噪重建后**的
+> `graph.json`（900 节点 / 1366 边 / 57 社区）；图谱再次重建会重新分配 id，跨版本引用前须重新映射。
+> 16:31 起按「优先级」执行 P0 与 P1-2，结果见文末「执行记录」章节。
+> **运行时代码、CSS、令牌零改动**，仅新增一条测试断言与两份文档。
+
+### 红线（先于一切优化）
+
+本项目历史上 5 次以「破坏性变更收益不成立」判定不修（见「已确认-不修」区 #8 / #9 / #10 / #12 / #16），
+因此本轮优化一律限定在**内部实现、测试与工具链**范围内，以下六项不动：
+
+| # | 不可变更契约 | 当前事实源 |
+| :--- | :--- | :--- |
+| 1 | `NVUI` 导出面（27 个公开成员） | `nvui-api.js` L3064–3107 |
+| 2 | 4 个运行时资产清单与模板副本一致性 | `scripts/sync-template.js` L14；`scripts/verify-release.js` L68–77 |
+| 3 | DOM / 类名契约（`nvui-` 与 `is-`、`<dialog class="nvui-tl">` 载体） | `AI-GUIDE.md` §0 硬约束 3 |
+| 4 | 令牌数量与 `!important` 预算 | `tokens.json` dark 111 / light 47；`components.css` 18 条（`verify-release.js` L47–54） |
+| 5 | 6 处版本号自洽与 README / CHANGELOG / preview 标题 | `scripts/verify-release.js` L32–61 |
+| 6 | 零运行时依赖、整目录可复制 | `package.json`（无 `dependencies`） |
+
+### P0 零风险项（已执行）
+
+1. **图谱去噪（G-04）[已完成 16:31]**：执行
+   `graphify extract . --code-only --force --exclude st-extension-template/ui-kit/`，
+   CLI 自动把配置持久化为 `graphify-out/.graphify_build.json`
+   （`{"excludes":["st-extension-template/ui-kit/"],"code_only":true}`）；`graphify-out/` 已 gitignore，仓库零新增文件。
+   结果 **1021→900 节点 / 1714→1366 边 / 64→57 社区 / 模板残留 0**，god nodes 不再成对，`graph.html` 已按新图重导出。
+   原方案预估「社区降到约 40」偏乐观，实测 57，如实修正。该排除**不影响** `verify-release` 的 MD5 校验（文件级，与图谱无关）。
+2. **复杂度冻结（G-01 第一步）[已完成 16:31]**：`test/test-ui-kit.js` 新增 §9.7，断言 `createPanel` 函数体
+   ≤ **1447** 行（实测 L1429–L2875；原方案写「约 1445」已按实测修正）。`npm test` **367 → 368 PASS / 0 FAIL**。
+   **方案修订**：原计划的「27 个导出成员逐一比对」经核查**已存在**于 `test/test-api-surface.js` 的
+   `EXPECTED_EXPORTS`（`npm run test:api` 覆盖），故不重复添加，只在 §9.7 注释中引用。
+3. **产物补齐（G-03 已完成 11-16）**：`graphify export html` 于 16:26 产出 `graph.html`，16:31 去噪后重导出；
+   11-16 执行 `graphify cluster-only . --no-label` 补齐 `GRAPH_REPORT.md`（10.6 KB）与 **7 条**建议问题（`questions` 由 `null` 变为有值）。
+   **更正**：此前记录「该命令会重算社区 id、作废编号映射」经实测否证——同一张图上重聚类 **900/900 节点社区 id 不变**
+   （`createPanel` 仍为 C7），故本页与 `TEST_INFRA.md` §3.1 的编号引用全部继续有效。
+
+### P1 下个迭代（纯内部重构）
+
+1. **G-01 分区重组 [暂缓]**：把 `nvui-api.js` L1429–L2875 内 42 个嵌套函数按「宿主/层级、玻璃能力、
+   DOM 与无障碍、布局/持久化」收进 4 个 factory，`createPanel` 只负责组装并返回 controller。导出面、DOM、CSS 全不变。
+   **暂缓原因（16:31）**：本机 SillyTavern 宿主 `http://127.0.0.1:8000` 不可达（绕代理复测 `HTTP 000`，直连 `502`），
+   `test/st-review-verify.js`（62 条）/ `test/st-review-2026-verify.js`（24 条）等实机回归无法执行；
+   在没有实机基线的情况下改 1447 行闭包体，违反本项目「先实机复现 / 复验再修」的规则 1 / 2。
+   **待宿主恢复后单独确认再动刀。**
+2. **G-02 隐式耦合显式化 [已完成 16:31]**：`TEST_INFRA.md` 新增 §3.1，补三条「可观察行为 ↔ 路径」映射
+   （Tab 焦点循环 → `isTrapFocusable`；destroy 后 document 监听数不增 → `destroy`；Esc 关闭与焦点归还 → `openPanel`），
+   并写明「改动 `createPanel` 必跑脚本」。**方案修订**：原计划「补齐对应可观察断言」经核查**已存在**——
+   `test/st-live-check.js` 六项已含 focus trap / 焦点归还 / destroy DOM 清理 / Esc 单例无监听器泄漏 / 冒泡截断，
+   `test/st-destroy-close-check.js` 另有 11 条；按 §1 黑盒原则不新增内部符号断言，**测试脚本零改动**。
+3. **验收清单**：`npm test` → `npm run test:api` → `npm run test:v280` → `npm run test:browser` →
+   `node test/test-e2e-v250.js --no-host` → `npm run verify:release` → `npm run downstream:check`，
+   实机前后对照 `test/st-review-verify.js`（62 条）与 `test/st-review-2026-verify.js`（24 条）；
+   最后 `npm run sync:template` 重同步，确认 4 资产 MD5 与根版一致。
+
+### P2 选择性项（先算成本）
+
+1. **G-07 语义层与社区标签**：文档共约 523 KB / 5.5k 行（README 2506、AUDIT 1022、CHANGELOG 867、AI-GUIDE 540 等）。
+   当前环境**无** `GEMINI_API_KEY` / `GOOGLE_API_KEY`，`graphify label` 需 LLM 后端，全量语义提取会落到 host agent，成本过高。
+   **建议分级**：先只接 `AI-GUIDE.md` + `README.md` §13 两个文件，验证 doc↔code 关联是否够用，再决定是否 `graphify extract . --mode deep` 全量重建。
+   （原拟纳入的 `tokens.json` 因 G-06 的文件名启发式无法进图，暂不列入。）
+2. **G-05 测试脚本归档**：20 个一次性探针下游依赖均为 0，可移入 `test/archive/2026-10/`；
+   但探针内是 `require('./st-review-harness')`（`test/st-review-diag.js` L17 等），移动后须改相对路径，
+   而 `test/st-review-harness.js` 被 14 个脚本依赖，**不可移动**。同步更新本文件「实机测试脚本」表
+   与 `TEST_INFRA.md` 的脚本索引。
+3. **G-06 CSS / 令牌层 [已判定不修]**：`.css` 无提取器、`.graphifyrc` 无法补、`tokens.json` 命中 `tokens` 关键字启发式，
+   证据与替代方案见「已确认-不修」区；本条不再作为待办。
+
+### 明确不做
+
+| 提议 | 否决理由 |
+| :--- | :--- |
+| 把 `nvui-api.js` 拆成多个运行时文件 | 破坏「4 资产整目录复制」契约，连带改 sync / verify / pack / downstream-check / CI 五处 |
+| 把 `createPanel` 拆成多个公开 API | 改导出面，破坏下游插件 |
+| 为性能重写 CSS 动画 | #8 / #9 / #10 / #12 已有实机帧间隔数据证明无可感知收益 |
+| 引入任何 npm 运行时依赖 | 违反零依赖定位；Node 仅测试用 |
+
+### 优先级
+
+`P0-1 图谱去噪`（零仓库改动）→ `P0-3 复杂度冻结`（只加测试）→ `P1-2 隐式耦合映射` →
+`P1-1 内部重组`（最大收益 / 最大风险，必须全套实机回归）→ `P2` 视需要。
+
+### 执行记录（2026-11-13 16:31）
+
+| 项 | 结果 | 验证 |
+| :--- | :--- | :--- |
+| P0-1 图谱去噪 | 完成：900 节点 / 1366 边 / 57 社区，模板残留 0 | `.graphify_build.json` 持久化；`graph.html` 重导出 |
+| P0-3 复杂度冻结 | 完成：`test/test-ui-kit.js` §9.7，上限 1447 行 | `npm test` 368 PASS / 0 FAIL |
+| P1-2 隐式耦合映射 | 完成：`TEST_INFRA.md` §3.1 | 文档校验，测试脚本零改动 |
+| P1-1 分区重组 | **暂缓**：宿主不可达，缺实机基线 | 待 `http://127.0.0.1:8000` 恢复后单独确认 |
+| P2 | 未执行 | 视需要 |
+
+**全套静态验收**：`npm test` 368/368、`npm run test:api` 27 导出冻结通过、
+`npm run test:v280` 静态功能断言通过、`npm run verify:release` 全部通过（含模板 4 资产 MD5）。
+浏览器回归（`test:browser`）与实机脚本因本机 Chrome / ST 宿主环境不可用，未纳入本轮结果。
+
+**改动文件清单**：`ISSUES.md`、`TEST_INFRA.md`、`test/test-ui-kit.js`（新增 1 条断言）、
+`graphify-out/`（已 gitignore：`graph.json`、`.graphify_analysis.json`、`.graphify_build.json`、`graph.html` 及两份重建前备份）。
+运行时资产（`tokens.css` / `components.css` / `nvui-api.js` / `tokens.json`）、模板副本、`package.json` 全部未改动。
+
+### 维护记录（2026-11-16）
+
+| 动作 | 内容 | 依据 |
+| :--- | :--- | :--- |
+| 结项关闭 | `G-02` / `G-04` 移出「待办」，转入「已修复」区的批次结项表，状态记为 `已关闭（2026-11-16）` | 关闭前复验：`.graphify_build.json` 排除生效、模板残留 0；`TEST_INFRA.md` §3.1 在册 |
+| 状态校准 | `G-01` / `G-03` 由「修复中」改为「待办」（`G-03` 同日随后结项关闭） | 规则 4：`修复中` 表示在办；两者分别等宿主恢复、等社区 id 重算决策，均无在办工作 |
+| 表格修复 | 「已修复」表原被 3 处空行截断为 4 段（GFM 在空行处终止表格），合并为单表并按编号升序（1–7、11、13–15、17–22） | 渲染验证：单表 17 行 + 2 行批次结项 |
+| 未变 | 运行时代码、CSS、令牌、测试脚本、`package.json`、模板副本零改动；本批仍不写 CHANGELOG、不升版本号 | 批次约定（见「待办」区说明） |
+| 报告补齐（G-03 关闭） | `graphify cluster-only . --no-label` 生成 `GRAPH_REPORT.md`（10.6 KB）+ 重导出 `graph.html`（665 KB）；`questions` 由 `null` → **7 条** | 先在副本预演再正式执行；社区 id 900/900 不变，「会重算 id」的旧判断被否证 |
+| 判定不修（G-06） | CSS / 令牌层无法进图：`.css` 无提取器、`.graphifyrc` 补不了、`tokens.json` 命中 `tokens` 关键字启发式且无白名单 | 临时目录单文件实测 + `classify_file()` / `_is_sensitive()` 直接取证 |
+| 新登记 G-07 | 语义层（文档进图）与社区可读标签需 LLM 后端，本机无 key，`--no-label` 保留 `Community N` 占位 | 文档 523 KB / 5.5k 行，全量成本高；建议先接两份文档试水 |
+| 实机冒烟（11-16） | 35 条断言覆盖面板骨架 / 焦点 / 持久化 / 吐司 / 宿主模态让位 / Fast UI 回退 / 移动端 / 360×640 / 减弱动效，**34 通过**；未过项为移动端导航项高 26px（设计取舍，非缺陷） | 真实 ST 1.19.0 + Chrome；探针在 `st-lab-out/smoke/`（已 gitignore）。补充两轮深水区 19/19：长内容滚动 + sticky footer、双面板 Esc 只关顶层、4 条吐司堆叠、Fast UI 回退可逆 |
+| 修复焦点陷阱（#23） | `trapTabFocus()` 模块级化；`test/issue-13-14-focus-escape.spec.js` 新增 T1b；模板已同步 | 修复前复现「Tab1 → `body.drop_target`」；修复后 spec 15/15、静态 368/368 |
+| 测试归档（G-05） | 7 个零引用探针 → `test/archive/2026-10/`，补目录 README | 全文索引确认仅 7 个 0 引用；`node --check` 全通过；`test/` 根脚本 50 → 43 |
+| GitHub 维护（11-16） | 建 GH-#20（焦点陷阱，对应本地 `#23`）/ GH-#21（3 条 UX 观察）；GH-#17 勾选与进度段按实测刷新（A1–A3 未开始、A4/A5 部分）；补建 `ROADMAP.md` 修掉三个 open issue 的死链 | `gh issue list/view` 逐条核对；本地 `#N` 与 GitHub 编号是两套序列，已加映射约定 |

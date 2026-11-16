@@ -21,3 +21,6 @@ st-extension-template/ui-kit/.sync-manifest.json
 
 # 发布计划仅本地保管，不入库
 RELEASE_PLAN_*.md
+
+# Graphify 知识图谱产物（本地生成，不入库）
+graphify-out/
