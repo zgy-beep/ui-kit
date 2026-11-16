@@ -1,12 +1,25 @@
-# UPGRADING · v2.8.2
+# UPGRADING · v2.8.3
 
-本文件是**常青升级指南**：当前版本是 v2.8.2。历史大版本差异见 [MIGRATION-v2.md](MIGRATION-v2.md)。
+本文件是**常青升级指南**：当前版本是 v2.8.3。历史大版本差异见 [MIGRATION-v2.md](MIGRATION-v2.md)。
+
+## 2.8.2 → 2.8.3
+
+v2.8.3 是 **PATCH，且只动测试与工程脚本**：探针归档进 `test/probe/`、`issue-16` 尺寸语义矩阵补到 12 项、
+`playwright-core` 进 devDependencies 并统一依赖解析、新增 `npm run verify:all` 一键门禁。
+公开 API / 组件类 / token 取值 / DOM 契约 / `nvui_state_v1` 状态格式 / 运行语义**全部不变**。
+
+- **4 个资产只有版本号变化**（文件头注释与 `--nvui-kit-version`），运行代码零改动 ——
+  不覆盖资产也能继续用；需要版本号自检（`NVUI.selfCheck()`）的插件再同步覆盖即可。
+- **不需要改任何调用代码**，也不涉及存储迁移；v2.8.2 的焦点陷阱修正与 40px 触控照常生效。
+- **下游可选的验证动作**：新机器 `npm i && npm run test:browser` 应一次通过（`playwright-core` 已是
+  devDependency，缺包/缺 Chrome 会打印可执行修复命令）；发布前可只跑 `npm run verify:all`
+  （无 Chrome 时浏览器段自动跳过，退出码仍为 0）。
 
 ## 2.8.1 → 2.8.2
 
 v2.8.2 是 **PATCH**：无公开 API、类名、token 取值或 `nvui_state_v1` 状态格式变化，覆盖 4 资产即可。
 v2.8.1 的 `persist.size: false` 修复（#16）语义原样保留：重构只是把实现搬进 `createPersistence(ctx)`，
-`test/issue-16-persist-size.js` 8/8 仍绿。
+`test/issue-16-persist-size.js` 12/12 仍绿。
 
 - **焦点陷阱修正**：`tabindex="-1"` 的未激活 tab 不再计入可 Tab 项，纯文本面板按 Tab 不会逃出模态（GH-#20）。
 - **触控尺寸（视觉变化）**：移动端底部导航项 `min-height: 40px`（原 26px），抽屉整体 +14px（GH-#21）。
@@ -75,7 +88,7 @@ tokens.json
 ### 2. 版本自检
 
 ```js
-const r = NVUI.selfCheck({ expect: '2.8.1' });
+const r = NVUI.selfCheck({ expect: '2.8.3' });
 if (!r.ok) console.warn('[my-plugin] ui-kit', r.issues);
 ```
 
@@ -119,8 +132,8 @@ panel.getGlassState();
 
 ### 6. 验收清单
 
-1. 4 资产同版本；`NVUI.version === '2.8.1'`；
-2. `NVUI.selfCheck({ expect: '2.8.1' })` 无 `version-mismatch` / `css-not-loaded`；
+1. 4 资产同版本；`NVUI.version === '2.8.3'`；
+2. `NVUI.selfCheck({ expect: '2.8.3' })` 无 `version-mismatch` / `css-not-loaded`；
 3. `node ui-kit/test/downstream-check.js` exit 0；
 4. 面板/弹窗/吐司/折叠/表单冒烟，零 pageerror；
 5. 检查相邻按钮间距、`.nvui-actions`、玻璃 auto/force/solid 三态；

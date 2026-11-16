@@ -6,6 +6,35 @@
 - 新增组件 / 新增 token（不破坏既有 DOM 与取值）：小版本（2.x.0）
 - 重命名类 / token、删除 token、修改 DOM 契约：大版本（x.0.0）
 
+## v2.8.3（2026-11-16）· 测试基建收尾：探针归档 / 尺寸矩阵 / 依赖解析 / 一键门禁（PATCH）
+
+> 补丁版本，且**运行语义零变化**：token（111/47）、组件类（81）、关键帧（16）、`!important`（18）、
+> 公开 API、DOM 契约与 `nvui_state_v1` 状态格式均未改动；4 个资产仅文件头与 `--nvui-kit-version` 的版本号同步。
+> 下游**不覆盖资产也能用**，改动集中在 `test/` 与 `scripts/`。
+
+- 测试目录收敛：30 个零门禁引用的历史实机脚本与一次性探针从 `test/` 根目录移入 `test/probe/`，根目录只剩可回归入口；
+  新增 [`test/probe/README.md`](test/probe/README.md)（30 条清单 + 是否依赖宿主 lab 扩展 + 结论索引），
+  5 个脚本的 `__dirname` 上级解析改为 `'..', '..'`；`test/README.md` §4、`TEST_INFRA.md` §3.1、`ISSUES.md` 脚本表
+  43 处路径与 `test/test-ui-kit.js` 两条存在性断言同步。
+- 尺寸语义矩阵：`test/issue-16-persist-size.js` 8 → **12** 项。新增 T9（三项全关：存档 fingerprint 不变、不写内联尺寸）、
+  T10（`persist: true` 恢复并回写）、T11（`persist: {}` 等价全开）、T12（异步 StorageAdapter 下 `size: null` 落盘、
+  tab/accordion 保留，覆盖 `bootstrap` 的 promise 分支与 `set` 的 catch 分支）；错误面断言移到末尾重编号 T13。
+  变异验证：把 `anyPersistEnabled()` 改成 `!!persistConfig` 时 T9 立刻变红。
+- 依赖解析统一：新增 [`scripts/resolve-browser.js`](scripts/resolve-browser.js) ——
+  `PLAYWRIGHT_MODULE_PATH` → 本地 `require` → `NODE_PATH` → 本机兜底；Chrome 走 `ST_CHROME` / `CHROME_PATH` /
+  `NVUI_CHROME` → 各平台默认路径；缺环境时打印**可执行修复命令**并以退出码 2 结束。
+  `playwright-core@^1.64.0` 进 `devDependencies`（补 `package-lock.json`），11 个脚本改为共用解析器。
+  **运行时仍零依赖**：4 个发布资产不含任何 `require`。新机器 `npm i && npm run test:browser` 一次通过。
+- 一键门禁：新增 `scripts/verify-all.js`（`npm run verify:all`）。9 步 = `test` → `test:api` → `test:v280` →
+  `downstream:check` → `verify:release` → `pack` + **产物校验**（zip 魔数/体积、`SHA256SUMS` 逐条哈希比对、
+  `manifest.version` 对齐）→ `test:browser` → `test:stress` → `test:e2e`。无 Chrome / 无 `playwright-core` 时
+  后三段 SKIP 且退出码 0；支持 `--no-browser`、`--only=`、`--list`；CI 静态 job 改为单条命令。
+- 验证：`npm test` 370/0；`test:api` 27 导出；`issue-16` 12/12；浏览器 455 + 18 + 217 + 15 + 12；
+  `test:stress` 19 + 15；`test:e2e` 58/58；真实宿主 `test:host` 35/35 + 19/19；`verify:all` 9/9；
+  `verify:release` 20 项 + `--self-test` 3/3。
+- 关联：GitHub [GH-#17](https://github.com/zgy-beep/ui-kit/issues/17)（线路 A）的 A1–A4 随本版交付（A5 已在 v2.8.2 交付），
+  线路 A 到达出口。GH-#21 的另两条（进度条可视标签、滚动边缘渐隐）属 additive 能力，转入 v2.9.0。
+
 ## v2.8.2（2026-11-16）· 焦点陷阱修正 + 触控尺寸 + 测试基线（PATCH）
 
 - 修复：`createPanel()` 的焦点陷阱把 `tabindex="-1"` 的未激活 tab 也算作可 Tab 项，导致纯文本面板从激活 tab 按一次 Tab 时误判「后面还有下一站」而放行默认 Tab，焦点直接逃到宿主页面（违反 `aria-modal` 契约）。现仅统计原生 Tab 序列内的节点，并对「焦点落在 `tabindex=-1` 节点」按 DOM 顺序兜底；`Tab / Shift+Tab` 逻辑抽到模块级 `trapTabFocus()`，`createPanel()` 行数维持复杂度冻结上限内。

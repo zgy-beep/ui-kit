@@ -1,6 +1,6 @@
 # SillyTavern 插件 UI Kit · Flat Glass 设计规范
 
-> 版本：**v2.8.2**（2026-11-16）· 设计语言 **Flat Glass（扁平玻璃）** · 零依赖 · 可整目录复用
+> 版本：**v2.8.3**（2026-11-16）· 设计语言 **Flat Glass（扁平玻璃）** · 零依赖 · 可整目录复用
 
 给 SillyTavern 插件用的自包含浮动 UI 设计系统：两个 CSS 文件接入即可获得一致的弹窗、面板、表单、反馈与动效；需要时再加一个零依赖 JS API 生成符合规范的 DOM。**样式层没有运行时；`nvui-api.js` 是可选增强。**
 
@@ -77,7 +77,7 @@
 | [`CHANGELOG.md`](CHANGELOG.md) | 变更记录与版本时间线（**历史事实的唯一来源**） |
 | [`MAINTAINING.md`](MAINTAINING.md) | 维护流程规范：提交时机与信息格式、版本三态与升位判定、GitHub issue 关闭判据、每轮 DoD |
 | [`AUDIT.md`](AUDIT.md) | 架构审核报告：v1.1.0 评估、v2.0.0/v2.0.1 复核与问题清单 |
-| [`ROADMAP.md`](ROADMAP.md) | 下一阶段计划：v2.8.2 / v2.9.0 / v3.0.0 的任务拆解、验收标准、风险与待拍板项（追踪：GitHub issue #17 / #18 / #19） |
+| [`ROADMAP.md`](ROADMAP.md) | 下一阶段计划：v2.8.3 / v2.9.0 / v3.0.0 的任务拆解、验收标准、风险与待拍板项（追踪：GitHub issue #17 / #18 / #19） |
 | [`ISSUES.md`](ISSUES.md) | 缺陷与审查项的本地追踪表：复现证据、修复点、实机数据（与 GitHub Issues 双向对应） |
 | [`package.json`](package.json) | 项目元信息与 `npm test` / `test:browser` / `test:e2e` 入口 |
 | [`LICENSE`](LICENSE) | MIT 许可 |
@@ -234,11 +234,11 @@ API 生成的 DOM 自动符合 [§12](#12-sillytavern-插件面板布局标准�
 
 ```html
 <!-- 设计令牌与组件样式 -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.8.2/tokens.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.8.2/components.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.8.3/tokens.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.8.3/components.css">
 
 <!-- 可选运行时 API -->
-<script src="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.8.2/nvui-api.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.8.3/nvui-api.js"></script>
 ```
 
 > 三份资源必须锁定**同一个 tag**，避免令牌、样式与运行时版本漂移；CDN 缓存刷新可能略晚于 tag 推送。
@@ -251,7 +251,7 @@ API 生成的 DOM 自动符合 [§12](#12-sillytavern-插件面板布局标准�
 async function ensureNVUI() {
     const W = window.parent || window, D = W.document;
     if (W.NVUI) return W.NVUI;
-    const CDN = 'https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.8.2'; // 三份资源锁同一 tag
+    const CDN = 'https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.8.3'; // 三份资源锁同一 tag
 
     // v2.7.2：先等 CSS 就绪再初始化，否则玻璃探测会在 CSS 缺席时误判为「不支持模糊」
     const loadCss = (id, href) => new Promise((resolve, reject) => {
@@ -967,7 +967,7 @@ head.addEventListener('click', () => {
 | 令牌 | 值 | 用途 |
 | :--- | :--- | :--- |
 | `--nvui-z-layer` | `1000000` | 载体档：`dialog.nvui-tl` 自身（非模态 `show()` 不进 top layer，档位必须显式给） |
-| `--nvui-kit-version` | `"2.8.2"` | v2.8.0 起：纯 CSS 下游可读的 kit 版本（与 `package.json` / `NVUI.version` 一致） |
+| `--nvui-kit-version` | `"2.8.3"` | v2.8.0 起：纯 CSS 下游可读的 kit 版本（与 `package.json` / `NVUI.version` 一致） |
 | `--nvui-z-floating` | `1000010` | 悬浮入口与悬浮面板 |
 | `--nvui-z-overlay` | `1000020` | 子浮层：遮罩与弹窗层 |
 | `--nvui-z-tooltip` | `1000030` | 工具提示；吐司载体也取此档 |
@@ -1784,9 +1784,9 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 
 **升级动作**：覆盖 CSS 与 `nvui-api.js`（新 API 全部为增量，旧代码无需修改）；宿主用 `showModal()` 时 kit 自动让位，业务无需改动；运行 `npm test`。
 
-### 10.10 v2.4.0 → v2.8.2 升级速查
+### 10.10 v2.4.0 → v2.8.3 升级速查
 
-从 v2.4.0 及更早版本升到当前 v2.8.2，按版本顺序做这几件事即可（**全部为小版本/补丁，覆盖文件即可，无破坏性变更**）。完整步骤见 [UPGRADING.md](UPGRADING.md)，历史版本差异见 [MIGRATION-v2.md](MIGRATION-v2.md)。
+从 v2.4.0 及更早版本升到当前 v2.8.3，按版本顺序做这几件事即可（**全部为小版本/补丁，覆盖文件即可，无破坏性变更**）。完整步骤见 [UPGRADING.md](UPGRADING.md)，历史版本差异见 [MIGRATION-v2.md](MIGRATION-v2.md)。
 
 | 版本 | 类型 | 你需要做什么 |
 | :--- | :--- | :--- |
@@ -1798,6 +1798,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 | v2.8.0 | 小版本 | 覆盖 4 资产；新增 `--nvui-kit-version`、`selfCheck` / `defaults`、`.nvui-actions`、`createPanel({ glass })` 与控制器 `setGlassMode/getGlassState`；相邻按钮 8px 默认间距。可选接入，见 [UPGRADING.md](UPGRADING.md)。 |
 | v2.8.1 | 补丁 | 覆盖 4 资产即可，无需改调用：修 GitHub #16 —— `persist: { size: false }` 现在真的「完全不参与尺寸持久化」（不再把历史 px 高度写回内联样式，并主动清理 `size: null`）；`persist.size: true` 行为不变。 |
 | v2.8.2 | 补丁 | 覆盖 4 资产；焦点陷阱修正（GH-#20）、移动端导航 40px 触控（GH-#21）、`test/host/` 实机基线入库；`createPanel` 七步拆分（1433 → 531 行，无行为变更）。v2.8.1 的 `persist.size: false` 语义保持不变。 |
+| v2.8.3 | 补丁 | **无需改动**：只有测试与工程脚本变化（探针归档 `test/probe/`、`issue-16` 尺寸矩阵 8 → 12 项、`playwright-core` 进 devDependencies、新增 `npm run verify:all`）。4 资产仅版本号注释同步，运行语义零变化。 |
 
 **高频 FAQ**
 
@@ -1852,6 +1853,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 
 | 版本 | 日期 | 类型 | 一句话摘要 |
 | :--- | :--- | :--- | :--- |
+| v2.8.3 | 2026-11-16 | 补丁 | 测试基建收尾：30 个探针归档 `test/probe/`；`issue-16` 尺寸矩阵 8 → 12 项；`playwright-core` 进 devDependencies + 统一解析（`scripts/resolve-browser.js`）；新增 `npm run verify:all`（9 步 + 产物校验） |
 | v2.8.2 | 2026-11-16 | 补丁 | 焦点陷阱尾项修正（GH-#20）；移动端底部导航 `min-height: 40px`（GH-#21）；宿主实机基线入库 `test/host/`；`createPanel` 七步拆分 1433 → 531 行 |
 | v2.8.1 | 2026-11-05 | 补丁 | 修 GitHub #16：`persist.size: false` 彻底退出尺寸持久化（旧 `size` 存档不再写回内联高度，落盘主动清成 `null`）；新增 `test/issue-16-persist-size.js` |
 | v2.8.0 | 2026-10-26 | 小版本 | 下游 DX：版本 token / selfCheck / defaults / `.nvui-actions` / 相邻按钮 8px / `glass: auto / force / solid`；token 111、组件类 81、`!important` 18 |
@@ -2186,7 +2188,7 @@ function setupPanelNav(panelEl, controller) {
 ```js
 // Node（测试 / 构建期静态生成；不触发 DOM）
 const NVUI = require('./nvui-api.js');
-console.log(NVUI.version);            // 与 package.json 一致（当前 2.8.2）
+console.log(NVUI.version);            // 与 package.json 一致（当前 2.8.3）
 console.log(typeof NVUI.createPanel); // 'function'
 ```
 
@@ -2295,7 +2297,7 @@ panel.open();
 ```json
 {
   "name": "sillytavern-nvui-kit-tokens",
-  "version": "2.8.2",
+  "version": "2.8.3",
   "description": "SillyTavern UI Kit 设计令牌机器可读镜像（由 tokens.css 生成，勿手改）。dark = 深色默认，light = .nvui-theme-light 覆盖。",
   "generatedFrom": "tokens.css",
   "dark": { "--nvui-bg": "#161a24", "--nvui-accent": "#8b6dff", "...": "共 111 个令牌" },

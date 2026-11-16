@@ -31,7 +31,7 @@
 
 | 里程碑 | 追踪 | 窗口 | 出口指标 | 主要风险 |
 | :--- | :--- | :--- | :--- | :--- |
-| **v2.8.2** 工程化收尾 | [#17](https://github.com/zgy-beep/ui-kit/issues/17) | 2026-11-06 → 11-14 | `npm run verify:all` 一次通过；新机器 `npm i` 后浏览器套件可复跑；零行为变更 | 目录搬动（A4）会打断下游脚本路径引用 |
+| **v2.8.2 / v2.8.3** 工程化收尾 | [#17](https://github.com/zgy-beep/ui-kit/issues/17) | 2026-11-06 → 11-16 | `npm run verify:all` 一次通过；新机器 `npm i` 后浏览器套件可复跑；零行为变更 | 目录搬动（A4）会打断下游脚本路径引用 |
 | **v2.9.0** 下游可维护性 | [#18](https://github.com/zgy-beep/ui-kit/issues/18) | 2026-11-15 → 12-04 | 6 项 additive 能力 + 双绿断言 + 文档与 API 表同步 | B3 枚举语义与 B1 状态读写互相影响，必须先定语义 |
 | **v3.0.0** 尺寸与命名重构 | [#19](https://github.com/zgy-beep/ui-kit/issues/19) | 2026-12-05 → 2027-01-14 | 迁移器测试通过；旧类 alias 一版；`MIGRATION-v3.md` + 下游公告 | 停写内联 px 会打断读 `panel.style.*` 的下游 |
 
@@ -45,15 +45,15 @@
 
 | # | 任务 | 动作 | 验收 | 估时 |
 | :--- | :--- | :--- | :--- | :--- |
-| A1 | 尺寸语义矩阵 | `test/issue-16-persist-size.js` 增 T9~T12：`{size:false,tab:false,accordion:false}` / `persist:true` / `persist:{}` / 异步 StorageAdapter | 12/12 绿；异步 adapter 下 `size:null` 落盘 | 0.5d |
-| A2 | 浏览器套件免 NODE_PATH | `playwright-core` 进 `devDependencies`；新增 `scripts/resolve-browser.js`，缺包/缺 Chrome 输出**可执行修复命令** | 新机器 `npm i && npm run test:browser` 一次通过 | 0.5d |
-| A3 | 一键门禁 | 新增 `scripts/verify-all.js`：静态 4 项 → `verify:release` → `pack` 产物校验 →（有 Chrome 时）浏览器段 | 本机全绿；CI 自动跳过浏览器段且不报错 | 0.5d |
-| A4 | 测试目录收敛 | 按「回归 / 宿主实机 / 一次性探针」分到 `test/host/`、`test/probe/`，新增 `test/README.md` 索引；探针结论留在 `ISSUES.md` | `test/*.js` 顶层只剩可回归脚本；README §13 同步。**状态：v2.8.2 已交付 `test/host/` + `test/README.md`；`test/probe/` 待做** | 1d |
+| A1 | 尺寸语义矩阵 | `test/issue-16-persist-size.js` 增 T9~T12：`{size:false,tab:false,accordion:false}` / `persist:true` / `persist:{}` / 异步 StorageAdapter | 12/12 绿；异步 adapter 下 `size:null` 落盘。**状态：v2.8.3 已交付（12/12，错误面断言移到末尾为 T13）** | 0.5d |
+| A2 | 浏览器套件免 NODE_PATH | `playwright-core` 进 `devDependencies`；新增 `scripts/resolve-browser.js`，缺包/缺 Chrome 输出**可执行修复命令** | 新机器 `npm i && npm run test:browser` 一次通过。**状态：v2.8.3 已交付（未设 `NODE_PATH` 实测 5 套全绿）** | 0.5d |
+| A3 | 一键门禁 | 新增 `scripts/verify-all.js`：静态 4 项 → `verify:release` → `pack` 产物校验 →（有 Chrome 时）浏览器段 | 本机全绿；CI 自动跳过浏览器段且不报错。**状态：v2.8.3 已交付（9/9；`--no-browser` 6 通过 3 跳过）** | 0.5d |
+| A4 | 测试目录收敛 | 按「回归 / 宿主实机 / 一次性探针」分到 `test/host/`、`test/probe/`，新增 `test/README.md` 索引；探针结论留在 `ISSUES.md` | `test/*.js` 顶层只剩可回归脚本；README §13 同步。**状态：v2.8.2 交付 `test/host/` + `test/README.md`；v2.8.3 交付 `test/probe/`（30 个脚本 + 索引）—— 本条完成** | 1d |
 | A5 | 版本一致性门禁 | `verify-release.js` 增加「CHANGELOG 首条 == `package.json.version`」「README §11.4 时间线含当前版本行」 | 故意写错版本号 → `verify:release` 必红。**状态：v2.8.2 已交付，`--self-test` 反向 3/3** | 0.5d |
 
 **出口**：`npm run verify:all` 绿 + CI 绿 + 4 资产 md5 一致 + 下游零改动（无 API / 样式 / 状态格式变化）。
 
-> **2026-11-16 实际发布**：v2.8.2 先以补丁形式发出（焦点陷阱 / 40px 触控 / 宿主实机基线 / `createPanel` 七步拆分），交付了 A5 与 A4 的 `test/host/` + `test/README.md` 部分。A1–A3 与 A4 剩余的 `test/probe/` 收敛转入 **v2.8.3**，本线路尚未到出口。
+> **2026-11-16 实际发布（两批）**：v2.8.2 以补丁形式发出（焦点陷阱 / 40px 触控 / 宿主实机基线 / `createPanel` 七步拆分），交付 A5 与 A4 的 `test/host/` + `test/README.md`；同日 v2.8.3 交付 A1（尺寸矩阵 12 项）、A2（`playwright-core` + `scripts/resolve-browser.js`）、A3（`npm run verify:all`）与 A4 剩余的 `test/probe/` 收敛。**线路 A 到达出口**。
 
 ---
 

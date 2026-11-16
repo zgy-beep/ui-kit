@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * v2.8.2 pack.js — 生成发布物：
+ * v2.8.3 pack.js — 生成发布物：
  *   dist/ui-kit-<version>.zip
  *   dist/SHA256SUMS
  *   dist/manifest.json
