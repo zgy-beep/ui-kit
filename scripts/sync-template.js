@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * v2.8.3 sync-template.js
+ * v2.9.0 sync-template.js
  * 只做一件事：把根目录 4 个运行资产同步到 st-extension-template/ui-kit/，并打印逐文件 md5。
  * 不读写 README/AUDIT 等文档，避免把「模板同步」变成隐藏的文档改写。
  */

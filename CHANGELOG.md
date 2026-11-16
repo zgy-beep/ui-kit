@@ -6,6 +6,127 @@
 - 新增组件 / 新增 token（不破坏既有 DOM 与取值）：小版本（2.x.0）
 - 重命名类 / token、删除 token、修改 DOM 契约：大版本（x.0.0）
 
+## v2.9.0（2026-11-16）· 布局可搬运 + 尺寸三态 + 运行时可诊断 + 主题/尺寸/表单三项交互（MINOR）
+
+> 小版本，**全部为 opt-in 增量**：不传新参数的既有调用行为、DOM 结构、`nvui_state_v1` 状态格式、
+> token 取值（111 / 47）与 `!important`（18）**全部不变**；关键帧仍 16。新增 **3 个组件类**（81 → 84）
+> 与 **1 个顶层导出**（27 → 28），均只允许新增。线路 B（GitHub [GH-#18](https://github.com/zgy-beep/ui-kit/issues/18)）
+> B1–B6 六项 + GH-#21 剩余两条随本版交付。
+
+### 布局可搬运（B1 / B3）
+
+- **`panel.getLayoutState()`**：返回 `{ version, size, tab, accordion }` 的**游离副本**。
+  刻意不含 `timestamp` —— 那是存储记录的元数据，带上会让两次 `get` 天然不相等、往返比对必然失败；
+  深拷贝同时挡住「下游改了返回值 → 下一次 flush 把脏数据写进存储」这条暗坑。
+  此前下游要导出布局只能反解 `nvui_state_<id>` 的存储结构，而那个结构随时可能随版本变化。
+- **`panel.setLayoutState(state, { silent })`**：只写内存 + 调度一次落盘，**不**调 `applyLoadedState` ——
+  导入是数据操作，不该让面板当场跳尺寸换标签，真正生效在下一次 `open()`。未提供的键落回当前 DOM 事实，
+  显式 `null` 视为清空；`silent: true` 只动内存不写存储；连续多次 set 合并成一次落盘（250ms 防抖），
+  `clearLayoutState()` 顺带作废待落盘的导入值。
+- **关掉的维度一律写 `null`**：`persist: { size: false }` 的面板被导入时不会绕过 v2.8.1 的尺寸隔离
+  （否则旧 px 高度又能复活）。内部把 `flushPersistSave()` 里的 DOM 反解抽成 `collectState()`，flush 与 get 共用。
+- **`persist.size: 'width-only'`**：三态 `true` 全量 / `false` 关闭 / `'width-only'` 只记宽。
+  「定宽 + 高度自适应」是下游高频诉求（#16 正是它的误用形态），此前想只记宽只能关掉整个尺寸持久化。
+  `collectState()` 在 width-only 下 `height` 恒 `null` 且不记 `isMaximized`（最大化本质是二维状态，
+  记下来必然要回写 calc 高度）；`applyClamping()` 的 `useSavedSize` 拆成 `useSavedW` / `useSavedH`
+  两个门禁 —— 只拦**存档尺寸**，内联 px（`setSize` / `opts.width` / 最大化）仍照常参与钳制；
+  `applyLoadedState()` 只回写宽，下游 `height: var(--nvui-panel-max-h)` / `94vh` 得以生效。
+  非法字符串按 `true` 处理并告警，避免手滑写成 `'widthOnly'` 就静默丢尺寸。
+- 新增模块级 `sizeMode()`（`off` / `width-only` / `full`）供诊断与后续判读。
+
+### 运行时可诊断（B2）
+
+- **`NVUI.diagnostics()`**：返回 8 个字段 —— `status` / `version` / `assets` / `glass` / `hostModals` /
+  `escapeStackDepth` / `persistKeys` / `listenerCounts`。**纯只读**（不建 DOM、不改类名、不写存储、
+  不触发玻璃重探），任何一段失败都退化成 `null` / 空值 —— 诊断工具本身不该成为新的故障源。
+  #16 的排查报告里最贵的一步是「你装的是哪版、状态里到底有什么」，此前只能让下游逐个执行
+  `selfCheck` / `getCarrierState` 再把结果拼起来。
+- `assets` 用 `--nvui-kit-version` 读 `tokens.css`、用 `styleSheets` 里是否存在 `.nvui-panel` 规则判
+  `components.css`；**md5 运行时算不出来**（只在发布产物 `manifest.json` 里），保留键位固定 `null`，
+  避免下游读不到键时报错。无 DOM 环境（Node / SSR）返回 `{ status: 'no-dom', version, assets: null }`。
+- 为让 `listenerCounts` 可信，`on()` / `off()` 增加活体计数，并把 **12 处直连
+  `addEventListener` / `removeEventListener` 全部改为走这对助手**。只统计**长寿命目标**
+  （window / document / documentElement / body / MediaQueryList）：实测把面板按钮的 `click`
+  也算进来会让计数只增不减，反而掩盖真泄漏（D6 实测销毁后 `resize` / `scroll` / `change` / `keydown` 全部回落基线）。
+
+### 主题跟随（B6）
+
+- **`setTheme('auto')`**：双信号取并集 —— 系统偏好浅色（`matchMedia('(prefers-color-scheme: light)')`）
+  **或** 切到 auto 时宿主已有的 `.nvui-theme-light`（宿主浅色皮肤）→ 浅色；任一成立都不该继续给深色面板。
+  下游此前普遍在写同一套胶水，现在收进 kit。
+- `matchMedia` 的 `change` 里同步切类 + `invalidateTokenCache()`，实测「`change` 事件到达后注册的监听
+  时类名已更新」，即同一事件内生效。显式 `'light'` / `'dark'` 会摘掉 auto 的监听（主权交回调用方）。
+- **刻意不做 `MutationObserver`**：我们写的就是同一个类名，观察它只会把自己的写入当成宿主意图
+  （会抖振成「保住浅色 → 自己触发 → 立刻改回深色」）；宿主信号改为切到 auto 的那一刻采样一次，
+  且采样时**排除本模块自己写的那个类**，否则 `setTheme('light')` 之后切 auto 会把上次的显式选择
+  误判成宿主皮肤，深色系统下回不到深色。无 `matchMedia` 时告警并回退 `dark`（不静默）。
+
+### 面板调尺寸（B4）
+
+- **`createPanel({ resizable: true })`**，默认关闭（既有面板视觉零变化）。手柄 `.nvui-resize` 挂在面板
+  右下角：`role="separator"` + `aria-orientation` + `aria-valuenow/valuemin/valuemax/valuetext` +
+  `tabindex="0"`。此前尺寸只有 `setSize()` / `setMaximized()` 两个程序入口 —— 鼠标拖不了、键盘更够不着，
+  「记忆尺寸」对键盘用户等于不存在。
+- **指针**：Pointer Events + `setPointerCapture`，鼠标 / 触屏 / 触控笔同一条路径，`touch-action: none`
+  防止拖拽被当成滚动。**键盘**：方向键 ±8px、Shift ±32px、`Home` 复位到默认宽 + 高度交回 CSS，
+  `preventDefault` + `stopPropagation` 不让方向键滚走页面。焦点环只消费 `--nvui-focus-ring-*` 令牌。
+- 所有写入都是「先落内联 px，再交回 `persist.applyClamping()`」：视口钳制、移动端清空内联尺寸、
+  尺寸持久化（含 width-only）全部沿用原语义，**手柄自己不算边界**。
+- aria 数值改成「焦点到手 / 每次写入」同步：面板创建时还在 dialog 里没显示，`offsetWidth` 为 0，
+  写上去只会是 `0 × 0` 的假信息（也没挂 `ResizeObserver` —— 观察一个尚未进文档的节点不可靠）。
+- **已知边界**：高度受 CSS `max-height: 88vh` 约束，往上长会被裁回来，手柄实际只能在可收缩区间内调高度 ——
+  这是面板「固定外框」的既有设计，不是手柄缺陷。
+
+### 表单（B5）
+
+- **`inputRow` 的 `type: 'textarea'` 伪类型**：DOM 是 `<textarea>`，意图走 `data-nvui-type`
+  （与既有的 `'path'` 伪类型同一套路：**不覆盖 `input.type` 的 IDL 访问器**，否则序列化 / `cloneNode` /
+  表单提交与 JS 读数会出现双真值）。新增 `rows`（默认 3）与 `.is-textarea`（可纵向拉伸，不横向）。
+  14 种原生 input 类型里没有多行文本，这个缺口一直在这里。
+- **`hint` / `error`**：各自一个独立消息节点并写进 `aria-describedby`；`error` 额外给
+  `aria-invalid="true"` 与行级 `is-error`。两者同时给时**各自一个 id**，并列写进 `aria-describedby`
+  （共用 id 会让读屏把两段读成一串，调试也分不清）。消息 id 用「序号 + `uniqueId`」：同一批次创建
+  多个输入行时 `uniqueId` 还看不到未入文档的节点，只靠它会撞 id。
+- `onChange` 契约不变：`textarea` 回传字符串（保留换行），`number` 仍回传数字。
+
+### 上一批 UX 观察（GH-#21 剩余两条）
+
+- **`progress({ showLabel, showValue })`**：默认关闭，关闭时返回值仍是 `.nvui-progress`（既有调用零变化）；
+  开启时返回新容器 `.nvui-progress-field`（内含轨道），容器同样带 `setValue()`，轨道在 `container.track`。
+  可视标题/数值带 `aria-hidden="true"` —— 语义仍由轨道的 `role="progressbar"` + `aria-valuenow` 承担，
+  避免读屏把同一进度播报两遍；不确定进度即使传 `showValue` 也不渲染数值（不编数字）。
+- **面板 body 滚动边缘渐隐**：选 `mask-image` 而非内阴影 —— 内阴影在滚动容器上会随内容一起被滚走，
+  只能靠伪元素覆盖，而覆盖层的 `pointer-events` 与 sticky footer 都要额外处理；mask 只影响绘制、
+  不参与命中测试。渐隐方向按滚动位置动态决定（`data-nvui-fade` = `top` / `bottom` / `both`），
+  避免「已到顶/到底还在渐隐」的假提示；JS 只打属性不写内联样式。监听 `scroll`（passive + rAF 合并）
+  + `ResizeObserver`（observe body 与各 pane，覆盖打开、切 tab、追加内容三种尺寸变化），
+  `destroy` 时 disconnect。尺寸复用 `--nvui-space-4`，不新增 token；下游
+  `[data-nvui-fade] { mask-image: none }` 可关。
+
+### 工程
+
+- `createPanel` 行数门禁**未放宽**，仍 531：B4 接入手柄时把 `var disposed / var acc` 合并成一行声明，
+  B1 接入两个控制器方法时删掉顶部一份重复的 `syncGlassFallback()`（同一函数同一语义被调了两次），
+  GH-#21 渐隐接入时删掉一处重复的 `panes = new Map()`。
+- 三条源码形态断言随之放宽但语义未变：`close` 监听与 Esc 单例注销改为「`on/off` 与裸
+  `addEventListener` 两种写法都算」；document 级 `keydown` 的反向断言**不能用负向前瞻**
+  （`\s*` 会回溯到零空格让断言永远成立），改成抓处理函数名再逐个比对。
+- 新增 6 个浏览器回归 spec：`v290-layout-state` 10 / `v290-width-only` 9 / `v290-diagnostics` 8 /
+  `v290-theme-auto` 10 / `v290-resize` 11 / `v290-inputrow` 8，并各自注册单跑入口。
+  关键项做过**变异测试**验证红测能力：get 不克隆 → L3 红；`useSavedH` 与 `useSavedW` 同源 → W1 红；
+  去掉 `hostLightSignal` → A4 红。
+
+### 验证
+
+`npm test` 370/0；`test:api` **28 导出**冻结通过；`verify:release` 20 项 + `--self-test` 3/3；
+浏览器 **455 + 18 + 217 + 15 + 12 + 11 + 10 + 9 + 8 + 10 + 11 + 8**；
+`test:stress` 19 + 15；`test:e2e` 58/0；真实宿主 `test:host` 35/35 + 19/19；`npm run verify:all` 9/9。
+
+### 关联
+
+GitHub [GH-#18](https://github.com/zgy-beep/ui-kit/issues/18) 线路 B 的 B1–B6 随本版交付；
+GH-#21 的三条 UX 观察全部落地（焦点/触控在 v2.8.2，进度标签与边缘渐隐在本版）。
+
 ## v2.8.3（2026-11-16）· 测试基建收尾：探针归档 / 尺寸矩阵 / 依赖解析 / 一键门禁（PATCH）
 
 > 补丁版本，且**运行语义零变化**：token（111/47）、组件类（81）、关键帧（16）、`!important`（18）、

@@ -1,6 +1,51 @@
-# UPGRADING · v2.8.3
+# UPGRADING · v2.9.0
 
-本文件是**常青升级指南**：当前版本是 v2.8.3。历史大版本差异见 [MIGRATION-v2.md](MIGRATION-v2.md)。
+本文件是**常青升级指南**：当前版本是 v2.9.0。历史大版本差异见 [MIGRATION-v2.md](MIGRATION-v2.md)。
+
+## 2.8.3 → 2.9.0
+
+v2.9.0 是 **MINOR**：**全部为 opt-in 增量**，不传新参数的既有调用行为、DOM 结构、`nvui_state_v1`
+状态格式、token 取值（111 / 47）与 `!important`（18）全部不变。覆盖 4 资产即可，**不改任何调用代码也能升**。
+
+- **组件类 81 → 84**（+`.nvui-progress-field` / `.nvui-resize` / `.nvui-input-msg`），新增均只增不删；
+- **顶层导出 27 → 28**（+`diagnostics`），冻结面只允许新增；
+- 控制器新增 `getLayoutState()` / `setLayoutState()`；`createPanel` 新增可选 `resizable`；
+  `inputRow` 新增 `textarea` 伪类型与 `rows` / `hint` / `error`；`progress` 新增 `showLabel` / `showValue`；
+  `setTheme` 新增 `'auto'`；`persist.size` 新增第三态 `'width-only'`。
+
+按需接入（都不改默认行为，逐个 opt-in）：
+
+| 想要什么 | 怎么开 | 备注 |
+| :--- | :--- | :--- |
+| 布局存档导出/导入（同步进 `extension_settings`、多设备搬运） | `panel.getLayoutState()` / `panel.setLayoutState(state)` | `get` 返回游离副本且不含 `timestamp`；`set` 只写内存 + 调度落盘，真正生效在下一次 `open()`，需要 `silent` 时加 `{ silent: true }` |
+| 「定宽 + 高度自适应」的面板只记宽 | `persist: { size: 'width-only' }` | 落盘 `height` 恒 `null` 且不记 `isMaximized`；下行 `height: 94vh` 之类得以生效。原有的 `true` / `false` 两态语义不变 |
+| 给用户一张「你这装的是哪版」快照 | `NVUI.diagnostics()` | 纯只读，8 个字段；无 DOM 环境返回 `{ status: 'no-dom', version, assets: null }` |
+| 面板跟随系统/宿主主题 | `panel.setTheme('auto')` | 双信号取并集（`prefers-color-scheme` 或宿主 `.nvui-theme-light`）；显式 `'light'` / `'dark'` 会摘掉监听 |
+| 鼠标与键盘都能调面板尺寸 | `createPanel({ resizable: true })` | 默认关闭；方向键 ±8px / Shift ±32px / `Home` 复位；写入一律走 `applyClamping()`，钳制与持久化语义不变 |
+| 多行文本输入、字段说明与错误提示 | `inputRow({ type: 'textarea', rows: 4 })`、`inputRow({ hint })`、`inputRow({ error })` | `textarea` 是伪类型，`input.type` 仍是 `text`（意图在 `data-nvui-type`）；`hint` / `error` 各占一个 `aria-describedby` id |
+| 进度条显示标题与百分比 | `progress({ showLabel: true, showValue: true })` | 默认关闭；开启后容器变 `.nvui-progress-field`，轨道在 `container.track`，可视文本 `aria-hidden` 防重复播报 |
+
+### 覆盖资产
+
+```
+tokens.css
+components.css
+nvui-api.js
+tokens.json
+```
+
+保持 `tokens.css` 在 `components.css` 之前，CSS 先于 JS；4 个必须是同一版本（`--nvui-kit-version` 与
+`NVUI.version` 都应为 `2.9.0`）。CSS 与 JS **都要换**：只换 CSS 会缺 `diagnostics` / `resizable` 等 API，
+只换 JS 会缺 `.nvui-resize` / `.nvui-input-msg` 的样式。
+
+### 验收清单（v2.9.0 增量部分）
+
+1. `NVUI.version === '2.9.0'`，`NVUI.selfCheck({ expect: '2.9.0' })` 干净；
+2. `NVUI.diagnostics().status === 'ok'`，`assets.tokensCss === '2.9.0'`，`assets.componentsCss === true`；
+3. 打开过面板再关掉，`diagnostics().listenerCounts` 的 `resize` / `scroll` / `change` / `keydown` 回到基线；
+4. `resizable: true` 的面板用 Tab 能到右下角手柄（`role="separator"`），方向键改尺寸且不滚走页面；
+5. 浅色系统 + `setTheme('auto')` 下切系统主题，面板同帧变色；
+6. 存量面板（不加任何新参数）在外观与 `nvui_state_<id>` 存储结构上与 v2.8.3 逐字节一致。
 
 ## 2.8.2 → 2.8.3
 
@@ -88,7 +133,7 @@ tokens.json
 ### 2. 版本自检
 
 ```js
-const r = NVUI.selfCheck({ expect: '2.8.3' });
+const r = NVUI.selfCheck({ expect: '2.9.0' });
 if (!r.ok) console.warn('[my-plugin] ui-kit', r.issues);
 ```
 
@@ -132,8 +177,8 @@ panel.getGlassState();
 
 ### 6. 验收清单
 
-1. 4 资产同版本；`NVUI.version === '2.8.3'`；
-2. `NVUI.selfCheck({ expect: '2.8.3' })` 无 `version-mismatch` / `css-not-loaded`；
+1. 4 资产同版本；`NVUI.version === '2.9.0'`；
+2. `NVUI.selfCheck({ expect: '2.9.0' })` 无 `version-mismatch` / `css-not-loaded`；
 3. `node ui-kit/test/downstream-check.js` exit 0；
 4. 面板/弹窗/吐司/折叠/表单冒烟，零 pageerror；
 5. 检查相邻按钮间距、`.nvui-actions`、玻璃 auto/force/solid 三态；

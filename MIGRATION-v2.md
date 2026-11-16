@@ -1,9 +1,10 @@
-# MIGRATION-v2 · v2.0 → v2.8 历史
+# MIGRATION-v2 · v2.0 → v2.9 历史
 
 本文件只记录**跨版本差异的要点**；当前版本升级步骤见 [UPGRADING.md](UPGRADING.md)，日常变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 | 版本 | 类型 | 下游需要做什么 |
 | :--- | :--- | :--- |
+| v2.9.0 | MINOR | 覆盖 4 资产；全部为 opt-in 增量（布局导入导出、`persist.size: 'width-only'`、`NVUI.diagnostics()`、`setTheme('auto')`、`resizable` 调尺寸手柄、`inputRow` 的 `textarea`/`hint`/`error`）；组件类 81 → 84、顶层导出 27 → 28，无 API / DOM / 状态格式破坏 |
 | v2.0.0 | MAJOR | 按 v2 设计语言重做 DOM 结构与类名；一次性迁移 |
 | v2.1.x | MINOR/PATCH | 覆盖资产；新增面板布局标准与尺寸 token |
 | v2.2.0 | MINOR | 覆盖资产；宿主表单隔离、玻璃/降级修正 |

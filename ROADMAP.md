@@ -29,9 +29,9 @@
 
 | 版本 | 日期 | 类型 | 内容一句话 | 出口数据 |
 | :--- | :--- | :--- | :--- | :--- |
+| v2.9.0 | 2026-11-16 | MINOR | 线路 B 六项（布局导入导出 / `width-only` / `diagnostics` / `setTheme('auto')` / 调尺寸手柄 / `textarea`+`hint`+`error`）+ GH-#21 剩余两条（进度可视标签、边缘渐隐） | `verify:all` 9/9；370/0；浏览器 455+18+217+15+12+11+10+9+8+10+11+8；实机 35+19；组件类 84 / 导出 28 |
 | v2.8.3 | 2026-11-16 | PATCH | 测试基建收尾：`test/probe/` 归档、`issue-16` 矩阵 8 → 12、`scripts/resolve-browser.js`、`npm run verify:all`（线路 A 到出口） | `verify:all` 9/9；370/0；实机 35+19；`verify:release` 20 项 |
 | v2.8.2 | 2026-11-16 | PATCH | 焦点陷阱修正（GH-#20）、40px 触控（GH-#21）、`test/host/` 基线入库、`createPanel` 七步拆分 1433 → 531 | 浏览器 455+18+217+15；实机 35+19；e2e 58 |
-| v2.8.1 | 2026-11-05 | PATCH | `persist.size: false` 尺寸隔离修复（GH-#16） | 367 PASS；issue-16 8/8 |
 
 
 ---
@@ -72,16 +72,19 @@ MINOR，全 additive。推荐顺序：**B1 → B3（共用持久化语义）→ 
 
 > **2026-11-16 追加（GH-#21 剩余两条）**：进度条可视标签 `progress({ showLabel, showValue })` 与面板 body
 > 滚动边缘渐隐 `data-nvui-fade`（mask-image）已落地，均属 additive，计入本版（commit `e37b446`，
-> 回归 `test/issue-21-ux.spec.js` 11/11）。B1–B6 尚未开始，本版仍处**开发中**，未 bump 版本号。
+> 回归 `test/issue-21-ux.spec.js` 11/11）。
+>
+> **2026-11-16 结项**：B1–B6 六项已全部落地并随 **v2.9.0** 发布（`f601260` B1 / `8b7f4be` B3 / `e200899` B2 /
+> `98dd3b3` B6 / `9b37425` B4 / `05e3db0` B5）。**线路 B 到达出口**。
 
 | # | 能力 | 问题 | API 草案 | 验收 |
 | :--- | :--- | :--- | :--- | :--- |
-| B1 | 布局状态读写出入口 | 现在只有 `clearLayoutState()`，下游要「导出/导入布局」「同步到 `extension_settings`」只能反解存储结构 | `panel.getLayoutState() → state`<br>`panel.setLayoutState(state, { silent })`<br>只写内存 + 调度一次落盘，不触发 `applyLoadedState` 的 tab 恢复 | 往返幂等：`get → set → get` 深相等；`silent:true` 不写存储 |
-| B3 | `persist.size: 'width-only'` | 「定宽 + 高度自适应」是高频诉求，#16 正是它的误用形态 | 布尔值保持兼容，新增 `'width-only'`；`applyClamping()` 的 `useSavedSize` 门禁按「宽/高」分别判定 | 高宽分别持久化：只回写 width、height 恒为空；`true` / `false` 行为不变 |
-| B2 | `NVUI.diagnostics()` | #16 报告里最贵的一步是「确认下游装的哪版、状态里到底有什么」 | 返回可贴进 issue 的 JSON：`version / assets{md5, kitVersion} / glass / hostModals / escapeStackDepth / persistKeys / listenerCounts` | Node 无 DOM 返回 `no-dom`；浏览器返回 8 个字段；不产生副作用 |
-| B6 | `NVUI.setTheme('auto')` | 下游普遍在写两套皮肤切换逻辑 | 双信号：`prefers-color-scheme` + 宿主 `.nvui-theme-light`；`matchMedia` 监听 + `invalidateTokenCache()` | 系统切深浅后 1 帧内生效；显式 `'light'/'dark'` 不受影响 |
-| B4 | 键盘调尺寸 | 调尺寸只有鼠标；键盘用户用不了「记忆尺寸」 | resize 手柄 `tabindex=0` `role=separator` `aria-orientation`；方向键 ±8px（Shift ±32）、Home 复位；统一走 `setSize()` | 键盘可改宽高并落盘；焦点环可见；`prefers-reduced-motion` 下无过渡 |
-| B5 | `inputRow` 补 `textarea` 与 `hint`/`error` | 14 种原生类型里没有多行文本；错误态只能自绘 | `'textarea'` 伪类型（DOM 仍 `textarea`，意图走 `data-nvui-type`）；`hint` `aria-describedby`、`error` `aria-invalid + aria-describedby` | 类型白名单断言；`error` 时 `aria-invalid="true"`；`hint`/`error` 不同时指向同一 id |
+| B1 | 布局状态读写出入口 | 现在只有 `clearLayoutState()`，下游要「导出/导入布局」「同步到 `extension_settings`」只能反解存储结构 | `panel.getLayoutState() → state`<br>`panel.setLayoutState(state, { silent })`<br>只写内存 + 调度一次落盘，不触发 `applyLoadedState` 的 tab 恢复 | 往返幂等：`get → set → get` 深相等；`silent:true` 不写存储。**状态：v2.9.0 已交付（`v290-layout-state` 10/10；变异：get 不克隆时 L3 红）** |
+| B3 | `persist.size: 'width-only'` | 「定宽 + 高度自适应」是高频诉求，#16 正是它的误用形态 | 布尔值保持兼容，新增 `'width-only'`；`applyClamping()` 的 `useSavedSize` 门禁按「宽/高」分别判定 | 高宽分别持久化：只回写 width、height 恒为空；`true` / `false` 行为不变。**状态：v2.9.0 已交付（`v290-width-only` 9/9；变异：`useSavedH` 与 `useSavedW` 同源时 W1 红）** |
+| B2 | `NVUI.diagnostics()` | #16 报告里最贵的一步是「确认下游装的哪版、状态里到底有什么」 | 返回可贴进 issue 的 JSON：`version / assets{md5, kitVersion} / glass / hostModals / escapeStackDepth / persistKeys / listenerCounts` | Node 无 DOM 返回 `no-dom`；浏览器返回 8 个字段；不产生副作用。**状态：v2.9.0 已交付（`v290-diagnostics` 8/8；D6 实测销毁后 `resize`/`scroll`/`change`/`keydown` 全部回落基线）** |
+| B6 | `NVUI.setTheme('auto')` | 下游普遍在写两套皮肤切换逻辑 | 双信号：`prefers-color-scheme` + 宿主 `.nvui-theme-light`；`matchMedia` 监听 + `invalidateTokenCache()` | 系统切深浅后 1 帧内生效；显式 `'light'/'dark'` 不受影响。**状态：v2.9.0 已交付（`v290-theme-auto` 10/10；判据改成「后注册的 change 探针收到事件时类名已更新」；变异：去掉 `hostLightSignal` 时 A4 红）** |
+| B4 | 键盘调尺寸 | 调尺寸只有鼠标；键盘用户用不了「记忆尺寸」 | resize 手柄 `tabindex=0` `role=separator` `aria-orientation`；方向键 ±8px（Shift ±32）、Home 复位；统一走 `setSize()` | 键盘可改宽高并落盘；焦点环可见；`prefers-reduced-motion` 下无过渡。**状态：v2.9.0 已交付（`v290-resize` 11/11；已知边界：高度受 `max-height: 88vh` 约束，只在可收缩区间内可调）** |
+| B5 | `inputRow` 补 `textarea` 与 `hint`/`error` | 14 种原生类型里没有多行文本；错误态只能自绘 | `'textarea'` 伪类型（DOM 仍 `textarea`，意图走 `data-nvui-type`）；`hint` `aria-describedby`、`error` `aria-invalid + aria-describedby` | 类型白名单断言；`error` 时 `aria-invalid="true"`；`hint`/`error` 不同时指向同一 id。**状态：v2.9.0 已交付（`v290-inputrow` 8/8）** |
 
 **出口**：每项「静态 + 真机」双绿 + `verify:release` 通过 + CHANGELOG 条目 + README / AI-GUIDE API 表更新 + 4 资产同步。
 

@@ -1,6 +1,6 @@
 # AI 协作设计指南 · 用 SillyTavern NVUI Kit 规范设计面板
 
-> 版本：**v2.8.3** · 适用对象：SillyTavern 插件开发者、其它软件项目、以及被要求「按规范生成/修改界面」的 AI 编码助手。
+> 版本：**v2.9.0** · 适用对象：SillyTavern 插件开发者、其它软件项目、以及被要求「按规范生成/修改界面」的 AI 编码助手。
 > 配套文件：[tokens.css](tokens.css)（设计令牌）、[components.css](components.css)（组件样式）、[README.md](README.md)（完整规范）、[nvui-api.js](nvui-api.js)（零依赖运行时 API）、[tokens.json](tokens.json)（令牌机器可读镜像）、[test/test-ui-kit.js](test/test-ui-kit.js)（规范守护测试）。
 
 本文档回答两个问题：
@@ -121,7 +121,7 @@ var panel = NVUI.createPanel({
 - `destroy`：面板销毁时的清理回调（解绑业务监听、清理定时器）。
 - 面板需彻底移除时调用 `panel.destroy()`：移除 DOM、注销全局 Esc 监听、触发 `destroy` 回调。
 
-> **单文件 / 酒馆助手脚本提示**：若是单文件用户脚本（不能拷贝本地文件夹），可通过 CDN 动态加载样式与 JS API（`https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.8.3/nvui-api.js`，完整配方见 `README.md` §2.1.3），然后同样使用 `NVUI.createPanel` 生成。令牌、样式与运行时应锁定同一个 `v2.7.2` tag。
+> **单文件 / 酒馆助手脚本提示**：若是单文件用户脚本（不能拷贝本地文件夹），可通过 CDN 动态加载样式与 JS API（`https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.9.0/nvui-api.js`，完整配方见 `README.md` §2.1.3），然后同样使用 `NVUI.createPanel` 生成。令牌、样式与运行时应锁定同一个 `v2.9.0` tag。
 
 > **ST 扩展直接开箱用**：`st-extension-template/` 是一份已在本机真实 ST 宿主验证过的扩展骨架
 > （`manifest.json` / `index.js` / `style.css` + `ui-kit/`）。复制到
@@ -361,7 +361,7 @@ async function checkGitHubRelease() {
     'use strict';
 
     // 1. 动态载入 Flat Glass 样式与运行时（国内高速 CDN）
-    const CDN_BASE = 'https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.8.3';
+    const CDN_BASE = 'https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v2.9.0';
     const appendCss = (href) => {
         const link = document.createElement('link');
         link.rel = 'stylesheet'; link.href = href;
@@ -467,7 +467,7 @@ async function checkGitHubRelease() {
 ### 4.2 审查/修改现有界面
 
 ```text
-请按「SillyTavern NVUI Kit v2.8.3」规范审查下面的插件界面代码：
+请按「SillyTavern NVUI Kit v2.9.0」规范审查下面的插件界面代码：
 - 列出违反项（类名/token/宿主红线/a11y/动效降级/布局标准），按 README 章节标注依据；
 - 给出最小 diff 修复（不要整体重写），保持既有功能；
 - 特别检查：是否用了 showModal/裸 fixed、是否双导航/双滚动层、是否有硬编码颜色或 emoji、折叠展开是否改变面板外框、标签页是否重建 DOM；
@@ -477,7 +477,7 @@ async function checkGitHubRelease() {
 ### 4.3 迁移其它软件
 
 ```text
-把项目 X 的界面迁移到 SillyTavern NVUI Kit v2.8.3：
+把项目 X 的界面迁移到 SillyTavern NVUI Kit v2.9.0：
 - 复制 tokens.css / components.css / nvui-api.js / tokens.json；
 - 将品牌色映射到 --nvui-accent*（只改 token，不改组件规则）；
 - 按「面板布局标准」重组设置页（电脑居中 / 手机底部抽屉）；
@@ -491,7 +491,7 @@ async function checkGitHubRelease() {
 
 | API | 说明 |
 | :--- | :--- |
-| `NVUI.version` | Kit/API 版本（2.8.3） |
+| `NVUI.version` | Kit/API 版本（2.9.0） |
 | `NVUI.getToken(name)` | 读取当前作用域的设计令牌值 |
 | `NVUI.setTheme('light'|'dark'|'auto', { solid })` | 切换浅色 / 深色 / **跟随系统**（v2.9.0）与实心扁平模式（只切类名）。`'auto'` = `prefers-color-scheme` 或宿主已有的 `.nvui-theme-light` 任一为浅即浅色，系统变更同帧生效；显式 light/dark 会摘掉 auto 监听 |
 | `NVUI.selfCheck({ expect })` | 运行时自检：版本 / CSS / 玻璃 / 载体 z / 宿主模态 / issues |
@@ -531,8 +531,9 @@ async function checkGitHubRelease() {
 
 ### 6.2 历史版本与兼容基准
 
-- 当前：**v2.8.3**（焦点陷阱修正 + 移动端触控 40px + 实机基线入库 + `createPanel` 七步拆分 1433 → 531 行；含 v2.8.1 的 #16 尺寸隔离语义。token 111 / 组件类 82 / `!important` 18）。
-- 开发中：**v2.9.0**（GH-#21 两条已落地：`progress({ showLabel, showValue })` 可视标签、面板 body 溢出边缘渐隐 `data-nvui-fade`；B1–B6 未开始）。
+- 当前：**v2.9.0**（线路 B 六项能力：布局状态导入导出 `getLayoutState`/`setLayoutState`、`persist.size: 'width-only'`、`NVUI.diagnostics()`、`setTheme('auto')` 双信号跟随、`createPanel({ resizable })` 键盘可达调尺寸手柄、`inputRow` 的 `textarea` + `hint`/`error`；含 GH-#21 的进度可视标签与溢出边缘渐隐。全为 opt-in。token 111 / 组件类 84 / 顶层导出 28 / `!important` 18）。
+- 上一版：**v2.8.3**（PATCH：测试基建收尾 —— 探针归档 `test/probe/`、`issue-16` 尺寸矩阵 8 → 12、`playwright-core` 进 devDependencies + `scripts/resolve-browser.js` 统一解析、新增 `npm run verify:all`。4 资产仅版本号注释同步，运行语义零变化）。
+- 上一版：**v2.8.2**（PATCH：焦点陷阱修正 GH-#20、移动端底部导航 40px 触控 GH-#21、`test/host/` 实机基线入库、`createPanel` 七步拆分 1433 → 531 行，无行为变更）。
 - 上一版：**v2.8.1**（PATCH：修 GitHub #16 —— `persist: { size: false }` 现在完全不参与尺寸持久化：不再把历史存档里的 px 高宽写回内联样式，`flushPersistSave()` 主动落 `size: null`；`persist.size: true` 行为不变。无 token / 组件类 / `!important` / 公开 API / 状态格式变更）。
 - 上一版：**v2.8.0**（下游 DX + 组件默认值 + Fast UI 玻璃模式：新增 `--nvui-kit-version`、`selfCheck`/`checkCompatibility`/`defaults`、`.nvui-actions`、`createPanel({ glass })` 与面板控制器 `setGlassMode/getGlassState`；相邻按钮 8px 默认间距；`force` 仅面板级 opt-in。token 111 / 组件类 81 / `!important` 18）。
 - 上一版：**v2.7.2**（玻璃透明感修复：面板保持透明 + 自身 `backdrop-filter` 背后模糊；宿主禁用模糊时 97% 近不透明回退；探测三态化并可自愈）。
