@@ -1685,42 +1685,27 @@
        #16 只是这个冲突的一个症状。变量同样在元素上，但只要不给 `!important`，
        下游一条普通规则就能接管，kit 默认值与下游覆盖也自然分层。
 
-       `data-nvui-legacy-size` 是过渡开关（加在 <html> 或面板根节点都认）：v3.x 内
-       仍写内联 px 并只告警一次，v3.1 移除 —— 给下游一个版本的缓冲期。 */
+       v3.0.0 曾提供 `data-nvui-legacy-size` 过渡开关（命中时仍写内联 px），v3.1 已移除。
+       现在没有第二条写入路径：尺寸只走这两个变量，不要为「读 style.width 的下游」
+       再加回内联分支 —— 那会让下游 CSS 重新失去接管能力，等于退回 v2.x 的根本冲突。 */
     var SIZE_VAR_W = '--nvui-panel-w';
     var SIZE_VAR_H = '--nvui-panel-h';
-    var LEGACY_SIZE_ATTR = 'data-nvui-legacy-size';
-
-    function usesLegacySize(panel) {
-        if (panel && panel.hasAttribute && panel.hasAttribute(LEGACY_SIZE_ATTR)) return true;
-        var doc = panel && panel.ownerDocument;
-        return !!(doc && doc.documentElement && doc.documentElement.hasAttribute(LEGACY_SIZE_ATTR));
-    }
 
     /* w / h 接受 number（写 px）、字符串（calc(...) 等）、null（清空该维度）。
-       清空一律两个载体都清，避免切换开关后残留上一次的写入。 */
+       清空时连内联一起摘：下游脚本历史上可能直接写过 panel.style.width，
+       不清就会出现「变量没了、内联还在」的假回落。 */
     function writePanelSize(panel, w, h) {
         if (!panel || !panel.style) return;
-        var legacy = usesLegacySize(panel);
-        if (legacy) {
-            warnOnce('legacy-size', '检测到 ' + LEGACY_SIZE_ATTR + '：面板仍在写内联 px。该开关 v3.1 移除，'
-                + '请改用 ' + SIZE_VAR_W + ' / ' + SIZE_VAR_H + '，或直接由 CSS 接管尺寸。');
-        }
         var applyOne = function (prop, cssVar, value) {
             var css = null;
             if (typeof value === 'number' && isFinite(value)) css = Math.round(value) + 'px';
             else if (typeof value === 'string' && value) css = value;
+            panel.style[prop] = '';
             if (css === null) {
-                panel.style[prop] = '';
                 panel.style.removeProperty(cssVar);
                 return;
             }
-            if (legacy) {
-                panel.style[prop] = css;
-            } else {
-                panel.style[prop] = '';
-                panel.style.setProperty(cssVar, css);
-            }
+            panel.style.setProperty(cssVar, css);
         };
         applyOne('width', SIZE_VAR_W, w);
         applyOne('height', SIZE_VAR_H, h);
@@ -1738,7 +1723,7 @@
         return isNaN(n) ? null : n;
     }
 
-    /* 把尺寸主权整个交回 CSS（移动端抽屉、销毁复位）。两个载体都要清。 */
+    /* 把尺寸主权整个交回 CSS（移动端抽屉、销毁复位）。变量与内联都清。 */
     function clearPanelSize(panel) {
         if (!panel || !panel.style) return;
         panel.style.width = '';

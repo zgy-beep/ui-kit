@@ -2,14 +2,14 @@
  * v3.0.0 / GH-#19 C1 回归：面板尺寸载体从内联 px 改为 CSS 变量
  * ---------------------------------------------------------------------------
  * 内联 width/height 是作者级声明，下游写 `height: 94vh` 永远抢不过它（#16 只是症状）。
- * v3.0 把载体换成 `--nvui-panel-w` / `--nvui-panel-h`，并给一个版本的过渡开关
- * `data-nvui-legacy-size`（仍然写内联 px + 只告警一次）。
+ * v3.0 把载体换成 `--nvui-panel-w` / `--nvui-panel-h`；v3.1 移除了 v3.0 提供的过渡开关
+ * `data-nvui-legacy-size`，现在只有一条写入路径，V3 专门证明这个开关彻底失效、不会复活。
  *
  * 设计契约（本 spec 逐条锁死）：
  *   V1  setSize() 写的是变量：--nvui-panel-w/h 有值，style.width/height 保持为空
- *   V2  同一段下游 CSS：v3 载体下生效（真实宽度 500），legacy 载体下被内联 px 压住
+ *   V2  下游 CSS 能接管面板宽度：kit 把 860 写进变量，但下游 .nvui-panel{width:500px} 真实生效
  *       —— 这条是 C1 的存在理由，不只是「写法变了」
- *   V3  data-nvui-legacy-size 开关：写内联 px、不写变量，且只告警一次（warnOnce）
+ *   V3  即使设了 data-nvui-legacy-size，kit 仍只写变量、不写内联、不告警（开关已移除，防复活）
  *   V4  迁移器：v1 存档（{width,height,isMaximized}）被读成 v2（{w,h,mode}）并落盘成 v2
  *   V5  兼容读：下游直接写 style.width，kit 仍能读到（readPanelSize 回退内联 px）
  *   V6  最大化写 calc 变量；还原时清掉 calc，主权交回 CSS 默认值
@@ -195,40 +195,35 @@ function record(id, name, pass, detail, ms) {
     });
 
     // ------------------------------------------------------------------ V2
-    await run('V2', '同一段下游 CSS：v3 载体下生效（500），legacy 载体下被内联 px 压住（860）', () => {
+    await run('V2', '下游 CSS 能接管面板宽度：kit 写 860 进变量，但下游 500px 真实生效', () => {
         localStorage.clear();
         window.__injectDownstream(500);
         const p = window.__open({ id: 'v2', title: 'V2' });
         p.setSize(860, 620);
         return window.__wait(60).then(() => {
-            const modern = Math.round(p.panel.getBoundingClientRect().width);
+            const el = p.panel;
+            const out = {
+                /* C1 的存在理由：kit 的目标尺寸（860）进了变量而不是内联，
+                   于是下游普通规则 .nvui-panel{width:500px} 不需要 !important 就能赢。 */
+                pass: Math.round(el.getBoundingClientRect().width) === 500
+                    && window.__w(el) === '860px'
+                    && el.style.width === '',
+                detail: JSON.stringify({
+                    renderedWidth: Math.round(el.getBoundingClientRect().width),
+                    varW: window.__w(el), inlineW: el.style.width,
+                }),
+            };
             p.destroy();
-            return window.__wait(120).then(() => {
-                document.documentElement.setAttribute('data-nvui-legacy-size', '');
-                const q = window.__open({ id: 'v2b', title: 'V2 legacy' });
-                q.setSize(860, 620);
-                return window.__wait(60).then(() => {
-                    const legacy = Math.round(q.panel.getBoundingClientRect().width);
-                    const legacyInline = q.panel.style.width;
-                    q.destroy();
-                    document.documentElement.removeAttribute('data-nvui-legacy-size');
-                    window.__dropDownstream();
-                    return {
-                        /* v3：下游 500 生效；legacy：内联 860 压过下游 → 860。
-                           两者都必须成立，否则说明载体根本没换或开关没生效。 */
-                        pass: modern === 500 && legacy === 860 && legacyInline === '860px',
-                        detail: JSON.stringify({ modernWidth: modern, legacyWidth: legacy, legacyInline }),
-                    };
-                });
-            });
+            window.__dropDownstream();
+            return out;
         });
     });
 
     // ------------------------------------------------------------------ V3
-    await run('V3', 'legacy 开关：写内联 px、不写变量，且只告警一次（warnOnce）', () => {
+    await run('V3', '过渡开关已移除：设了 data-nvui-legacy-size 也仍只写变量、不写内联、不告警', () => {
         localStorage.clear();
-        /* 不重置 __warns：V2 的 legacy 分支已经触发过一次，这里再写两次仍应只有那一条 ——
-           这正是 warnOnce 的语义（按 key 去重，不是按调用次数）。 */
+        /* 这条是防复活断言。v3.0 的开关一旦被加回来，下面四个条件里至少三个会红：
+           写内联、变量为空、出现 legacy 告警。因此不需要额外的静态断言。 */
         document.documentElement.setAttribute('data-nvui-legacy-size', '');
         const p = window.__open({ id: 'v3', title: 'V3' });
         p.setSize(700, 500);
@@ -238,11 +233,11 @@ function record(id, name, pass, detail, ms) {
                 const el = p.panel;
                 const hits = window.__warns.filter((w) => w.indexOf('data-nvui-legacy-size') !== -1).length;
                 const out = {
-                    pass: el.style.width === '760px'
-                        && el.style.height === '520px'
-                        && window.__w(el) === ''
-                        && window.__h(el) === ''
-                        && hits === 1,
+                    pass: el.style.width === ''
+                        && el.style.height === ''
+                        && window.__w(el) === '760px'
+                        && window.__h(el) === '520px'
+                        && hits === 0,
                     detail: JSON.stringify({
                         inlineW: el.style.width, inlineH: el.style.height,
                         varW: window.__w(el), varH: window.__h(el), legacyWarns: hits,

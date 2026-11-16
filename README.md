@@ -76,7 +76,7 @@
 | [`AI-GUIDE.md`](AI-GUIDE.md) | 给 AI 编码助手的操作手册：硬约束、读文件顺序、面板标准流程、提示词模板、验收清单 |
 | [`CHANGELOG.md`](CHANGELOG.md) | 变更记录与版本时间线（**历史事实的唯一来源**） |
 | [`MAINTAINING.md`](MAINTAINING.md) | 维护流程规范：提交时机与信息格式、版本三态与升位判定、GitHub issue 关闭判据、每轮 DoD |
-| [`MIGRATION-v3.md`](MIGRATION-v3.md) | **v2.9 → v3.0 迁移指南**：四类破坏性变更的杀伤力分级、v1/v2 状态映射、`data-nvui-legacy-size` 过渡开关、升级步骤 |
+| [`MIGRATION-v3.md`](MIGRATION-v3.md) | **v2.9 → v3.0 迁移指南**：四类破坏性变更的杀伤力分级、v1/v2 状态映射、尺寸载体切换与过渡开关历史、升级步骤 |
 | [`MIGRATION-v2.md`](MIGRATION-v2.md) | v2.0 → v2.9 历史版本差异速查（每条一行「下游需要做什么」） |
 | [`UPGRADING.md`](UPGRADING.md) | 常青升级指南：从上一版升到当前版本的具体动作与验收清单 |
 | [`AUDIT.md`](AUDIT.md) | 架构审核报告：v1.1.0 评估、v2.0.0/v2.0.1 复核与问题清单 |
@@ -970,9 +970,9 @@ head.addEventListener('click', () => {
 > | 某一个面板的尺寸 | `.nvui-panel { width: 500px }`（v3.0.0 起真的生效，不必 `!important`），或 `panel.style.setProperty('--nvui-panel-w', '640px')` |
 > | 持久化记住的尺寸 | `persist.size`（`true` / `false` / `'width-only'`），载体同上 |
 >
-> 过渡期若必须回到 v2 的内联 px 行为（宿主 CSS 硬依赖 `style.width`），给面板元素或 `<html>`
-> 加 `data-nvui-legacy-size`，kit 会告警一次并按老方式写；**该开关 v3.1 移除**。详见
-> [MIGRATION-v3.md](MIGRATION-v3.md) §1。
+> **v3.1 起没有第二条写入路径**：v3.0.0 曾有 `data-nvui-legacy-size` 过渡开关（命中时仍写内联 px），
+> 现已移除，kit 恒写变量。宿主 CSS 硬依赖 `style.width` 的下游请改用 `panel.style.setProperty()` 或
+> 自己的选择器，不要再找开关；迁移细节见 [MIGRATION-v3.md](MIGRATION-v3.md) §1。
 
 - 桌面：面板 720px × 88vh，弹窗最大 680px × 80vh。
 - 手机（600px 及以下）：面板与弹窗高度都切到 92dvh，面板改为全宽底部抽屉。

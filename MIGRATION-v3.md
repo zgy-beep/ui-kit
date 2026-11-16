@@ -95,19 +95,34 @@ settings.layoutState = normalized;   // 之后永远是 v2
 
 `migrateStateV1toV2(state)` 契约：幂等（已是 v2 原样返回同一对象）、不改入参、`null` / 非对象返回 `null`。
 
-### 1.4 过渡开关 `data-nvui-legacy-size`
+### 1.4 过渡开关 `data-nvui-legacy-size`（v3.0 引入，**v3.1 已移除**）
 
-如果下游有 CSS 或动画**硬依赖** `panel.style.width`（例如自己写的手柄动画读内联值），
-可以临时回到 v2 行为：
+> **状态：已移除。** 如果你读到这段文字时正在从 v2.x 或 v3.0.x 升级，请直接看下面的替代方案；
+> 在 v3.1+ 里给面板或 `<html>` 加这个属性**没有任何效果** —— kit 仍只写 CSS 变量，不告警。
+
+v3.0.0 曾提供过渡开关，给下游一版时间改代码：
 
 ```html
+<!-- v3.0 的历史写法，v3.1 起无效，不要再用 -->
 <div class="nvui-panel" data-nvui-legacy-size> ... </div>
-<!-- 或全局 -->
 <html data-nvui-legacy-size>
 ```
 
-kit 会**告警一次**（`warnOnce`，全局只一次，不是每次调用都刷屏），然后按老方式写内联 px。
-**这个开关 v3.1 移除**，不要在新代码里用；它存在的唯一目的是给你一版时间改下游。
+**替代方案**（v3.1+ 唯一有效的两条路）：
+
+```js
+// ① 在实例上写变量（等价于原来的 setSize）
+panel.style.setProperty('--nvui-panel-w', '640px');
+panel.style.setProperty('--nvui-panel-h', '520px');
+```
+
+```css
+/* ② 用你自己的选择器直接接管，不需要 !important */
+#my_plugin_layer .nvui-panel { width: 500px; }
+```
+
+如果下游代码在**读** `panel.style.width`：改用 `panel.getLayoutState().size`，或按
+`style.getPropertyValue('--nvui-panel-w') || style.width` 的顺序读（保留对 v2 遗留内联的兼容）。
 
 ### 1.5 顺手修掉的 v2 遗留缺陷
 
@@ -233,7 +248,7 @@ NVUI.diagnostics();   // 看 assets.version / persistKeys 是否符合预期
 - `.nvui-btn-row` 作为 `.nvui-actions` 的 alias 保留到 v3.x 结束；
 - 新增能力默认关闭或保持旧行为。
 
-**v3.1 会移除**：`data-nvui-legacy-size` 开关。除此之外 v3.x 内不再有破坏性变更。
+**v3.1 已移除**：`data-nvui-legacy-size` 开关（见 §1.4）。除此之外 v3.x 内不再有破坏性变更。
 
 ---
 
@@ -242,7 +257,7 @@ NVUI.diagnostics();   // 看 assets.version / persistKeys 是否符合预期
 - **只换 CSS、忘换 `tokens.json` / `nvui-api.js`** 是最常见的漂移；v2.4.0 曾发生模板
   `tokens.json` 落后两版。v3.0 起 `tokens.json` 与 `components.css` 的版本号不再强绑
   （一个跟 CSS 注释生成，一个跟运行时），更要靠 `downstream-check.js` 而不是肉眼。
-- **别用 `data-nvui-legacy-size` 当长期方案**。它的存在是为了让你不用在同一周里既改代码又改测试，
-  不是为了让你永远不读变量。
+- **`data-nvui-legacy-size` 已经彻底失效**：v3.0 用它给下游争取了一版缓冲期，v3.1 移除后
+  设了属性也不会有任何效果；别再照着旧文档抄这段代码。
 - **`getLayoutState()` 返回的是游离副本**：改它不会改面板，也不会改存储。要生效必须
   `setLayoutState()`（或 `open()` 重读）。

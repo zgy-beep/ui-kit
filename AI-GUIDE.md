@@ -421,7 +421,8 @@ async function checkGitHubRelease() {
 
 布局状态格式同步升到 **v2**：`{ version: 2, size: { w, h, mode } }`，`mode` 取 `normal` / `maximized` / `width-only` / `off`。旧格式 `{ version: 1, size: { width, height, isMaximized } }` 由 `NVUI.migrateStateV1toV2()` 自动读入，**落盘一律写 v2**，下游不需要自己判断版本。完整迁移步骤见 [MIGRATION-v3.md](MIGRATION-v3.md)。
 
-过渡期若必须回到内联 px（例如宿主有 CSS 依赖 `style.width` 做动画），给面板元素或 `<html>` 加 `data-nvui-legacy-size` 即可，kit 会告警一次并按老方式写。**该开关 v3.1 移除**，不要在新代码里用。
+**v3.1 起不再有内联 px 写入路径**：v3.0.0 曾有 `data-nvui-legacy-size` 过渡开关，现已移除。若宿主 CSS 硬依赖 `style.width`，改用自己的选择器（`panel.style.setProperty('--nvui-panel-w', '640px')` 或
+`#my_layer .nvui-panel { width: 500px }`），不要找开关。
 
 ---
 

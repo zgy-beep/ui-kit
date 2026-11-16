@@ -16,8 +16,9 @@ v3.0.0 是 **MAJOR**。它改的不是能力而是**契约**：面板尺寸的�
 | C3 | `tokens.json` 升 schema 2：新增 `schema` / `meta{group,type,description}` / `groupDescriptions`，**`dark` / `light` 的值结构与键顺序逐字节不变** | 遍历 `tokens.json` 顶层键当令牌名的下游 | 改成遍历 `json.dark` / `json.light`。只按 key 取值的不用动 |
 | C4 | 新增 `engines.node: >=18.0.0` 与 README §11.5 兼容矩阵硬门禁 | 构建 / 测试脚本还在 Node 16 的下游 | 升级 Node（只影响开发期脚本，浏览器运行时无关）；可选地在初始化时调 `NVUI.checkCompatibility({ min: '3.0.0' })` 自查 |
 
-**过渡开关**：若你的宿主 CSS / 动画硬依赖 `panel.style.width`，给面板元素或 `<html>` 加
-`data-nvui-legacy-size`，kit 会告警一次并按 v2 方式写内联 px。**该开关 v3.1 移除**。
+**过渡开关已结束**：v3.0.0 曾提供 `data-nvui-legacy-size`（按 v2 方式写内联 px），
+v3.1 起已移除，设了属性也不再有任何效果。宿主 CSS / 动画硬依赖 `panel.style.width` 的下游，
+改用 `panel.style.setProperty('--nvui-panel-w', ...)` 或自己的选择器，详见 MIGRATION-v3 §1.4。
 
 ### 覆盖资产
 
