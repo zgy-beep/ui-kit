@@ -2561,6 +2561,7 @@ var panel = NVUI.createPanel({
     version: 'v2.5.0',
     persist: true,         // 一键开启尺寸、Tab 与折叠记忆
     themeToggle: true,     // 预置头部日/月平滑主题切换按钮
+    resizable: true,       // 右下角 .nvui-resize 手柄：可拖拽，也可方向键 / Shift / Home
     tabs: [{ key: 'basic', label: '基本' }, { key: 'about', label: '关于' }],
     footer: [{ label: '关闭', variant: 'ghost', close: true }]
 });
@@ -3396,6 +3397,7 @@ panel.showUpdate({ version: 'v2.5.0', label: '新版本 v2.5.0 可用', url: 'ht
             version: 'v2.5.0',
             persist: true,         // v2.5.0 声明式持久化
             themeToggle: true,     // v2.5.0 头部预置主题切换
+            resizable: true,       // v2.9.0 右下角 .nvui-resize 调尺寸手柄（键盘可用）
             onThemeChange: function (theme) {
                 setApiStatus('面板头部主题切换触发：已切换为 ' + (theme === 'light' ? '浅色主题' : '深色主题'));
             },

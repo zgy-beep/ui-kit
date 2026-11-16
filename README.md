@@ -1939,6 +1939,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 | `.nvui-panel-title` | 面板标题：`--nvui-fs-2xl` 粗体、单行省略；`aria-labelledby` 指向它 |
 | `.nvui-panel-actions` | 右侧操作区（`.nvui-icon-btn` 组，含关闭按钮），`flex-shrink:0` |
 | `.nvui-panel-body` | 内容区：`flex:1 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain`；**全面板唯一滚动层**；内容溢出时自动加 `data-nvui-fade`（`top` / `bottom` / `both`）做边缘渐隐 |
+| `.nvui-resize` | **v2.9.0 新增**：右下角调尺寸手柄（`role="separator"` + `aria-valuenow/valuemin/valuemax/valuetext` + `tabindex="0"`）。仅 `createPanel({ resizable: true })` 生成；拖拽走 Pointer Events，键盘走方向键 / Shift / Home，焦点环用 `--nvui-focus-ring-*`。指针拖拽与键盘最终都落内联 px 再交回 `applyClamping()`，与 `setSize()` 共用同一套钳制 / 持久化路径 |
 | `.nvui-panel-footer` | 可选底部操作区：右对齐按钮组，顶部直线分隔，`flex-shrink:0` |
 | `.nvui-panel-heading` | 内容区顶部「分区标题 + 版本徽标」行；内部 `.nvui-section-title` 占满剩余宽度 |
 | `.nvui-sheet-handle` | 仅手机显示的拖拽把手：40×4、pill 圆角；桌面 `display:none`；加 `aria-hidden="true"` |
@@ -2256,6 +2257,7 @@ console.log(typeof NVUI.createPanel); // 'function'
 | `update` | 静态更新胶囊 `{ version, label, url, onClick, hidden }` |
 | `themeToggle` | `true` 或 `{ onThemeChange, initial: 'dark' 或 'light' }`：头部主题切换按钮 |
 | `focusFallback` | 焦点归还兜底：CSS 选择器或元素。触发元素不可聚焦时（如 ST 的 wand 菜单点击后自动收起）焦点落到它 |
+| `resizable` | **v2.9.0 新增**，默认 `false`。`true` 时右下角出现 `.nvui-resize` 手柄：可拖拽，也可键盘操作（方向键 ±8px、Shift ±32px、Home 复位到默认宽 + 高度自适应）。所有尺寸写入都经 `applyClamping()`，钳制 / 移动端回退 / 持久化（含 `size: 'width-only'`）语义与 `setSize()` 完全一致 |
 
 **控制器方法**：`id` / `dialog` / `overlay` / `panel` / `body` / `tabs` / `bottomNav` 节点，以及
 `open()` / `close()` / `destroy()` / `setTab(key)` / `syncIndicator()` / `addNode(key, node)` /

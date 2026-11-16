@@ -3006,6 +3006,132 @@
         };
     }
 
+    /* ---------------------- 调尺寸手柄（v2.9.0 / GH-#18 B4） ---------------------- */
+    /*
+     * 尺寸此前只有 setSize() / setMaximized() 两个程序入口：鼠标拖不了，键盘更够不着，
+     * 「记忆尺寸」对键盘用户等于不存在。opt-in 的 `resizable: true` 补一个右下角手柄：
+     *   - 指针：Pointer Events + setPointerCapture，鼠标 / 触屏 / 触控笔同一条路径；
+     *   - 键盘：方向键 ±8px、Shift ±32px、Home 复位（默认宽 + 高度自适应）；
+     *   - 语义：role="separator" + aria-orientation + aria-valuenow / aria-valuemin /
+     *     aria-valuemax / aria-valuetext；焦点环走 --nvui-focus-ring-*，不自写像素。
+     *
+     * 所有写入都是「先落内联 px，再交回 persist.applyClamping()」：
+     * 因此视口钳制、移动端清空内联尺寸、尺寸持久化（含 width-only）全部沿用原语义，
+     * 手柄自己不做任何边界计算，也不直接写存储。
+     */
+    function createResizeGrip(ctx) {
+        var panel = ctx.panel;
+        var persist = ctx.persist;
+        var isDisposed = ctx.isDisposed || function () { return false; };
+        var minW = 320;
+        var minH = 240;
+        var drag = null;
+
+        var defaultOpts = ctx.opts || {};
+        var grip = el('div', 'nvui-resize', {
+            'data-nvui-part': 'resize',
+            role: 'separator',
+            'aria-orientation': 'horizontal',
+            'aria-label': '调整面板尺寸（方向键调整，Shift 加速，Home 复位）',
+            tabindex: '0',
+            'aria-valuemin': String(minW),
+            title: '拖拽或方向键调整尺寸',
+        });
+        panel.classList.add('is-resizable');
+        panel.appendChild(grip);
+        function defaultWidth() {
+            return (typeof defaultOpts.width === 'number' && !isNaN(defaultOpts.width)) ? defaultOpts.width : 720;
+        }
+
+        function syncValue() {
+            if (isDisposed()) return;
+            var vp = getViewport();
+            var w = Math.round(panel.offsetWidth);
+            var h = Math.round(panel.offsetHeight);
+            /* 面板还没显示时 offsetWidth 为 0：与其写「0 × 0 像素」这种假信息，不如留空 */
+            if (!w) return;
+            grip.setAttribute('aria-valuemax', String(Math.max(minW, vp.vw - 32)));
+            if (w > 0) grip.setAttribute('aria-valuenow', String(w));
+            grip.setAttribute('aria-valuetext', w + ' × ' + h + ' 像素');
+        }
+
+        function write(w, h) {
+            if (isDisposed()) return;
+            if (typeof w === 'number' && isFinite(w)) panel.style.width = Math.round(w) + 'px';
+            if (typeof h === 'number' && isFinite(h)) panel.style.height = Math.round(h) + 'px';
+            else if (h === null) panel.style.height = '';
+            persist.applyClamping();
+            persist.scheduleIfSize();
+            syncValue();
+        }
+
+        function onKeyDown(event) {
+            if (event.altKey || event.ctrlKey || event.metaKey) return;
+            var step = event.shiftKey ? 32 : 8;
+            var w = panel.offsetWidth;
+            var h = panel.offsetHeight;
+            var handled = true;
+            if (event.key === 'ArrowLeft') write(w - step, h);
+            else if (event.key === 'ArrowRight') write(w + step, h);
+            else if (event.key === 'ArrowUp') write(w, h - step);
+            else if (event.key === 'ArrowDown') write(w, h + step);
+            else if (event.key === 'Home') write(defaultWidth(), null);
+            else handled = false;
+            if (!handled) return;
+            /* 阻止滚动 / 宿主快捷键，并让 Esc 之外的方向键留在手柄上 */
+            event.preventDefault();
+            event.stopPropagation();
+        }
+
+        function onPointerDown(event) {
+            if (isDisposed()) return;
+            if (typeof event.button === 'number' && event.button !== 0) return;
+            drag = { x: event.clientX, y: event.clientY, w: panel.offsetWidth, h: panel.offsetHeight };
+            try { grip.setPointerCapture(event.pointerId); } catch (e) {}
+            grip.classList.add('is-dragging');
+            event.preventDefault();
+        }
+
+        function onPointerMove(event) {
+            if (!drag) return;
+            write(drag.w + (event.clientX - drag.x), drag.h + (event.clientY - drag.y));
+        }
+
+        function endDrag(event) {
+            if (!drag) return;
+            drag = null;
+            try { grip.releasePointerCapture(event.pointerId); } catch (e) {}
+            grip.classList.remove('is-dragging');
+        }
+
+        on(grip, 'keydown', onKeyDown);
+        on(grip, 'pointerdown', onPointerDown);
+        on(grip, 'pointermove', onPointerMove);
+        on(grip, 'pointerup', endDrag);
+        on(grip, 'pointercancel', endDrag);
+        /* 面板创建时还在 dialog 里没显示，offsetWidth 是 0 —— 此刻算不出 aria 数值。
+           不挂 ResizeObserver（对刚创建、尚未进文档的节点不可靠，且常驻观察一个隐藏
+           面板是纯浪费）：改为「焦点到手 / 每次写入」两个时机同步。读屏软件也正是在
+           焦点落到手柄时才读 aria-valuenow，时机是对的。 */
+        on(grip, 'focus', syncValue);
+        on(grip, 'pointerdown', syncValue);
+
+        return {
+            el: grip,
+            sync: syncValue,
+            dispose: function () {
+                drag = null;
+                off(grip, 'keydown', onKeyDown);
+                off(grip, 'pointerdown', onPointerDown);
+                off(grip, 'pointermove', onPointerMove);
+                off(grip, 'pointerup', endDrag);
+                off(grip, 'pointercancel', endDrag);
+                off(grip, 'focus', syncValue);
+                off(grip, 'pointerdown', syncValue);
+            },
+        };
+    }
+
     function createPanel(options) {
         var opts = options || {};
         /* 面板 id 会被派生出 -layer / -overlay / -title / -tab-* / -pane-* 等多个 DOM id，
@@ -3021,8 +3147,7 @@
         installHostModalWatcher();
 
         /* 生命周期标志：持久化子系统与 accordion 注册表都要读它 */
-        var disposed = false;
-        var acc = null;
+        var disposed = false, acc = null;
         /* 持久化子系统（G-01 第二步）在 DOM 骨架建好后创建，见下 */
         var persist = null;
         /* 标签控制器（G-01 第四步）：activeDom 由它独占，本函数只读 getActiveDom() */
@@ -3080,6 +3205,7 @@
         /* 玻璃模式控制器（G-01 第七步）：模式状态、系统偏好监听与生效值计算都在 factory 内，
            面板侧只保留 setMode / getState 两个出口（destroy 时 dispose）。 */
         var glassCtl = createGlassController({ dialog: dialog, mode: opts.glass });
+        var resizeGrip = opts.resizable ? createResizeGrip({ panel: panel, persist: persist, opts: opts, isDisposed: function () { return disposed; } }) : null;
         /* 初始自定义宽度（opts.width，默认交由 CSS / token 720px） */
         if (typeof opts.width === 'number' && !isNaN(opts.width)) {
             var initClamp = clampPanelLayout({ width: opts.width }, null, opts);
@@ -3455,7 +3581,7 @@
             persist.cleanup();
             disposed = true;
             acc.unbindAll();
-            scrollFade.dispose();
+            scrollFade.dispose(); if (resizeGrip) resizeGrip.dispose();
             if (typeof opts.destroy === 'function') opts.destroy();
         }
 

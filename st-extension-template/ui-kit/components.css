@@ -2152,6 +2152,54 @@ dialog.nvui-tl.nvui-theme-light select.nvui-input,
     color: var(--nvui-text);
 }
 
+/* v2.9.0（GH-#18 B4）：可选调尺寸手柄。
+   仅在 createPanel({ resizable: true }) 时生成；默认不开，因此既有面板的视觉零变化。
+   手柄只负责把「用户想多大」翻译成内联 px，钳制与持久化仍走 persist.applyClamping()。 */
+.nvui-panel.is-resizable {
+    position: relative;
+}
+
+.nvui-resize {
+    position: absolute;
+    right: 3px;
+    bottom: 3px;
+    width: 18px;
+    height: 18px;
+    border-radius: var(--nvui-radius-sm);
+    cursor: nwse-resize;
+    /* 触屏拖拽不要被浏览器当成滚动 */
+    touch-action: none;
+    opacity: 0.42;
+    background-image: repeating-linear-gradient(
+        135deg,
+        var(--nvui-text-3) 0 1.5px,
+        transparent 1.5px 4px
+    );
+    background-clip: content-box;
+    padding: 4px;
+    box-sizing: border-box;
+}
+
+.nvui-resize:hover,
+.nvui-resize.is-dragging {
+    opacity: 0.85;
+}
+
+/* 键盘用户必须看得见焦点：统一走焦点环令牌，不自己写像素 */
+.nvui-resize:focus-visible {
+    opacity: 1;
+    outline: var(--nvui-focus-ring-w) solid var(--nvui-focus-ring-color);
+    outline-offset: var(--nvui-focus-ring-offset);
+}
+
+/* 减少动效偏好下尺寸变化不做过渡（本组件本就没有 transition，
+   留这条是为了将来加过渡时不会悄悄违背 prefers-reduced-motion） */
+@media (prefers-reduced-motion: reduce) {
+    .nvui-resize {
+        transition: none;
+    }
+}
+
 /* 浅色主题的面板态：玻璃更接近白色霜面，避免透明面板在亮背景上失去可读性 */
 .nvui-theme-light .nvui-overlay.is-panel {
     background: color-mix(in srgb, var(--nvui-bg) 22%, transparent);

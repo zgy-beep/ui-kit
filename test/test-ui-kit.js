@@ -769,6 +769,7 @@ const COMPONENT_CLASSES = [
     'nvui-glass', 'nvui-solid', 'nvui-acc-inner',
     'nvui-toast', 'nvui-toast-stack',
     'nvui-progress', 'nvui-progress-bar', 'nvui-progress-field', 'nvui-skeleton', 'nvui-status-dot',
+    'nvui-resize',
     'nvui-fade-in', 'nvui-slide-up', 'nvui-pop-in', 'nvui-stagger', 'nvui-pulse',
     // v2.1.0 新增 10 个类名：SillyTavern 插件面板布局标准（契约 §14）
     'nvui-panel', 'nvui-panel-header', 'nvui-panel-title', 'nvui-panel-actions', 'nvui-panel-body',
@@ -776,8 +777,8 @@ const COMPONENT_CLASSES = [
     // v2.8.0 新增 1 个类名：默认按钮组
     'nvui-actions',
 ];
-check('COMPONENT_CLASSES 清单为 v2.9.0 的 82 个类名（v2.8.0 的 81 + .nvui-progress-field）',
-    COMPONENT_CLASSES.length === 82 && new Set(COMPONENT_CLASSES).size === 82,
+check('COMPONENT_CLASSES 清单为 v2.9.0 的 83 个类名（v2.8.0 的 81 + .nvui-progress-field + .nvui-resize）',
+    COMPONENT_CLASSES.length === 83 && new Set(COMPONENT_CLASSES).size === 83,
     `实际 ${COMPONENT_CLASSES.length} 个 / 去重 ${new Set(COMPONENT_CLASSES).size} 个`);
 const kitAllSources = [tokensClean, componentsClean, previewClean].join('\n');
 const missingInCss = COMPONENT_CLASSES.filter((c) => !containsExact(kitAllSources, '.' + c));

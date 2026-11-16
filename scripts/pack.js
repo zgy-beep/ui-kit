@@ -126,7 +126,7 @@ function main() {
         files: manifestFiles,
         contracts: {
             tokens: Object.keys(tokensJson.dark || {}).length,
-            classes: 82,
+            classes: 83,
             keyframes: 16,
             important: (componentsClean.match(/!important/g) || []).length,
         },
