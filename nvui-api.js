@@ -2595,13 +2595,74 @@
         };
     }
 
+    /**
+     * 玻璃模式控制器（G-01 第七步）。
+     *
+     * 收进四份状态（请求模式 / 生效模式 / 系统偏好 MQ / 清理句柄）与三个出口
+     * （setMode / getState / dispose），面板侧不再直接读写 effectiveGlassMode。
+     * 创建时机必须紧贴 dialog：applyPanelGlassMode() 要在挂载前先跑一次，
+     * 否则首帧会闪一帧实体背景再切到玻璃。
+     */
+    function createGlassController(ctx) {
+        var dialog = ctx.dialog;
+        var mode = normalizeGlassMode(ctx.mode);
+        var effective = applyPanelGlassMode(dialog, mode);
+        var mediaCleanup = null;
+
+        /* force 模式需要跟随系统「减少透明度 / 强制颜色」动态让位；auto/solid 也同步一次。 */
+        function refresh() {
+            effective = applyPanelGlassMode(dialog, mode);
+            return effective;
+        }
+
+        if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+            var glassMqs = [
+                window.matchMedia('(prefers-reduced-transparency: reduce)'),
+                window.matchMedia('(forced-colors: active)'),
+            ];
+            var onGlassPrefChange = function () { refresh(); };
+            glassMqs.forEach(function (mq) {
+                if (mq && typeof mq.addEventListener === 'function') mq.addEventListener('change', onGlassPrefChange);
+            });
+            mediaCleanup = function () {
+                glassMqs.forEach(function (mq) {
+                    if (mq && typeof mq.removeEventListener === 'function') mq.removeEventListener('change', onGlassPrefChange);
+                });
+            };
+        }
+
+        return {
+            setMode: function (next) {
+                mode = normalizeGlassMode(next);
+                return refresh();
+            },
+            getState: function () {
+                var reason = '';
+                if (mode === 'force' && effective !== 'force') {
+                    reason = !browserSupportsBackdrop() ? 'backdrop-unsupported' : 'preference-blocked';
+                } else if (effective === 'auto' && isDomAvailable() && document.body
+                    && document.body.classList.contains('no-blur')) {
+                    reason = 'host-no-blur';
+                }
+                return {
+                    mode: mode,
+                    effective: effective,
+                    fastUI: !!(isDomAvailable() && document.body && document.body.classList.contains('no-blur')),
+                    browserSupports: browserSupportsBackdrop(),
+                    preferenceBlocked: glassPreferenceBlocksForce(),
+                    reason: reason,
+                };
+            },
+            dispose: function () {
+                if (mediaCleanup) { mediaCleanup(); mediaCleanup = null; }
+            },
+        };
+    }
+
     function createPanel(options) {
         var opts = options || {};
         /* 宿主若全局禁用了 backdrop-filter，先恢复回退态，避免玻璃只剩半透明底色 */
         syncGlassFallback();
-        var glassMode = normalizeGlassMode(opts.glass);
-        var effectiveGlassMode = glassMode;
-        var glassMediaCleanup = null;
         /* 面板 id 会被派生出 -layer / -overlay / -title / -tab-* / -pane-* 等多个 DOM id，
            所以它本身也必须是合法 id（不能含空格 / 引号 / < >）。 */
         var id = uniqueId(sanitizeIdPart(opts.id || 'nvui-panel', 'nvui-panel'));
@@ -2632,7 +2693,7 @@
             role: 'presentation',
             'aria-label': dialogTitleStr + ' 浮层',
             'data-nvui-version': VERSION,
-            'data-nvui-glass-mode': glassMode,
+            'data-nvui-glass-mode': normalizeGlassMode(opts.glass),
         });
         stampVersion(dialog);
         var overlay = el('div', 'nvui-overlay is-panel', { id: id + '-overlay', hidden: '' });
@@ -2671,28 +2732,9 @@
             sanitizeIdPart: sanitizeIdPart,
             warn: warn,
         });
-        effectiveGlassMode = applyPanelGlassMode(dialog, glassMode);
-
-        /* force 模式需要跟随系统「减少透明度 / 强制颜色」动态让位；auto/solid 也同步一次。 */
-        function refreshPanelGlassMode() {
-            effectiveGlassMode = applyPanelGlassMode(dialog, glassMode);
-        }
-        if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
-            var glassMqs = [
-                window.matchMedia('(prefers-reduced-transparency: reduce)'),
-                window.matchMedia('(forced-colors: active)'),
-            ];
-            var onGlassPrefChange = function () { refreshPanelGlassMode(); };
-            glassMqs.forEach(function (mq) {
-                if (mq && typeof mq.addEventListener === 'function') mq.addEventListener('change', onGlassPrefChange);
-            });
-            glassMediaCleanup = function () {
-                glassMqs.forEach(function (mq) {
-                    if (mq && typeof mq.removeEventListener === 'function') mq.removeEventListener('change', onGlassPrefChange);
-                });
-            };
-        }
-
+        /* 玻璃模式控制器（G-01 第七步）：模式状态、系统偏好监听与生效值计算都在 factory 内，
+           面板侧只保留 setMode / getState 两个出口（destroy 时 dispose）。 */
+        var glassCtl = createGlassController({ dialog: dialog, mode: opts.glass });
         /* 初始自定义宽度（opts.width，默认交由 CSS / token 720px） */
         if (typeof opts.width === 'number' && !isNaN(opts.width)) {
             var initClamp = clampPanelLayout({ width: opts.width }, null, opts);
@@ -3044,7 +3086,7 @@
          * 摘除动作本身幂等（removed 标志），重复触发无害。
          */
         function destroy() {
-            if (glassMediaCleanup) { glassMediaCleanup(); glassMediaCleanup = null; }
+            glassCtl.dispose();
             restoreForeignNodes(dialog);
             unregisterEscapeHandler(closePanel);
             var removed = false;
@@ -3124,26 +3166,10 @@
                 persist.scheduleIfSize();
             },
             setGlassMode: function (mode) {
-                glassMode = normalizeGlassMode(mode);
-                effectiveGlassMode = applyPanelGlassMode(dialog, glassMode);
-                return effectiveGlassMode;
+                return glassCtl.setMode(mode);
             },
             getGlassState: function () {
-                var reason = '';
-                if (glassMode === 'force' && effectiveGlassMode !== 'force') {
-                    reason = !browserSupportsBackdrop() ? 'backdrop-unsupported' : 'preference-blocked';
-                } else if (effectiveGlassMode === 'auto' && isDomAvailable() && document.body
-                    && document.body.classList.contains('no-blur')) {
-                    reason = 'host-no-blur';
-                }
-                return {
-                    mode: glassMode,
-                    effective: effectiveGlassMode,
-                    fastUI: !!(isDomAvailable() && document.body && document.body.classList.contains('no-blur')),
-                    browserSupports: browserSupportsBackdrop(),
-                    preferenceBlocked: glassPreferenceBlocksForce(),
-                    reason: reason,
-                };
+                return glassCtl.getState();
             },
         };
 

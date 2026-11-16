@@ -2358,7 +2358,7 @@ if (!hasDom) {
 
 /* --- 9.7 复杂度冻结（G-01）：createPanel 不得继续膨胀 --- */
 /*
- * 图谱实测：createPanel() 度 67，是全项目唯一枢纽。2026-11-16 P1-1 分四步拆：
+ * 图谱实测：createPanel() 度 67，是全项目唯一枢纽。2026-11-16 P1-1 分七步拆：
  *   第一步：accordion 子系统（15 个函数、283 行）→ createAccordionRegistry(ctx)，
  *           函数体 1433 → 1162 行，嵌套函数 36 → 20 个；
  *   第二步：持久化 / 视口钳制（7 个函数、332 行）→ createPersistence(ctx)，
@@ -2370,11 +2370,15 @@ if (!hasDom) {
  *   第五步：更新胶囊（1 个函数 + 3 份状态、95 行）→ createUpdatePillController(ctx)，
  *           函数体 688 → 601 行，嵌套函数 8 → 7 个；
  *   第六步：节点写入（2 个函数、62 行）→ createPaneWriter(ctx)，
- *           函数体 601 → 569 行，嵌套函数 7 → 5 个。
+ *           函数体 601 → 569 行，嵌套函数 7 → 5 个；
+ *   第七步：玻璃模式（1 个函数 + 4 份状态、40 行）→ createGlassController(ctx)，
+ *           函数体 569 → 531 行，嵌套函数 5 → 4 个。
+ * 剩余 3 个嵌套函数（openPanel / closePanel / destroy）是面板对外的生命周期契约，
+ * 抽取需要 15 项能力的 ctx，耦合会重于收益，故**到此为止**（见 ISSUES.md G-01）。
  * 阈值随重构下调，**只允许降不允许升**：需要新逻辑时先抽 factory，而不是放宽本条。
  * 27 个导出成员已由 test/test-api-surface.js 的 EXPECTED_EXPORTS 冻结，此处不重复断言。
  */
-const CREATE_PANEL_MAX_LINES = 569;
+const CREATE_PANEL_MAX_LINES = 531;
 const apiLines = apiSrc.split('\n');
 const cpStart = apiLines.findIndex((l) => /^\s*function createPanel\(/.test(l));
 const cpEnd = cpStart < 0 ? -1
