@@ -508,7 +508,8 @@ async function checkGitHubRelease() {
 | `NVUI.inputRow({ label, type, value, min, max, step, onChange })` | 输入行（number 默认隐藏原生步进按钮） |
 | `NVUI.accordion({ title, summary, open, content })` | 折叠分组 |
 | `NVUI.progress({ value, variant, indeterminate })` | 进度条（返回元素带 `setValue`） |
-| `NVUI.createPanel(options)` | 完整面板（见 §2.2），支持 persist/themeToggle/onThemeChange/update/width/**glass** 等，返回 `{ open, close, destroy, setTab, syncIndicator, addSwitch, addInput, addAccordion, addProgress, addNode, addSectionTitle, showUpdate, trackAccordion, adoptAccordions, clearLayoutState, setSize, setMaximized, setGlassMode, getGlassState }` |
+| `panel.getLayoutState()` / `panel.setLayoutState(state, { silent })` | v2.9.0（GH-#18 B1）布局状态读写：get 返回 `{ version, size, tab, accordion }` 游离副本（无 `timestamp`），set 只写内存 + 一次落盘（不切换当前视图）；`silent: true` 不写存储；`persist` 关掉的维度强制 `null` |
+| `NVUI.createPanel(options)` | 完整面板（见 §2.2），支持 persist/themeToggle/onThemeChange/update/width/**glass** 等，返回 `{ open, close, destroy, setTab, syncIndicator, addSwitch, addInput, addAccordion, addProgress, addNode, addSectionTitle, showUpdate, trackAccordion, adoptAccordions, clearLayoutState, getLayoutState, setLayoutState, setSize, setMaximized, setGlassMode, getGlassState }` |
 | `panel.trackAccordion(node, id?, options?)` | 接管 `innerHTML` 注入的**单个** `.nvui-acc`（v2.6.0，GitHub #11）。默认**不**绑点击，`{ bind: true }` 才由 kit 提供开合；返回实际 id，幂等；键按**原始字符串**保存（中文 / 非 ASCII 不折叠，`__proto__` 等特殊键安全）；显式 / DOM / data 键被活动节点占用时告警并返回 `null`（自动键才追加序号）；非 `.nvui-acc` / 跨面板返回 `null` |
 | `panel.adoptAccordions(root, options?)` | 批量接管容器内 `.nvui-acc`（含 root 自身），返回本次新增数量；重复调用返回 `0`；拒绝 `document` / `body` |
 | `NVUI.showToast({ message, type, duration, icon })` | 吐司通知（自动建独立载体、自动清理） |

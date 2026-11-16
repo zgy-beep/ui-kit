@@ -1421,6 +1421,43 @@
     }
 
     /**
+     * 布局状态的深拷贝与规范化（v2.9.0 / GH-#18 B1）。
+     *
+     * 两个用途：
+     * 1. `getLayoutState()` 必须返回游离副本 —— 否则下游一改返回值就污染了内部
+     *    `loadedState`，下一次 flush 会把这坨脏数据写进存储；
+     * 2. `setLayoutState()` 必须先规范化再落内存 —— 外部传入的对象可能带任意键、
+     *    把 `accordion` 传成数组、或 `width` 传成字符串。
+     *
+     * `timestamp` 是可选的存储元数据：有就保留，没有就不补（导出的布局态不该带时刻）。
+     */
+    function cloneLayoutState(state) {
+        if (!state || typeof state !== 'object') return null;
+        var out = { version: 1 };
+        if (typeof state.timestamp === 'number') out.timestamp = state.timestamp;
+        if (state.size && typeof state.size === 'object') {
+            out.size = {
+                width: (typeof state.size.width === 'number' && !isNaN(state.size.width)) ? state.size.width : null,
+                height: (typeof state.size.height === 'number' && !isNaN(state.size.height)) ? state.size.height : null,
+                isMaximized: !!state.size.isMaximized,
+            };
+        } else {
+            out.size = null;
+        }
+        out.tab = (state.tab === undefined || state.tab === null) ? null : String(state.tab);
+        if (state.accordion && typeof state.accordion === 'object') {
+            /* 无原型承接：键可能是 "__proto__" / "constructor"（同 flushPersistSave） */
+            var acc = Object.create(null);
+            var keys = Object.keys(state.accordion);
+            for (var i = 0; i < keys.length; i++) acc[keys[i]] = !!state.accordion[keys[i]];
+            out.accordion = acc;
+        } else {
+            out.accordion = null;
+        }
+        return out;
+    }
+
+    /**
      * 多分辨率跨屏视口越界钳制防护数学模型 (Viewport Clamping)。
      * - 手机端（<=600px）强制清空内联固定像素，交由 CSS 100% 抽屉规范接管；
      * - 桌面端钳制宽在 [min(320, vw-32), vw-32]，高在 [min(240, vh-32), vh-32]；
@@ -1869,6 +1906,8 @@
         var persistTimer = null;
         var resizeRaf = null;
         var resizeObserver = null;
+        /* setLayoutState() 导入的状态：下一次 flush 按它原样写，不用 DOM 反解覆盖 */
+        var pendingState = null;
 
         function anyPersistEnabled() {
             return !!(persistConfig && (persistConfig.size || persistConfig.tab || persistConfig.accordion));
@@ -1883,17 +1922,14 @@
             }, PERSIST_DEBOUNCE_MS);
         }
 
-        function flushPersistSave(force) {
-            if (!persistConfig || ctx.isDisposed() || !anyPersistEnabled()) {
-                return;
-            }
-            var hadTimer = !!persistTimer;
-            if (persistTimer) {
-                clearTimeout(persistTimer);
-                persistTimer = null;
-            }
-            try {
-                var defaultW = (opts && typeof opts.width === 'number' && !isNaN(opts.width)) ? opts.width : 720;
+        /* 从 DOM 反解当前布局快照。collectState() 同时服务 flush 与 getLayoutState()：
+           导出布局不该先把东西写进存储。persistConfig 为空（未开持久化）时按「全维度」采集，
+           只读快照仍然有意义 —— 下游可据此迁到自己的存储。 */
+        function collectState() {
+            var sizeOn = !persistConfig || !!persistConfig.size;
+            var tabOn = !persistConfig || !!persistConfig.tab;
+            var accOn = !persistConfig || !!persistConfig.accordion;
+            var defaultW = (opts && typeof opts.width === 'number' && !isNaN(opts.width)) ? opts.width : 720;
                 var currentW = defaultW;
                 var currentH = null;
                 var isMax = panel.classList.contains('is-maximized');
@@ -1954,19 +1990,35 @@
                     }
                 }
 
-                var toSave = {
+                return {
                     version: 1,
                     timestamp: Date.now(),
                     /* Issue #16：persist.size:false 时不得把历史 size 原样回存，
                        否则旧像素高度永远清不掉，每次打开都会被 applyClamping() 写回内联样式。 */
-                    size: persistConfig.size ? {
+                    size: sizeOn ? {
                         width: currentW,
                         height: currentH,
                         isMaximized: isMax,
-                    } : null,
-                    tab: persistConfig.tab ? currentTabKey : (loadedState ? loadedState.tab : null),
-                    accordion: persistConfig.accordion ? currentAccState : (loadedState ? loadedState.accordion : null),
+                    } : (loadedState ? loadedState.size : null),
+                    tab: tabOn ? currentTabKey : (loadedState ? loadedState.tab : null),
+                    accordion: accOn ? currentAccState : (loadedState ? loadedState.accordion : null),
                 };
+        }
+
+        function flushPersistSave(force) {
+            if (!persistConfig || ctx.isDisposed() || !anyPersistEnabled()) {
+                return;
+            }
+            var hadTimer = !!persistTimer;
+            if (persistTimer) {
+                clearTimeout(persistTimer);
+                persistTimer = null;
+            }
+            try {
+                /* setLayoutState() 导入的状态优先：它表达的是「下次打开复原成什么样」，
+                   可能故意与当前视图不同，不能被 DOM 反解覆盖。写完即弃。 */
+                var toSave = pendingState || collectState();
+                pendingState = null;
 
                 if (!hadTimer && hasSaved && !force && isStateEqual(toSave, loadedState)) {
                     return;
@@ -2148,11 +2200,65 @@
             }
         }
 
+        /* 导出当前布局（v2.9.0 / GH-#18 B1）。刻意不带 timestamp：
+           布局态是「宽高 + 标签 + 折叠」，时间戳属于存储记录，带上就破坏了
+           `get → set → get` 的深相等。 */
+        function getLayoutState() {
+            var snapshot = cloneLayoutState(pendingState || collectState());
+            /* 时间戳是存储记录元数据，不属于布局本身：留着会让两次 get 天然不等 */
+            if (snapshot) delete snapshot.timestamp;
+            return snapshot;
+        }
+
+        /* 导入布局（v2.9.0 / GH-#18 B1）。
+         * 只写内存 + 调度一次落盘，**不**调用 applyLoadedState —— 导入是数据操作，
+         * 不该让面板当场跳尺寸、换标签。真正生效时机是下一次 open()。
+         * 关掉的维度一律写 null：否则 `persist: { size: false }` 的面板一旦被导入，
+         * #16 的「尺寸隔离」就被绕过了。 */
+        function setLayoutState(state, options) {
+            var silent = !!(options && options.silent);
+            if (!persistConfig || !anyPersistEnabled()) {
+                ctx.warn('setLayoutState(): 本面板未启用持久化，已忽略');
+                return null;
+            }
+            if (!state || typeof state !== 'object') {
+                ctx.warn('setLayoutState(): 需要对象参数，已忽略');
+                return null;
+            }
+            var base = collectState();
+            var has = function (k) { return Object.prototype.hasOwnProperty.call(state, k); };
+            var next = {
+                version: 1,
+                timestamp: Date.now(),
+                /* 未提供的键落回当前 DOM 事实；显式传 null 视为「清空该项」 */
+                size: has('size') ? state.size : base.size,
+                tab: has('tab') ? state.tab : base.tab,
+                accordion: has('accordion') ? state.accordion : base.accordion,
+            };
+            var normalized = cloneLayoutState(next);
+            if (!persistConfig.size) normalized.size = null;
+            if (!persistConfig.tab) normalized.tab = loadedState ? loadedState.tab : null;
+            if (!persistConfig.accordion) normalized.accordion = loadedState ? loadedState.accordion : null;
+
+            loadedState = normalized;
+            if (silent) {
+                /* 只动内存：下一次由真实交互触发的落盘仍以 DOM 为准 */
+                debug('setLayoutState(): silent，仅更新内存态');
+                return cloneLayoutState(normalized);
+            }
+            pendingState = normalized;
+            schedulePersistSave();
+            debug('setLayoutState(): 已导入布局并调度落盘');
+            return cloneLayoutState(normalized);
+        }
+
         function panelClearLayoutState() {
             if (persistTimer) {
                 clearTimeout(persistTimer);
                 persistTimer = null;
             }
+            /* 导入中的状态一并作废，否则清空后的第一次 flush 又把它写回去 */
+            pendingState = null;
             clearLayoutState(opts.id || id, storage);
             loadedState = null;
             hasSaved = false;
@@ -2249,6 +2355,8 @@
             },
             cleanup: cleanup,
             clearLayout: panelClearLayoutState,
+            getLayout: getLayoutState,
+            setLayout: setLayoutState,
         };
     }
 
@@ -2769,8 +2877,6 @@
 
     function createPanel(options) {
         var opts = options || {};
-        /* 宿主若全局禁用了 backdrop-filter，先恢复回退态，避免玻璃只剩半透明底色 */
-        syncGlassFallback();
         /* 面板 id 会被派生出 -layer / -overlay / -title / -tab-* / -pane-* 等多个 DOM id，
            所以它本身也必须是合法 id（不能含空格 / 引号 / < >）。 */
         var id = uniqueId(sanitizeIdPart(opts.id || 'nvui-panel', 'nvui-panel'));
@@ -3261,6 +3367,8 @@
             addProgress: function (key, o) { return writer.addNode(key, progress(o)); },
             addSectionTitle: function (key, text) { return writer.addNode(key, el('div', 'nvui-section-title', { text: text })); },
             clearLayoutState: persist.clearLayout,
+            getLayoutState: persist.getLayout,
+            setLayoutState: persist.setLayout,
             flushPersistSave: persist.flush,
             setSize: function (w, h) {
                 if (typeof w === 'number') panel.style.width = w + 'px';

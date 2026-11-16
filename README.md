@@ -2249,7 +2249,7 @@ console.log(typeof NVUI.createPanel); // 'function'
 | `mount` | 挂载节点（默认 `document.body`；无效则回退 body，仍无效则中止创建） |
 | `onClose` | 关闭后回调 |
 | `destroy` | `destroy()` 时执行的清理回调（解绑自有监听、清理定时器等） |
-| `persist` | `true` 或 `{ size, tab, accordion, storage }`：布局状态持久化（尺寸 / tab / 折叠），可插拔 StorageAdapter |
+| `persist` | `true` 或 `{ size, tab, accordion, storage }`：布局状态持久化（尺寸 / tab / 折叠），可插拔 StorageAdapter；读写入口见控制器方法 `getLayoutState()` / `setLayoutState()` |
 | `width` | 初始自定义宽度（number，单位 px，默认 720；经 Viewport Clamping 钳制） |
 | `update` | 静态更新胶囊 `{ version, label, url, onClick, hidden }` |
 | `themeToggle` | `true` 或 `{ onThemeChange, initial: 'dark' 或 'light' }`：头部主题切换按钮 |
@@ -2259,7 +2259,26 @@ console.log(typeof NVUI.createPanel); // 'function'
 `open()` / `close()` / `destroy()` / `setTab(key)` / `syncIndicator()` / `addNode(key, node)` /
 `addSwitch(key, opts)` / `addInput(key, opts)` / `addAccordion(key, opts)` / `addProgress(key, opts)` / `addSectionTitle(key, text)` /
 `showUpdate(updateConfig)` / `trackAccordion(node, id?, options?)` / `adoptAccordions(root, options?)` /
-`clearLayoutState()` / `flushPersistSave()` / `setSize(width, height)` / `setMaximized(boolean)` / `setGlassMode(mode)` / `getGlassState()`，以及只读 getter `activeTab`。
+`clearLayoutState()` / `getLayoutState()` / `setLayoutState(state, { silent })` / `flushPersistSave()` /
+`setSize(width, height)` / `setMaximized(boolean)` / `setGlassMode(mode)` / `getGlassState()`，以及只读 getter `activeTab`。
+
+**布局状态导入导出（v2.9.0，GH-#18 B1）**
+
+`getLayoutState()` 返回 `{ version, size, tab, accordion }` 的**游离副本**（不含 `timestamp` ——
+时间戳是存储记录元数据，带上会让两次调用天然不等）。`setLayoutState(state, { silent })` 只写内存 +
+调度一次落盘，**不会**让面板当场跳尺寸或换标签 —— 导入是数据操作，真正生效在下一次 `open()`。
+
+```js
+const snapshot = panel.getLayoutState();          // → 可存进 extension_settings
+await saveToHostSettings(panel.id, snapshot);     // 宿主自己的存储
+panel.setLayoutState(snapshot);                   // 导入：只写内存 + 一次落盘
+panel.setLayoutState(snapshot, { silent: true }); // 预览：不写存储，仅内存态
+```
+
+- 未提供的键落回当前 DOM 事实，显式传 `null` 视为清空该项；`persist` 关掉的维度（如 `size: false`）一律写 `null`，
+  不会绕过 #16 的尺寸隔离；
+- 连续多次调用合并成一次落盘（250ms 防抖）；`silent: true` 完全不写存储；
+- 未启用 `persist` 时 `getLayoutState()` 仍返回只读快照（便于一次性迁移到自己的存储），`setLayoutState()` 返回 `null`。
 
 **组件默认值（`NVUI.defaults`）**
 

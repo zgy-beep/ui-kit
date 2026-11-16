@@ -20,6 +20,7 @@ const CONTROLLER_METHODS = [
     'open', 'close', 'destroy', 'setTab', 'showUpdate', 'syncIndicator', 'addNode', 'addSwitch',
     'addInput', 'addAccordion', 'trackAccordion', 'adoptAccordions', 'addProgress', 'addSectionTitle',
     'clearLayoutState', 'flushPersistSave', 'setSize', 'setMaximized', 'setGlassMode', 'getGlassState',
+    'getLayoutState', 'setLayoutState',
 ];
 
 const failures = [];
