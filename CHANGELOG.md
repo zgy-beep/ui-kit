@@ -6,7 +6,7 @@
 - 新增组件 / 新增 token（不破坏既有 DOM 与取值）：小版本（2.x.0）
 - 重命名类 / token、删除 token、修改 DOM 契约：大版本（x.0.0）
 
-## v2.8.1（2026-11-16）· 焦点陷阱修正 + 触控尺寸 + 测试基线（PATCH）
+## v2.8.2（2026-11-16）· 焦点陷阱修正 + 触控尺寸 + 测试基线（PATCH）
 
 - 修复：`createPanel()` 的焦点陷阱把 `tabindex="-1"` 的未激活 tab 也算作可 Tab 项，导致纯文本面板从激活 tab 按一次 Tab 时误判「后面还有下一站」而放行默认 Tab，焦点直接逃到宿主页面（违反 `aria-modal` 契约）。现仅统计原生 Tab 序列内的节点，并对「焦点落在 `tabindex=-1` 节点」按 DOM 顺序兜底；`Tab / Shift+Tab` 逻辑抽到模块级 `trapTabFocus()`，`createPanel()` 行数维持复杂度冻结上限内。
 - 回归：`test/issue-13-14-focus-escape.spec.js` 新增 T1b（纯文本面板：激活 tab / 点选非激活 tab 后各按一次 Tab 均须留在面板内），root + template 双资产 15/15。
@@ -30,7 +30,38 @@
      剩余 `openPanel` / `closePanel` / `destroy` 为对外生命周期契约，抽取需 15 项能力的 ctx，故保留。
   导出面、DOM、CSS、状态存储格式零变化；真实宿主 35/35 + 19/19、持久化压力 19/19、e2e 58/58、浏览器 4 spec 全绿。
 - 维护流程：新增 [`MAINTAINING.md`](MAINTAINING.md)，把「何时提交 / 提交信息格式」「版本三态与升位判定树」「GitHub issue 关闭判据与巡查节奏」写成可执行规范；`verify:release` 增加该文档三章存在性校验（19 → 20 项），`npm test` 增加一条同源断言（369 → 370）。同时统一措辞：`CHANGELOG.md` 不再使用 `Unreleased` 标题，「已 bump 未打 tag」记为**待发布**。
-- 关联：GitHub [GH-#20](https://github.com/zgy-beep/ui-kit/issues/20)（发布提交请关联 `Fixes #20`）。GH-#21 的另两条（进度条可视标签、滚动边缘渐隐）**本版不含**，仍待设计确认。
+- 兼容：本版含 v2.8.1 的 `persist.size:false` 尺寸隔离修复（#16）。该修复的三处语义（clamp 只读存档门禁、恢复前摘掉 size、落盘写 `size:null`）已移植进重构后的 `createPersistence(ctx)`，`test/issue-16-persist-size.js` 8/8 保持全绿，状态格式不变。
+- 关联：GitHub [GH-#20](https://github.com/zgy-beep/ui-kit/issues/20)（已修复待发布，关闭条件见 `MAINTAINING.md` §3.3）。GH-#21 的另两条（进度条可视标签、滚动边缘渐隐）**本版不含**，仍待设计确认。
+
+## v2.8.1（2026-11-05）· `persist.size: false` 尺寸隔离修复（PATCH）
+
+> 补丁版本：不改 token 取值/数量（111/47）、组件类（81）、关键帧（16）、`!important` 预算（18）、公开 API 签名与持久化状态格式；下游覆盖 4 个运行资产即可升级。
+
+### 修复
+
+- **`persist.size: false` 不再把历史尺寸写回内联样式（GitHub [#16](https://github.com/zgy-beep/ui-kit/issues/16)）**：下游用 `createPanel({ persist: { size: false, tab: true, accordion: true } })` 关闭尺寸持久化、并在业务 CSS 里用 `--nvui-panel-max-h` / `height: var(--nvui-panel-max-h)` 接管面板高度时，只要 `nvui_state_<id>` 里**曾经**存在过 `size.width/height`（旧版本存过或用户拖拽过），面板重开就会被写回旧 px 高度 —— 1440×900 实测只有 567px，而不是 94vh 的 846px。三处定版改动：
+  1. `applyClamping()` 增加 `useSavedSize = !!(persistConfig && persistConfig.size)` 门禁：`persist.size: false` 时**完全不读** `loadedState.size`；面板自身的内联 px（拖拽 / `opts.width` / `setSize()` / 最大化）仍照常参与视口钳制，clamp 的安全语义不变；
+  2. `applyLoadedState()` 在 `persistConfig.size === false` 且存档带 `size` 时，先把 `size` 摘成 `null` 再恢复其它字段（同步与异步 StorageAdapter 两条路径共用），避免后续任何路径再读到旧值；
+  3. `flushPersistSave()` 不再 `loadedState.size` 原样回存，改为在 `persist.size: false` 时写 `size: null` —— 历史遗留值被**一次性自愈**清掉，下游不必再手动清理存储。
+- 下游此前为规避该缺陷写的「开面板前 `delete state.size`」补丁可以删除，行为不再依赖它。
+
+### 测试
+
+- 新增 `test/issue-16-persist-size.js`（真实 Chromium，8 项断言）：T1 复现（旧 `size` + `size:false` → 无内联 height、回到 94vh token 高度）、T2 历史 `size` 被清成 `null` 且 tab/accordion 存档保留、T3 门禁不误伤内联 px（`setSize(720, 5000)` 仍被钳制）、T4 `persist.size: true` 旧尺寸照常恢复、T5 清理后再开不死灰复燃、T6 无 `persist` 不写尺寸内联样式、T7 旧存档 `isMaximized: true` 不进最大化态、T8 全程零 pageerror。
+- **红测验证**：把 `nvui-api.js` 临时还原为 v2.8.0 原文件时 T1/T2/T7 全红（`inlineHeight: "400px"`、存档 `size` 仍为旧对象），修复后 8/8 全绿。
+- 接入 `npm run test:issue16`，并追加到 `npm run test:browser` 链尾。
+- 全量回归：`npm test` 367 PASS / 0 FAIL、`test:api` 27 导出冻结、forms 455/455、accordion 18/18、optgroup 217/217、focus 13/13，`verify:release` 通过。
+
+### 文档 / 版本
+
+- README（标题版本 / CDN tag / §10.10 升级速查 / §11.4 版本时间线 / token 表 `--nvui-kit-version`）、AI-GUIDE（当前版本与历史基准）、UPGRADING（新增「2.8.0 → 2.8.1」段，含绕过补丁删除说明）、MIGRATION-v2、preview.html 同步到 v2.8.1。
+- `st-extension-template/ui-kit/` 4 资产随 `npm run sync:template` 同步（md5 逐文件一致）。
+- `ISSUES.md`：#16 转入「已修复」并写明修复版本与回归入口。
+
+### 兼容性
+
+- 无 token / 类名 / 关键帧 / `!important` / 公开 API 签名 / `nvui_state_*` 状态格式变更。
+- 唯一可观察行为变化：`persist.size: false` 的面板不再被历史存档尺寸钳回；`persist.size: true`（默认）完全不变。
 
 ## v2.8.0（2026-10-26）· 下游 DX + 组件默认值 + Fast UI 玻璃模式（MINOR）
 

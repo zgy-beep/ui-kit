@@ -1,11 +1,15 @@
 #!/usr/bin/env node
-/** v2.8.x 静态功能断言：自检、默认值、间距、force 玻璃契约。版本从 package.json 派生。 */
+/**
+ * v2.8.x 静态功能断言：自检、默认值、间距、force 玻璃契约。
+ * 版本号一律从 package.json 读取（自 v2.8.1 起），避免每次补丁发版都要改测试。
+ */
 'use strict';
 const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
-const VERSION = require(path.join(ROOT, 'package.json')).version;
+const pkg = require(path.join(ROOT, 'package.json'));
+const VERSION = pkg.version;
 const api = require(path.join(ROOT, 'nvui-api.js'));
 const css = fs.readFileSync(path.join(ROOT, 'components.css'), 'utf8');
 const tokens = fs.readFileSync(path.join(ROOT, 'tokens.css'), 'utf8');
@@ -29,7 +33,7 @@ const nodeCheck = api.selfCheck({ expect: VERSION });
 check('selfCheck 在 Node 无 DOM 安全返回 no-dom', nodeCheck.ok === false
     && nodeCheck.issues.includes('no-dom') && nodeCheck.kitVersion === VERSION);
 check(`tokens.css 包含 --nvui-kit-version ${VERSION}`,
-    tokens.includes('--nvui-kit-version: ' + VERSION));
+    new RegExp(`--nvui-kit-version:\\s*"?${VERSION.replace(/\./g, '\\.')}`).test(tokens));
 check('CSS 包含 .nvui-actions 与正文相邻按钮默认间距',
     /\.nvui-actions\s*\{/.test(css)
     && /:where\([^)]*\)\s*>\s*\.nvui-btn\s*\+\s*\.nvui-btn/.test(css));
@@ -40,4 +44,4 @@ check('CSS 含面板级 solid 覆盖（dialog 自身 .nvui-solid）',
     /dialog\.nvui-tl\.nvui-solid\s+\.nvui-panel/.test(css));
 
 if (failures.length || checks.some((c) => !c.ok)) process.exit(1);
-console.log(`${VERSION} 静态功能断言通过。`);
+console.log(`v${VERSION} 静态功能断言通过。`);

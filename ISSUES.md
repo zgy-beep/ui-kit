@@ -30,7 +30,7 @@
 | [GH-#17](https://github.com/zgy-beep/ui-kit/issues/17) | 线路 A · v2.8.2 工程化收尾（A1–A5）。2026-11-16 复核：A1 / A2 / A3 **未开始**，A4 **部分完成**、A5 **已完成**。 | **OPEN**（进行中）：A4 已归档 7 个零引用探针（`test/*.js` 50 → 43）；A5 已补 README §11.4 时间线与 `--self-test` 反向验证。issue 勾选与进度段已同步。 |
 | [GH-#18](https://github.com/zgy-beep/ui-kit/issues/18) | 线路 B · v2.9.0 下游可维护性与可观测性（B1–B6，全 additive）。 | **OPEN**（未开始）：无线程内提交；`ROADMAP.md` 已补建并记录顺序建议 B1 → B3 → B2 → B6 → B4 / B5。 |
 | [GH-#19](https://github.com/zgy-beep/ui-kit/issues/19) | 线路 C · v3.0.0 内联尺寸停写与命名收敛（C1–C4，破坏性）。 | **OPEN**（未开始）：需迁移器与下游公告；`ROADMAP.md` 已记录「读 `panel.style.width/height` 的下游代码会失效」。 |
-| [GH-#20](https://github.com/zgy-beep/ui-kit/issues/20) | 焦点陷阱尾项误判：`tabindex="-1"` 的未激活 tab 被计入可 Tab 项，纯文本面板一次 Tab 即逃出模态（对应本文件 `#23`）。 | **OPEN · 已修复待发布（v2.8.1）**：代码与回归已落地，`CHANGELOG.md` 有 `## v2.8.1` 条目（未打 tag）；GitHub 侧已打 `fixed-pending-release` 标签。v2.8.1 发布提交关联 `Fixes #20` 后关闭。 |
+| [GH-#20](https://github.com/zgy-beep/ui-kit/issues/20) | 焦点陷阱尾项误判：`tabindex="-1"` 的未激活 tab 被计入可 Tab 项，纯文本面板一次 Tab 即逃出模态（对应本文件 `#23`）。 | **OPEN · 已修复待发布（v2.8.2）**：代码与回归已落地，`CHANGELOG.md` 有 `## v2.8.2` 条目（未打 tag）；GitHub 侧已打 `fixed-pending-release` 标签。v2.8.2 发布后按 `MAINTAINING.md` §3.3 关闭。 |
 | [GH-#21](https://github.com/zgy-beep/ui-kit/issues/21) | UX 观察 3 条：移动端底部导航项 26px、进度条 `label` 仅 `aria-label` 无可视标签、长内容滚动边缘硬切。 | **OPEN · 待设计确认**：三条均未改代码，验收口径与取舍已写在 issue；对应本文件「需求与特性规划」区的三条「（冒烟观察 2026-11-16）」。 |
 
 > `ROADMAP.md` 于 2026-11-16 补建：此前三个 open issue 均引用该文件，但仓库从未提交过（`git log --all -- ROADMAP.md` 为空），属**死链**，现已修复。
@@ -39,6 +39,7 @@
 
 | # | 问题 | 严重度 | 状态 | 证据 | 修复 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| G16（GitHub #16） | `persist: { size: false }` 关闭尺寸持久化后，面板仍被历史存档的 px 宽高钳回，压掉下游 `height: var(--nvui-panel-max-h)`；且旧 `size` 每次落盘被原样回存，永远清不掉 | **P1 持久化** | 已修复（v2.8.1） | `nvui-api.js` v2.8.0：`applyClamping()` 的 `loadedState.size` 分支无 `persistConfig.size` 门禁；`flushPersistSave()` 写 `persistConfig.size ? {...} : loadedState.size`。下游 ST-Worldbook-Editor 实测 1440×900 下 567px（期望 94vh = 846px） | ① `applyClamping()` 增加 `useSavedSize` 门禁（存档 size 完全不读，内联 px 仍照常视口钳制）；② `applyLoadedState()` 在 `size === false` 时把存档 `size` 摘成 `null`（同步/异步 adapter 同路径）；③ `flushPersistSave()` 改为落 `size: null`，历史遗留值一次性自愈。回归入口 `node test/issue-16-persist-size.js`（Chromium 8/8；还原 v2.8.0 时 T1/T2/T7 全红），已并入 `npm run test:browser` |
 | 1 | `nvui-api.js` 的 `el()` 支持 `html` 属性直写 `innerHTML`，构成 XSS 汇聚点 | P0 安全 | 已修复 | `nvui-api.js` 原 L73 `else if (k === 'html') node.innerHTML = String(v);` | 删除该分支，只保留 `text` → `textContent`，其余走 `setAttribute`。GitHub Issue #1 |
 | 2 | `animationend` 冒泡截断退场动画：面板内子动画（如 `.nvui-tabpane-in`）结束会冒泡到 overlay，导致 overlay 自身退场被提前截断 | P0 正确性 | 已修复 | 实机对照实验：A 组（切 tab 后 30ms 关闭）overlay 退场在 207ms 被 hidden（截断）；B/C 组正常 | `closeLayer` / 吐司 `dismiss()` 的 `onAnimEnd` 增加 `event.target` 校验（+ 吐司校验 `animationName`） |
 | 3 | 每次 `createPanel` 都在 `document` 上挂 `keydown` 监听且从不注销 → 监听器泄漏 | P1 正确性 | 已修复 | `nvui-api.js` 原 `on(document, 'keydown', ...)`；实机：第 3 个面板新增 document 监听数 = 1 | 引入全局单例 Esc 调度器 `escapeStack`，只由最上层可见浮层响应；面板销毁时自动注销 |
@@ -56,7 +57,7 @@
 | 20 | `innerHTML` 注入的 `.nvui-acc` 无法进入 `accList`，`persist.accordion` 静默存成 `{}`（重开面板状态丢失） | P1 持久化 | 已修复（v2.6.0） | GitHub Issue #11 附浏览器实测 storage 内容（`accordion: {}` 而同份 `size`/`tab` 正常）。本地复核：原 `addNode` 注册门槛要求节点自带 `setOpen`（仅工厂产物满足），`trackAccordion` 为闭包私有、控制器无公开入口 | 新增 `panel.trackAccordion(node, id?, options?)` 与 `panel.adoptAccordions(root, options?)`：键按**原始字符串**保存（中文 / 非 ASCII 键不再折叠，`__proto__` 等特殊键安全存取）；**显式 / DOM / data 键被活动节点占用时告警并返回 `null`**，自动键与工厂标题兜底键才追加序号；同键旧节点已脱离面板时由新节点替换；注册幂等；**默认不接管点击**（`{ bind: true }` opt-in）；跨面板 / `document` / `body` 边界拒绝；`destroy()` 解绑并停止落盘；沿用既有 `nvui_state_*` 状态格式。验证入口：`node test/test-issue-11-accordion.js`（真实 Chromium）。**GitHub：随 v2.6.0 发布提交关闭（`Fixes #11`）** |
 | 21 | 面板「没有玻璃透明感」：面板虽然半透明，但透明度不足且背后模糊不够，视觉上不像玻璃 | P2 视觉 | 已修复（v2.7.2） | 真实 ST 实机对照：玻璃态 = 透明面板 + 面板背后强模糊。面板态单独采用更透的玻璃：遮罩 `color-mix(--nvui-bg 20%)` + `blur(24px)`，面板 `color-mix(--nvui-bg 30%)` + token 柔光 + `blur(48px) saturate(190%) brightness(1.12)`；浅色 62% 底；窄屏降档。面板/遮罩规则提升到 `dialog.nvui-tl` 作用域，压过真实 ST 中其它扩展内嵌的旧版 kit CSS | `.nvui-overlay.is-panel` / `.nvui-panel` 使用面板态高透明玻璃 + 强 blur；`dialog.nvui-tl` 作用域副本保证多扩展共存时生效；`.nvui-solid`/Fast UI 回退/减少透明度降级仍可覆盖。面板态为视觉优先档（极亮宿主不承诺 text-2 AA）；新增 `test/st-glass-transparency.js` 与真实宿主 21 项断言 |
 | 22 | 玻璃探测时序死锁 + 不可逆：kit CSS 未就绪时调用 `syncGlassFallback()` 永久缓存 false 并挂 `.nvui-solid`；`.nvui-solid .nvui-glass` 反压探针，导致 CSS 就绪后 `{force:true}` 仍返回 false、无法恢复；另有 `setTheme()` 误清用户实心偏好、`open()` 不重探的反向缺陷 | **P1 正确性** | 已修复（v2.7.2） | CDP 复现：CSS 未注入时 `{supported:false, html:'nvui-solid'}`；注入 CSS 后 `{supported:false}` 且面板 `rgb(22,26,36)`、`backdrop-filter:none`；真实 ST `fast_ui_mode` 默认 true（body.no-blur），首装 `showToast()` 即可触发并永久实心；`setTheme()` 只清 body 类、自动回退在 html，两边状态失联 | 探测三态化（supported/unsupported/unknown）：unknown（CSS 未就绪）不缓存、不落回退，按「根/body class + reduce 偏好 + CSS 就绪 + 用户实心」签名重探（定时器 / load / fonts.ready / `openLayer()` / 媒体变化）；探测前临时摘掉 `.nvui-solid` 与 `.nvui-glass-fallback` 避免自锁；宿主禁模糊时改挂可逆的 `.nvui-glass-fallback`（97% token 派生近不透明档），支持恢复后自动移除；`setTheme()` 不再无条件清 `.nvui-solid`；`openLayer()` 增加重探。新增 `test/st-glass-transparency.js` 覆盖时序竞争与回退可逆 |
-| 23 | 焦点陷阱尾项误判：`tabindex="-1"` 的未激活 tab 被计入可 Tab 项，纯文本面板从激活 tab 按一次 Tab 即逃出模态，焦点落到宿主页面 | **P1 可访问性** | 已修复（待发布 v2.8.1） | 2026-11-16 实机（ST 1.19.0 / Chrome，1440×900）：trap items 含 `repro-tab-b ti=-1`；焦点在激活 tab（`ti=0`）按一次 Tab 后 `document.activeElement` 变为宿主 `body.drop_target`（`inPanel=false`）；三 tab 面板同样复现。根因：`last` 取到 `ti=-1` 项 → `current !== last` → 放行默认 Tab，而原生序列已无下一站 | `trapTabFocus()` 抽到模块级：只统计 `tabIndex >= 0` 的节点；焦点在容器或 `tabindex=-1` 节点时用 `compareDocumentPosition` 判断该方向是否还有下一站，无则回卷。`test/issue-13-14-focus-escape.spec.js` 新增 T1b；root + template **15/15**，静态门禁 **368/368**，模板已同步 **GitHub GH-#20**（2026-11-16 建，发布后关）。 |
+| 23 | 焦点陷阱尾项误判：`tabindex="-1"` 的未激活 tab 被计入可 Tab 项，纯文本面板从激活 tab 按一次 Tab 即逃出模态，焦点落到宿主页面 | **P1 可访问性** | 已修复（待发布 v2.8.2） | 2026-11-16 实机（ST 1.19.0 / Chrome，1440×900）：trap items 含 `repro-tab-b ti=-1`；焦点在激活 tab（`ti=0`）按一次 Tab 后 `document.activeElement` 变为宿主 `body.drop_target`（`inPanel=false`）；三 tab 面板同样复现。根因：`last` 取到 `ti=-1` 项 → `current !== last` → 放行默认 Tab，而原生序列已无下一站 | `trapTabFocus()` 抽到模块级：只统计 `tabIndex >= 0` 的节点；焦点在容器或 `tabindex=-1` 节点时用 `compareDocumentPosition` 判断该方向是否还有下一站，无则回卷。`test/issue-13-14-focus-escape.spec.js` 新增 T1b；root + template **15/15**，静态门禁 **368/368**，模板已同步 **GitHub GH-#20**（2026-11-16 建，发布后关）。 |
 
 ### 2026-11-13 图谱批次结项（G-02 / G-03 / G-04 / G-08，工具链项，无版本变更）
 
@@ -441,3 +442,16 @@
 | 修复焦点陷阱（#23） | `trapTabFocus()` 模块级化；`test/issue-13-14-focus-escape.spec.js` 新增 T1b；模板已同步 | 修复前复现「Tab1 → `body.drop_target`」；修复后 spec 15/15、静态 368/368 |
 | 测试归档（G-05） | 7 个零引用探针 → `test/archive/2026-10/`，补目录 README | 全文索引确认仅 7 个 0 引用；`node --check` 全通过；`test/` 根脚本 50 → 43 |
 | GitHub 维护（11-16） | 建 GH-#20（焦点陷阱，对应本地 `#23`）/ GH-#21（3 条 UX 观察）；GH-#17 勾选与进度段按实测刷新（A1–A3 未开始、A4/A5 部分）；补建 `ROADMAP.md` 修掉三个 open issue 的死链 | `gh issue list/view` 逐条核对；本地 `#N` 与 GitHub 编号是两套序列，已加映射约定 |
+
+## 下一步迭代计划
+
+> 计划详情统一维护在 [`ROADMAP.md`](ROADMAP.md)（本文件只记已发生的事实，计划漂移以 ROADMAP 为准）。
+> 执行进度在 GitHub：每个线路一个追踪 issue + 一个 milestone。
+
+| 线路 | 目标版本 | 追踪 | Milestone |
+| :--- | :--- | :--- | :--- |
+| A · 工程化收尾（测试可复跑、门禁可信任） | v2.8.2 | [#17](https://github.com/zgy-beep/ui-kit/issues/17) | v2.8.2 · 工程化收尾（2026-11-14） |
+| B · 下游可维护性与可观测性（6 项 additive） | v2.9.0 | [#18](https://github.com/zgy-beep/ui-kit/issues/18) | v2.9.0 · 下游可维护性（2026-12-04） |
+| C · 内联尺寸停写与命名收敛（破坏性 + 迁移器） | v3.0.0 | [#19](https://github.com/zgy-beep/ui-kit/issues/19) | v3.0.0 · 尺寸与命名重构（2027-01-14） |
+
+排期原则：**先让断言可信（A）→ 再让下游少写代码（B）→ 最后才动破坏性契约（C）**。
