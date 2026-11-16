@@ -2533,6 +2533,68 @@
         };
     }
 
+    /**
+     * 节点写入器（G-01 第六步）：appendToPane / addNode。
+     *
+     * 回退链（NEW-15）与 accordion 自动接管都依赖运行时状态，故 tabs / keyMap /
+     * panes / activeDom / acc / isDisposed 全部以 getter 注入：factory 创建时
+     * panes 还是空 Map，acc 也可能尚未挂完。
+     */
+    function createPaneWriter(ctx) {
+        var body = ctx.body;
+        var persist = ctx.persist;
+        var warn = ctx.warn;
+        var appendNode = ctx.appendNode;
+
+        function appendToPane(key, node) {
+            var panes = ctx.panes();
+            var tabs = ctx.tabs() || [];
+            var domKey = null;
+            if (key !== null && key !== undefined) {
+                var raw = String(key);
+                domKey = ctx.keyMap().get(raw) || null;
+                if (!domKey) {
+                    for (var i = 0; i < tabs.length; i++) {
+                        if (tabs[i].domKey === raw) { domKey = raw; break; }
+                    }
+                }
+                if (!domKey) {
+                    warn('addNode(): 未知标签 key "' + raw + '"，已回退到可见面板');
+                }
+            }
+            /* 回退链（NEW-15）：有效 key → 当前激活 pane → 第一个 pane → body。
+               报告原文建议「回退第一个 pane」，但首个 pane 往往处于未激活（不可见）状态，
+               内容落进去等于「看不见」；当前激活 pane 一定可见，
+               且同样满足报告的真正诉求 —— 绝不落到 body（body 不属于任何 tabpane，
+               内容会既不在导航语义下、也不在任何标签的可见区域内）。 */
+            var pane = null;
+            var activeDomNow = ctx.activeDom();
+            if (domKey && panes.get(domKey)) pane = panes.get(domKey);
+            else if (activeDomNow && panes.get(activeDomNow)) pane = panes.get(activeDomNow);
+            else if (tabs.length && panes.get(tabs[0].domKey)) pane = panes.get(tabs[0].domKey);
+            if (!pane) pane = body;
+            appendNode(pane, node);
+            return node;
+        }
+
+        function addNode(key, node) {
+            appendToPane(key, node);
+            var acc = ctx.acc();
+            if (!ctx.isDisposed() && persist.accordionEnabled()
+                && node && node.classList && node.classList.contains('nvui-acc')
+                && typeof node.setOpen === 'function' && !acc.findItem(node)) {
+                var accId = node.id ? String(node.id) : acc.uniqueId('acc-' + (acc.list.length + 1));
+                acc.track(node, accId, { bind: false });
+            }
+            return node;
+        }
+
+        return {
+            appendToPane: appendToPane,
+            addNode: addNode,
+        };
+    }
+
     function createPanel(options) {
         var opts = options || {};
         /* 宿主若全局禁用了 backdrop-filter，先恢复回退态，避免玻璃只剩半透明底色 */
@@ -2949,51 +3011,19 @@
             function () { return overlay.isConnected; }
         );
 
-        /**
-         * 把节点追加到指定标签的面板。
-         * key 用调用方给的原始 key（契约不变）；找不到时回退到当前激活面板，
-         * 再回退到第一个面板，最后才落到 body（无标签的单页面板）。
-         */
-        function appendToPane(key, node) {
-            var domKey = null;
-            if (key !== null && key !== undefined) {
-                var raw = String(key);
-                domKey = keyMap.get(raw) || null;
-                if (!domKey) {
-                    for (var i = 0; i < tabs.length; i++) {
-                        if (tabs[i].domKey === raw) { domKey = raw; break; }
-                    }
-                }
-                if (!domKey) {
-                    warn('addNode(): 未知标签 key "' + raw + '"，已回退到可见面板');
-                }
-            }
-            /* 回退链（NEW-15）：有效 key → 当前激活 pane → 第一个 pane → body。
-               报告原文建议「回退第一个 pane」，但首个 pane 往往处于未激活（不可见）状态，
-               内容落进去等于「看不见」；当前激活 pane 一定可见，
-               且同样满足报告的真正诉求 —— 绝不落到 body（body 不属于任何 tabpane，
-               内容会既不在导航语义下、也不在任何标签的可见区域内）。 */
-            var pane = null;
-            var activeDomNow = tabCtl.getActiveDom();
-            if (domKey && panes.get(domKey)) pane = panes.get(domKey);
-            else if (activeDomNow && panes.get(activeDomNow)) pane = panes.get(activeDomNow);
-            else if (tabs.length && panes.get(tabs[0].domKey)) pane = panes.get(tabs[0].domKey);
-            if (!pane) pane = body;
-            append(pane, node);
-            return node;
-        }
-
-        function addNode(key, node) {
-            appendToPane(key, node);
-            if (!disposed && persist.accordionEnabled()
-                && node && node.classList && node.classList.contains('nvui-acc')
-                && typeof node.setOpen === 'function' && !acc.findItem(node)) {
-                var accId = node.id ? String(node.id) : acc.uniqueId('acc-' + (acc.list.length + 1));
-                acc.track(node, accId, { bind: false });
-            }
-            return node;
-        }
-
+        /* 节点写入器（G-01 第六步）：回退链与 accordion 自动接管都在 factory 内 */
+        var writer = createPaneWriter({
+            body: body,
+            persist: persist,
+            appendNode: append,
+            warn: warn,
+            tabs: function () { return tabs; },
+            keyMap: function () { return keyMap; },
+            panes: function () { return panes; },
+            activeDom: function () { return tabCtl.getActiveDom(); },
+            acc: function () { return acc; },
+            isDisposed: function () { return disposed; },
+        });
         /**
          * 销毁面板（NEW-16：让宿主能收到 dialog 的 close 事件）。
          *
@@ -3056,13 +3086,13 @@
             setTab: tabCtl.setByKey,
             showUpdate: updateCtl.show,
             syncIndicator: function () { if (tabsNav) syncTabsIndicator(tabsNav, false); },
-            addNode: addNode,
-            addSwitch: function (key, o) { return addNode(key, switchRow(o)); },
-            addInput: function (key, o) { return addNode(key, inputRow(o)); },
+            addNode: writer.addNode,
+            addSwitch: function (key, o) { return writer.addNode(key, switchRow(o)); },
+            addInput: function (key, o) { return writer.addNode(key, inputRow(o)); },
             addAccordion: function (key, o) {
                 /* 注意：局部变量不能叫 acc —— 那是 accordion 注册表的名字（G-01） */
                 var node = accordion(o);
-                appendToPane(key, node);
+                writer.appendToPane(key, node);
                 if (!disposed && persist.accordionEnabled()) {
                     var accId;
                     if (o && o.id) {
@@ -3078,8 +3108,8 @@
             },
             trackAccordion: acc.track,
             adoptAccordions: acc.adopt,
-            addProgress: function (key, o) { return addNode(key, progress(o)); },
-            addSectionTitle: function (key, text) { return addNode(key, el('div', 'nvui-section-title', { text: text })); },
+            addProgress: function (key, o) { return writer.addNode(key, progress(o)); },
+            addSectionTitle: function (key, text) { return writer.addNode(key, el('div', 'nvui-section-title', { text: text })); },
             clearLayoutState: persist.clearLayout,
             flushPersistSave: persist.flush,
             setSize: function (w, h) {

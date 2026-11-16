@@ -2368,11 +2368,13 @@ if (!hasDom) {
  *   第四步：标签切换（2 个函数、54 行）→ createTabController(ctx)，并让该 factory
  *           独占 activeDom，函数体 737 → 688 行，嵌套函数 10 → 8 个；
  *   第五步：更新胶囊（1 个函数 + 3 份状态、95 行）→ createUpdatePillController(ctx)，
- *           函数体 688 → 601 行，嵌套函数 8 → 7 个。
+ *           函数体 688 → 601 行，嵌套函数 8 → 7 个；
+ *   第六步：节点写入（2 个函数、62 行）→ createPaneWriter(ctx)，
+ *           函数体 601 → 569 行，嵌套函数 7 → 5 个。
  * 阈值随重构下调，**只允许降不允许升**：需要新逻辑时先抽 factory，而不是放宽本条。
  * 27 个导出成员已由 test/test-api-surface.js 的 EXPECTED_EXPORTS 冻结，此处不重复断言。
  */
-const CREATE_PANEL_MAX_LINES = 601;
+const CREATE_PANEL_MAX_LINES = 569;
 const apiLines = apiSrc.split('\n');
 const cpStart = apiLines.findIndex((l) => /^\s*function createPanel\(/.test(l));
 const cpEnd = cpStart < 0 ? -1
