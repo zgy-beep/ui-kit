@@ -2250,6 +2250,7 @@ console.log(typeof NVUI.createPanel); // 'function'
 | `onClose` | 关闭后回调 |
 | `destroy` | `destroy()` 时执行的清理回调（解绑自有监听、清理定时器等） |
 | `persist` | `true` 或 `{ size, tab, accordion, storage }`：布局状态持久化（尺寸 / tab / 折叠），可插拔 StorageAdapter；读写入口见控制器方法 `getLayoutState()` / `setLayoutState()` |
+| `persist.size` | **三态**（v2.9.0）：`true` 宽高 + 最大化全量记忆；`false` 完全不参与（#16 语义）；`'width-only'` 只记宽 —— `height` 恒为 `null`、最大化不记（最大化本质是二维状态），适合「定宽 + 高度交给下游 CSS」 |
 | `width` | 初始自定义宽度（number，单位 px，默认 720；经 Viewport Clamping 钳制） |
 | `update` | 静态更新胶囊 `{ version, label, url, onClick, hidden }` |
 | `themeToggle` | `true` 或 `{ onThemeChange, initial: 'dark' 或 'light' }`：头部主题切换按钮 |
@@ -2276,7 +2277,7 @@ panel.setLayoutState(snapshot, { silent: true }); // 预览：不写存储，仅
 ```
 
 - 未提供的键落回当前 DOM 事实，显式传 `null` 视为清空该项；`persist` 关掉的维度（如 `size: false`）一律写 `null`，
-  不会绕过 #16 的尺寸隔离；
+  不会绕过 #16 的尺寸隔离；`persist.size: 'width-only'` 时导入的 `height` / `isMaximized` 同样被强制清空；
 - 连续多次调用合并成一次落盘（250ms 防抖）；`silent: true` 完全不写存储；
 - 未启用 `persist` 时 `getLayoutState()` 仍返回只读快照（便于一次性迁移到自己的存储），`setLayoutState()` 返回 `null`。
 

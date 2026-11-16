@@ -1886,8 +1886,15 @@
         if (opts.persist === true) {
             persistConfig = { size: true, tab: true, accordion: true, storage: defaultStorageAdapter };
         } else if (opts.persist && typeof opts.persist === 'object') {
+            /* v2.9.0（GH-#18 B3）：size 三态 —— true 全量 / false 关闭 / 'width-only' 只记宽。
+               非法字符串按「全开」处理并告警，避免下游手滑写成 'widthOnly' 就静默丢尺寸。 */
+            var sizeOpt = opts.persist.size;
+            if (typeof sizeOpt === 'string' && sizeOpt !== 'width-only') {
+                ctx.warn('createPanel(): persist.size 只接受 true / false / "width-only"，已按 true 处理');
+                sizeOpt = true;
+            }
             persistConfig = {
-                size: opts.persist.size !== false,
+                size: (sizeOpt === 'width-only') ? 'width-only' : (sizeOpt !== false),
                 tab: opts.persist.tab !== false,
                 accordion: opts.persist.accordion !== false,
                 storage: (opts.persist.storage && typeof opts.persist.storage.get === 'function' && typeof opts.persist.storage.set === 'function')
@@ -1908,6 +1915,12 @@
         var resizeObserver = null;
         /* setLayoutState() 导入的状态：下一次 flush 按它原样写，不用 DOM 反解覆盖 */
         var pendingState = null;
+
+        /* 尺寸持久化的「维度门禁」（v2.9.0 / B3）：width-only 时高度一律不读不写 */
+        function sizeMode() {
+            if (!persistConfig || !persistConfig.size) return 'off';
+            return persistConfig.size === 'width-only' ? 'width-only' : 'full';
+        }
 
         function anyPersistEnabled() {
             return !!(persistConfig && (persistConfig.size || persistConfig.tab || persistConfig.accordion));
@@ -1990,15 +2003,17 @@
                     }
                 }
 
+                var widthOnly = sizeMode() === 'width-only';
                 return {
                     version: 1,
                     timestamp: Date.now(),
                     /* Issue #16：persist.size:false 时不得把历史 size 原样回存，
-                       否则旧像素高度永远清不掉，每次打开都会被 applyClamping() 写回内联样式。 */
+                       否则旧像素高度永远清不掉，每次打开都会被 applyClamping() 写回内联样式。
+                       B3：width-only 同理 —— height 恒为 null，最大化本质是二维状态，不记。 */
                     size: sizeOn ? {
                         width: currentW,
-                        height: currentH,
-                        isMaximized: isMax,
+                        height: widthOnly ? null : currentH,
+                        isMaximized: widthOnly ? false : isMax,
                     } : (loadedState ? loadedState.size : null),
                     tab: tabOn ? currentTabKey : (loadedState ? loadedState.tab : null),
                     accordion: accOn ? currentAccState : (loadedState ? loadedState.accordion : null),
@@ -2061,9 +2076,10 @@
                     debug('applyLoadedState(): persist.size:false，已忽略并清除历史 size 存档');
                 }
 
-                // 1. 恢复尺寸
+                // 1. 恢复尺寸（width-only 只回写宽，高度留给下游 CSS）
                 if (persistConfig && persistConfig.size && saved.size) {
-                    if (saved.size.isMaximized) {
+                    var widthOnly = persistConfig.size === 'width-only';
+                    if (!widthOnly && saved.size.isMaximized) {
                         panel.classList.add('is-maximized');
                     } else {
                         panel.classList.remove('is-maximized');
@@ -2073,12 +2089,12 @@
                         panel.style.width = '';
                         panel.style.height = '';
                     } else {
-                        if (saved.size.isMaximized) {
+                        if (!widthOnly && saved.size.isMaximized) {
                             panel.style.width = 'calc(100vw - 32px)';
                             panel.style.height = 'calc(100vh - 32px)';
                         } else {
                             if (clamped.styleWidth) panel.style.width = clamped.styleWidth;
-                            if (clamped.styleHeight) panel.style.height = clamped.styleHeight;
+                            if (!widthOnly && clamped.styleHeight) panel.style.height = clamped.styleHeight;
                         }
                     }
                 }
@@ -2141,12 +2157,16 @@
                覆盖下游 CSS（如 `height: var(--nvui-panel-max-h)` / 94vh）。
                注意只拦「存档尺寸」：面板自身的内联 px（用户拖拽 / opts.width / 最大化）
                仍然照常参与钳制，clamp 的视口安全语义不变。 */
-            var useSavedSize = !!(persistConfig && persistConfig.size);
+            /* B3：宽/高分别判定 —— 'width-only' 只读存档宽度，高度一律交给下游 CSS；
+               内联 px（用户拖拽 / opts.width / 最大化）仍照常参与钳制。 */
+            var mode = sizeMode();
+            var useSavedW = mode !== 'off';
+            var useSavedH = mode === 'full';
 
             var targetW = null;
             if (panel.style.width && panel.style.width.indexOf('px') !== -1) {
                 targetW = parseInt(panel.style.width, 10);
-            } else if (useSavedSize && loadedState && loadedState.size && typeof loadedState.size.width === 'number') {
+            } else if (useSavedW && loadedState && loadedState.size && typeof loadedState.size.width === 'number') {
                 targetW = loadedState.size.width;
             } else if (typeof opts.width === 'number' && !isNaN(opts.width)) {
                 targetW = opts.width;
@@ -2155,7 +2175,7 @@
             var targetH = null;
             if (panel.style.height && panel.style.height.indexOf('px') !== -1) {
                 targetH = parseInt(panel.style.height, 10);
-            } else if (useSavedSize && loadedState && loadedState.size && typeof loadedState.size.height === 'number') {
+            } else if (useSavedH && loadedState && loadedState.size && typeof loadedState.size.height === 'number') {
                 targetH = loadedState.size.height;
             }
 
@@ -2236,7 +2256,12 @@
                 accordion: has('accordion') ? state.accordion : base.accordion,
             };
             var normalized = cloneLayoutState(next);
-            if (!persistConfig.size) normalized.size = null;
+            if (!persistConfig.size) {
+                normalized.size = null;
+            } else if (persistConfig.size === 'width-only' && normalized.size) {
+                normalized.size.height = null;
+                normalized.size.isMaximized = false;
+            }
             if (!persistConfig.tab) normalized.tab = loadedState ? loadedState.tab : null;
             if (!persistConfig.accordion) normalized.accordion = loadedState ? loadedState.accordion : null;
 
@@ -2337,6 +2362,7 @@
             /* accordion 子系统读的是配置对象本身，保持原契约 */
             config: function () { return persistConfig; },
             sizeEnabled: function () { return !!(persistConfig && persistConfig.size); },
+            sizeMode: sizeMode,
             tabEnabled: function () { return !!(persistConfig && persistConfig.tab); },
             accordionEnabled: function () { return !!(persistConfig && persistConfig.accordion); },
             loaded: function () { return loadedState; },
