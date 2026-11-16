@@ -27,7 +27,7 @@
 | GitHub Issue | 问题与证据 | 状态 |
 | :--- | :--- | :--- |
 | [GH-#15](https://github.com/zgy-beep/ui-kit/issues/15) | v2.7.0 forms 浏览器回归一次并行运行得到 453/455，半选 checkbox 背景和横杠透明度读到过渡中间帧；串行复跑 455/455。 | **已关闭**（v2.7.1）：等待两项计算样式终值并保留最终断言；三份并行 forms 各 455/455。发布提交关联 `Fixes #15`。 |
-| [GH-#17](https://github.com/zgy-beep/ui-kit/issues/17) | 线路 A · v2.8.2 工程化收尾（A1–A5）。2026-11-16 复核：A1 / A2 / A3 **未开始**，A4 **部分完成**、A5 **已完成**。 | **OPEN**（进行中）：A4 已归档 7 个零引用探针（`test/*.js` 50 → 43）；A5 已补 README §11.4 时间线与 `--self-test` 反向验证。issue 勾选与进度段已同步。 |
+| [GH-#17](https://github.com/zgy-beep/ui-kit/issues/17) | 线路 A · v2.8.2 / v2.8.3 工程化收尾（A1–A5）。 | **CLOSED（v2.8.3，2026-11-16）**：A1 尺寸矩阵 8 → 12（`c42f3f7`）、A2 依赖解析统一（`f68f4ce`）、A3 `verify:all` 9 步 + 产物校验（`2c763e6`）随 v2.8.3 发布；A4 `test/probe/` 30 个脚本 + 索引（`0301d68`）、A5 已在 v2.8.2 交付。tag `v2.8.3` + Release 3 产物已推，关闭评论含版本 / commit / 实测数字。 |
 | [GH-#18](https://github.com/zgy-beep/ui-kit/issues/18) | 线路 B · v2.9.0 下游可维护性与可观测性（B1–B6，全 additive）。 | **OPEN**（未开始）：无线程内提交；`ROADMAP.md` 已补建并记录顺序建议 B1 → B3 → B2 → B6 → B4 / B5。 |
 | [GH-#19](https://github.com/zgy-beep/ui-kit/issues/19) | 线路 C · v3.0.0 内联尺寸停写与命名收敛（C1–C4，破坏性）。 | **OPEN**（未开始）：需迁移器与下游公告；`ROADMAP.md` 已记录「读 `panel.style.width/height` 的下游代码会失效」。 |
 | [GH-#20](https://github.com/zgy-beep/ui-kit/issues/20) | 焦点陷阱尾项误判：`tabindex="-1"` 的未激活 tab 被计入可 Tab 项，纯文本面板一次 Tab 即逃出模态（对应本文件 `#23`）。 | **CLOSED（v2.8.2，2026-11-16）**：tag `v2.8.2` + [Release](https://github.com/zgy-beep/ui-kit/releases/tag/v2.8.2) 已建，关闭评论记录了版本 / commit / 验证数据；按 `MAINTAINING.md` §3.3 第 1 条关闭。 |
@@ -442,6 +442,11 @@
 | 修复焦点陷阱（#23） | `trapTabFocus()` 模块级化；`test/issue-13-14-focus-escape.spec.js` 新增 T1b；模板已同步 | 修复前复现「Tab1 → `body.drop_target`」；修复后 spec 15/15、静态 368/368 |
 | 测试归档（G-05） | 7 个零引用探针 → `test/archive/2026-10/`，补目录 README | 全文索引确认仅 7 个 0 引用；`node --check` 全通过；`test/` 根脚本 50 → 43 |
 | GitHub 维护（11-16） | 建 GH-#20（焦点陷阱，对应本地 `#23`）/ GH-#21（3 条 UX 观察）；GH-#17 勾选与进度段按实测刷新（A1–A3 未开始、A4/A5 部分）；补建 `ROADMAP.md` 修掉三个 open issue 的死链 | `gh issue list/view` 逐条核对；本地 `#N` 与 GitHub 编号是两套序列，已加映射约定 |
+| 测试归档 A4（11-16） | 30 个零门禁引用探针 → `test/probe/`（新增 `probe/README.md` 30 条清单 + lab 依赖列）；5 个脚本 `__dirname` 改 `'..','..'`；`test/` 根 44 → 14 个脚本；文档路径 47 处同步 | `npm test` 370/0；`node --check` 30/30；`test-ui-kit.js` 两条存在性断言改指 probe/ |
+| 尺寸矩阵 A1（11-16） | `issue-16` 8 → 12 项（T9 三项全关 / T10 `persist:true` / T11 `persist:{}` / T12 异步 adapter；错误面移到末尾为 T13） | 变异测试：`anyPersistEnabled()` 改成 `!!persistConfig` 时 T9 变红；12/12 绿 |
+| 依赖解析 A2（11-16） | `scripts/resolve-browser.js` 统一 playwright/Chrome 解析 + 可执行修复命令（退出码 2）；`playwright-core@^1.64.0` 进 devDependencies；11 个脚本改用；运行时仍零依赖 | 未设 `NODE_PATH` 跑 `test:browser` 455+18+217+15+12 全绿；缺包模拟 exit=2 |
+| 一键门禁 A3（11-16） | `npm run verify:all`：9 步 = 静态 4 → `verify:release` → `pack` + 产物校验 → browser / stress / e2e；`--no-browser` / `--only=` / `--list`；CI 改单条命令 | 9/9；`--no-browser` 6 通过 3 跳过；模拟无 playwright 6 通过 3 跳过且 exit=0 |
+| 发布 v2.8.3（11-16） | PATCH，只含测试与工程脚本：13 处版本 2.8.3、CHANGELOG 条目、README §10.10 + §11.4 各补一行、UPGRADING 新增「2.8.2 → 2.8.3」、ROADMAP 线路 A 标为到出口；GH-#17 关闭 | `verify:all` 9/9；实机 35/35 + 19/19；`verify:release` 20 项 + `--self-test` 3/3；`pack` 出 `ui-kit-2.8.3.zip`；tag `v2.8.3` + Release 3 产物 |
 | 发布 v2.8.2（11-16） | 远端已先行发布 v2.8.1（#16），本批按语义化版本改号 v2.8.2；`git tag -a v2.8.2` + Release + 资产（zip / SHA256SUMS）；GH-#20 关闭 | `verify:release` 20 项 + `--self-test` 3/3；实机 35/35 + 19/19；浏览器 455+18+217+15+8 |
 
 ## 下一步迭代计划

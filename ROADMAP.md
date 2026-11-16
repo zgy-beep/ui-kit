@@ -25,6 +25,15 @@
 
 **v2.8.1 出口状态**：`npm test` 367 PASS、`test:api` 27 导出、forms 455、accordion 18、optgroup 217、focus 13、issue-16 8/8；`verify:release` 通过；CI（main + tag）绿；Release 3 产物。
 
+### 0.1 发布流水（最近三版）
+
+| 版本 | 日期 | 类型 | 内容一句话 | 出口数据 |
+| :--- | :--- | :--- | :--- | :--- |
+| v2.8.3 | 2026-11-16 | PATCH | 测试基建收尾：`test/probe/` 归档、`issue-16` 矩阵 8 → 12、`scripts/resolve-browser.js`、`npm run verify:all`（线路 A 到出口） | `verify:all` 9/9；370/0；实机 35+19；`verify:release` 20 项 |
+| v2.8.2 | 2026-11-16 | PATCH | 焦点陷阱修正（GH-#20）、40px 触控（GH-#21）、`test/host/` 基线入库、`createPanel` 七步拆分 1433 → 531 | 浏览器 455+18+217+15；实机 35+19；e2e 58 |
+| v2.8.1 | 2026-11-05 | PATCH | `persist.size: false` 尺寸隔离修复（GH-#16） | 367 PASS；issue-16 8/8 |
+
+
 ---
 
 ## 1. 排期总览
