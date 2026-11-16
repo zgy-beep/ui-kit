@@ -38,8 +38,22 @@ const readme = read('README.md');
 const NVUI = require(path.join(ROOT, 'nvui-api.js'));
 
 /* ---- 1. README 兼容矩阵：找到当前版本那一行 ---- */
-const matrixStart = readme.indexOf('兼容矩阵');
-const matrixSection = matrixStart === -1 ? '' : readme.slice(matrixStart, matrixStart + 4000);
+/* 必须以 §11.5 的**标题**为锚点，不能裸搜「兼容矩阵」四个字：README 里别处（§10.10 速查表、
+   §11.4 时间线）也会提到它，裸搜会切到时间线上、把日期当宿主版本读（实测 v3.0.0 收口时
+   就这么红过一次：README=2026-11-16 / manifest=1.12.0）。 */
+const matrixHeading = readme.search(/^#{2,4}\s*11\.5\s+兼容矩阵/m);
+let matrixSection = '';
+if (matrixHeading !== -1) {
+    /* 下一个标题的位置 = 本节的结束。不能拿 `rest.slice(1)` 去搜 `^#{2,4}`
+       —— 那会把本节自己的标题当成「下一个标题」（`## 11.5` 本身就以 `##` 开头）。 */
+    const headingRe = /^#{2,4}\s+\S.*$/gm;
+    let next = -1;
+    let m;
+    while ((m = headingRe.exec(readme)) !== null) {
+        if (m.index > matrixHeading) { next = m.index; break; }
+    }
+    matrixSection = next === -1 ? readme.slice(matrixHeading) : readme.slice(matrixHeading, next);
+}
 const rows = matrixSection.split('\n')
     .filter((l) => /^\|\s*v\d+\.\d+\.\d+\s*\|/.test(l))
     .map((l) => l.split('|').map((c) => c.trim()).filter(Boolean));
@@ -52,7 +66,7 @@ const currentRow = rows.find((r) => r[0] === 'v' + VERSION);
 const lineVersion = 'v' + VERSION.split('.')[0] + '.0.0';
 const lineRow = rows.find((r) => r[0] === lineVersion) || currentRow;
 
-check('README 有「兼容矩阵」表', matrixStart !== -1 && rows.length > 0, `找到 ${rows.length} 行`);
+check('README 有「兼容矩阵」表', matrixHeading !== -1 && rows.length > 0, `找到 ${rows.length} 行`);
 check(`兼容矩阵声明了当前大版本线 ${lineVersion}（新开一条线必须当天补行）`, !!lineRow,
     lineRow ? lineRow.join(' | ') : `已有：${rows.map((r) => r[0]).join(', ')}`);
 
