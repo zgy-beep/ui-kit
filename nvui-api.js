@@ -953,7 +953,11 @@
         'text', 'number', 'password', 'email', 'url', 'tel', 'search',
         'date', 'time', 'datetime-local', 'month', 'week', 'color', 'range', 'file',
     ];
-    var KIT_INPUT_TYPES = ['path'];
+    /* kit 伪类型：DOM 用别的元素或别的 type 承载，意图走 data-nvui-type。
+       v2.9.0（GH-#18 B5）新增 'textarea' —— 14 种原生 input 类型里没有多行文本。 */
+    var KIT_INPUT_TYPES = ['path', 'textarea'];
+    /* 消息节点 id 序号：同一批次创建多个输入行时 uniqueId() 还看不到未入文档的节点 */
+    var inputMsgSeq = 0;
 
     function normalizeInputType(type) {
         if (typeof type !== 'string' || !type) return 'text';
@@ -984,17 +988,24 @@
         if (!opts.label) warnOnce('inputRow-label', 'inputRow(): 缺少 label，将渲染空标签行');
         var row = el('label', 'nvui-input-row');
         var type = normalizeInputType(opts.type);
-        /* 伪类型 path：DOM 类型仍是 text，只靠 .is-path 类表现「路径框」 */
+        var isTextarea = type === 'textarea';
+        /* 伪类型 path / textarea：DOM 类型仍是 text / textarea，只靠 is-* 类表现 */
         var domType = type === 'path' ? 'text' : type;
-        var input = el('input', 'nvui-input' + (type === 'number' ? ' is-number' : (type === 'path' ? ' is-path' : '')));
-        input.type = domType;
-        if (type === 'path') {
+        var input;
+        if (isTextarea) {
+            input = el('textarea', 'nvui-input is-textarea');
+            input.rows = (typeof opts.rows === 'number' && opts.rows > 0) ? Math.round(opts.rows) : 3;
+        } else {
+            input = el('input', 'nvui-input' + (type === 'number' ? ' is-number' : (type === 'path' ? ' is-path' : '')));
+            input.type = domType;
+        }
+        if (type === 'path' || isTextarea) {
             /* 伪类型的意图用 data-* 承载：
                不覆盖 input.type 的 IDL 访问器 —— 覆盖会造成「DOM 属性是 text、JS 读出 path」
                的双真值，序列化 / cloneNode / 表单提交看到的是 text，而业务代码读到 path；
                且 setter 语义会错乱（写 number 后 getter 仍返回 path，读写永久不一致）。
                现在 DOM 与手写的 .is-path 路径框完全同构，意图由 dataset.nvuiType 暴露。 */
-            input.setAttribute('data-nvui-type', 'path');
+            input.setAttribute('data-nvui-type', type);
         }
         if (opts.value !== undefined && opts.value !== null) {
             try {
@@ -1024,6 +1035,26 @@
                 opts.onChange(input.value);
             });
         }
+        /* v2.9.0（GH-#18 B5）：hint / error 各生成独立 id 的消息节点，
+           input 的 aria-describedby 指向它们（两个都传时按「提示在前、错误在后」并列）。
+           刻意不复用一个 id：读屏会把合并后的两段读成一串，调试时也分不清谁是谁。 */
+        var describedBy = [];
+        var appendMsg = function (text, kind) {
+            inputMsgSeq += 1;
+            var msgId = uniqueId('nvui-input-msg-' + inputMsgSeq);
+            var msg = el('span', 'nvui-input-msg is-' + kind, { id: msgId, text: text });
+            describedBy.push(msgId);
+            row.appendChild(msg);
+            if (kind === 'error') {
+                input.setAttribute('aria-invalid', 'true');
+                row.classList.add('is-error');
+            }
+            row.classList.add('is-msg');
+        };
+        if (opts.hint) appendMsg(opts.hint, 'hint');
+        if (opts.error) appendMsg(opts.error, 'error');
+        if (describedBy.length) input.setAttribute('aria-describedby', describedBy.join(' '));
+
         row.input = input;
         return row;
     }

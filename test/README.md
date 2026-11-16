@@ -18,8 +18,8 @@
 
 | 入口 | 脚本 |
 | :--- | :--- |
-| `npm run test:browser` | `test-issues-9-10-forms.js` → `test-issue-11-accordion.js` → `issue-12-optgroup-dark-theme.spec.js` → `issue-13-14-focus-escape.spec.js` → `issue-16-persist-size.js`（12）→ `issue-21-ux.spec.js`（11）→ `v290-layout-state.spec.js`（10）→ `v290-width-only.spec.js`（9）→ `v290-diagnostics.spec.js`（8）→ `v290-theme-auto.spec.js`（10）→ `v290-resize.spec.js`（11） |
-| `npm run test:issue16` / `test:issue21` / `test:layout` / `test:widthonly` / `test:diagnostics` / `test:theme` / `test:resize` | 单跑某一条回归（改持久化 / 进度条 / 滚动行为 / 布局导入导出 / 尺寸三态 / 诊断快照 / 主题跟随系统 / 调尺寸手柄时） |
+| `npm run test:browser` | `test-issues-9-10-forms.js` → `test-issue-11-accordion.js` → `issue-12-optgroup-dark-theme.spec.js` → `issue-13-14-focus-escape.spec.js` → `issue-16-persist-size.js`（12）→ `issue-21-ux.spec.js`（11）→ `v290-layout-state.spec.js`（10）→ `v290-width-only.spec.js`（9）→ `v290-diagnostics.spec.js`（8）→ `v290-theme-auto.spec.js`（10）→ `v290-resize.spec.js`（11）→ `v290-inputrow.spec.js`（8） |
+| `npm run test:issue16` / `test:issue21` / `test:layout` / `test:widthonly` / `test:diagnostics` / `test:theme` / `test:resize` / `test:inputrow` | 单跑某一条回归（改持久化 / 进度条 / 滚动行为 / 布局导入导出 / 尺寸三态 / 诊断快照 / 主题跟随系统 / 调尺寸手柄 / 输入行时） |
 | `npm run test:stress` | `stress-m1-persistence.js`（19，持久化/损坏数据/竞态）→ `stress-m2-header.js`（15，头部控制流） |
 | `npm run test:e2e` | `test-e2e-v250.js`（58，v2.5.0 全路径） |
 | `npm run test:glass` | `st-glass-transparency.js` |

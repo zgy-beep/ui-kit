@@ -719,6 +719,42 @@ dialog.nvui-tl > .nvui-toast-stack {
     font-size: var(--nvui-fs-md);
 }
 
+/* v2.9.0（GH-#18 B5）：多行文本 + 提示 / 错误消息。
+   textarea 用 .is-textarea 而不是 input.type —— 14 种原生 input 类型里没有多行文本，
+   意图由 data-nvui-type="textarea" 暴露（与 path 伪类型同一套路）。 */
+.nvui-input.is-textarea {
+    flex: 1 1 auto;
+    min-height: calc(var(--nvui-control-h) * 2);
+    line-height: var(--nvui-lh-normal);
+    /* 只允许纵向拉伸：横向拉伸会把行布局挤坏 */
+    resize: vertical;
+}
+
+/* 有消息时整行允许换行，消息独占一行并右对齐到输入框下方 */
+.nvui-input-row.is-msg {
+    flex-wrap: wrap;
+}
+
+.nvui-input-msg {
+    flex: 1 1 100%;
+    font-size: var(--nvui-fs-xs);
+    line-height: var(--nvui-lh-tight);
+    text-align: right;
+}
+
+.nvui-input-msg.is-hint {
+    color: var(--nvui-text-3);
+}
+
+/* 错误态只染文字与输入框边线，不改背景：底色变化在玻璃面板上会脏 */
+.nvui-input-msg.is-error {
+    color: var(--nvui-danger);
+}
+
+.nvui-input-row.is-error .nvui-input {
+    box-shadow: inset 0 0 0 1px var(--nvui-danger-line);
+}
+
 .nvui-input {
     flex: 0 0 auto;
     min-height: var(--nvui-control-h);

@@ -769,7 +769,7 @@ const COMPONENT_CLASSES = [
     'nvui-glass', 'nvui-solid', 'nvui-acc-inner',
     'nvui-toast', 'nvui-toast-stack',
     'nvui-progress', 'nvui-progress-bar', 'nvui-progress-field', 'nvui-skeleton', 'nvui-status-dot',
-    'nvui-resize',
+    'nvui-resize', 'nvui-input-msg',
     'nvui-fade-in', 'nvui-slide-up', 'nvui-pop-in', 'nvui-stagger', 'nvui-pulse',
     // v2.1.0 新增 10 个类名：SillyTavern 插件面板布局标准（契约 §14）
     'nvui-panel', 'nvui-panel-header', 'nvui-panel-title', 'nvui-panel-actions', 'nvui-panel-body',
@@ -777,8 +777,8 @@ const COMPONENT_CLASSES = [
     // v2.8.0 新增 1 个类名：默认按钮组
     'nvui-actions',
 ];
-check('COMPONENT_CLASSES 清单为 v2.9.0 的 83 个类名（v2.8.0 的 81 + .nvui-progress-field + .nvui-resize）',
-    COMPONENT_CLASSES.length === 83 && new Set(COMPONENT_CLASSES).size === 83,
+check('COMPONENT_CLASSES 清单为 v2.9.0 的 84 个类名（v2.8.0 的 81 + progress-field + resize + input-msg）',
+    COMPONENT_CLASSES.length === 84 && new Set(COMPONENT_CLASSES).size === 84,
     `实际 ${COMPONENT_CLASSES.length} 个 / 去重 ${new Set(COMPONENT_CLASSES).size} 个`);
 const kitAllSources = [tokensClean, componentsClean, previewClean].join('\n');
 const missingInCss = COMPONENT_CLASSES.filter((c) => !containsExact(kitAllSources, '.' + c));
@@ -2010,7 +2010,7 @@ check('nvui-api: inputRow 的 type 走白名单（不在表内回退 text 并告
     && /warn\('inputRow\(\): 不支持的 type/.test(apiSrc)
     && !/input\.type = opts\.type === 'number' \? 'number' : 'text';/.test(apiSrc));
 check('nvui-api: inputRow 保留 path 伪类型（DOM 仍是 text，样式走 is-path）',
-    /var KIT_INPUT_TYPES = \['path'\]/.test(apiSrc)
+    /var KIT_INPUT_TYPES = \['path', 'textarea'\]/.test(apiSrc)
     && /type === 'path' \? 'text' : type/.test(apiSrc));
 check('nvui-api: number 类型的 onChange 回传数字而非字符串',
     /type === 'number'/.test(apiSrc)
@@ -2077,7 +2077,7 @@ check('nvui-api: 原生 input 类型不被塌缩为 text（file/color/date 等�
     /var INPUT_TYPES = \[[\s\S]{0,400}'file'/.test(apiSrc)
     && /var domType = type === 'path' \? 'text' : type/.test(apiSrc));
 check('nvui-api: path 伪类型的 DOM 契约为 type="text" + .is-path（与 preview.html 手写 DOM 同构）',
-    /input\.setAttribute\('data-nvui-type', 'path'\)/.test(apiSrc)
+    /input\.setAttribute\('data-nvui-type', type\)/.test(apiSrc)
     && /type === 'path' \? 'text' : type/.test(apiSrc)
     && !/Object\.defineProperty\(input, 'type'/.test(apiSrc)
     && !/get: function \(\) \{ return 'path'; \}/.test(apiSrc));

@@ -1790,6 +1790,16 @@
                         <input class="nvui-input" type="text" placeholder="输入章节标题关键字过滤">
                         <span>章节过滤</span>
                     </label>
+                    <label class="nvui-input-row is-msg">
+                        <textarea class="nvui-input is-textarea" rows="3" data-nvui-type="textarea" placeholder="多行文本（v2.9.0 · inputRow({ type: 'textarea' })）"></textarea>
+                        <span>备注说明</span>
+                        <span class="nvui-input-msg is-hint" id="pv-msg-hint">最多 500 字，支持换行</span>
+                    </label>
+                    <label class="nvui-input-row is-msg is-error">
+                        <input class="nvui-input" type="text" value="not-a-url" aria-invalid="true" aria-describedby="pv-msg-error">
+                        <span>回调地址</span>
+                        <span class="nvui-input-msg is-error" id="pv-msg-error">必须是 http(s) 开头的完整地址</span>
+                    </label>
                     <div class="nvui-row pv-row-wrap pv-mt-2">
                         <button type="button" class="nvui-btn is-sm is-ghost" id="pv-focus-demo">聚焦示例</button>
                         <span class="nvui-hint">

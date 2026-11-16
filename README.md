@@ -1939,6 +1939,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 | `.nvui-panel-title` | 面板标题：`--nvui-fs-2xl` 粗体、单行省略；`aria-labelledby` 指向它 |
 | `.nvui-panel-actions` | 右侧操作区（`.nvui-icon-btn` 组，含关闭按钮），`flex-shrink:0` |
 | `.nvui-panel-body` | 内容区：`flex:1 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain`；**全面板唯一滚动层**；内容溢出时自动加 `data-nvui-fade`（`top` / `bottom` / `both`）做边缘渐隐 |
+| `.nvui-input-msg` | **v2.9.0 新增**：输入行的提示 / 错误消息（`is-hint` 次要色、`is-error` 语义 danger 色 + 输入框内描边）。`hint` / `error` 各生成独立 id，`input` 的 `aria-describedby` 并列指向；`error` 还会置 `aria-invalid="true"` |
 | `.nvui-resize` | **v2.9.0 新增**：右下角调尺寸手柄（`role="separator"` + `aria-valuenow/valuemin/valuemax/valuetext` + `tabindex="0"`）。仅 `createPanel({ resizable: true })` 生成；拖拽走 Pointer Events，键盘走方向键 / Shift / Home，焦点环用 `--nvui-focus-ring-*`。指针拖拽与键盘最终都落内联 px 再交回 `applyClamping()`，与 `setSize()` 共用同一套钳制 / 持久化路径 |
 | `.nvui-panel-footer` | 可选底部操作区：右对齐按钮组，顶部直线分隔，`flex-shrink:0` |
 | `.nvui-panel-heading` | 内容区顶部「分区标题 + 版本徽标」行；内部 `.nvui-section-title` 占满剩余宽度 |
@@ -2230,7 +2231,7 @@ console.log(typeof NVUI.createPanel); // 'function'
 | `NVUI.clearLayoutState(id, storageAdapter?)` | 清除指定面板的布局记忆（StorageAdapter 或默认 localStorage） | `void` |
 | `NVUI.clampPanelLayout(savedSize, savedPos, options?)` | 跨分辨率视口越界钳制计算（保证桌面与移动端安全贴边） | `object` |
 | `NVUI.switchRow(options)` | 生成胶囊开关行（`label` / `value` / `disabled` / `feature` / `onChange`） | `HTMLElement` |
-| `NVUI.inputRow(options)` | 生成输入行（`label` / `type` / `value` / `placeholder` / `min` / `max` / `step` / `disabled` / `onChange`；`type: 'path'` 为伪类型） | `HTMLElement`（`row.input` 指向 input） |
+| `NVUI.inputRow(options)` | 生成输入行（`label` / `type` / `value` / `placeholder` / `min` / `max` / `step` / `disabled` / `onChange` / `rows` / `hint` / `error`；`type: 'path'`、`'textarea'` 为伪类型） | `HTMLElement`（`row.input` 指向 input / textarea） |
 | `NVUI.accordion(options)` | 生成折叠分组（`title` / `summary` / `open` / `content[]`） | `HTMLElement`（带 `setOpen` / `setSummary`） |
 | `NVUI.progress(options)` | 生成进度条（`value` / `label` / `variant` / `indeterminate` / `showLabel` / `showValue`） | `HTMLElement`（带 `setValue`）；开启 `showLabel` / `showValue` 时返回 `.nvui-progress-field` 容器，容器同样带 `setValue`，轨道在 `container.track` |
 | `NVUI.createPanel(options)` | 生成完整插件面板（标题栏 + 顶部 tabs + 内容区 + 可选 footer + 手机底部导航） | 控制器对象（见下） |

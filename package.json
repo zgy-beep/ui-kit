@@ -19,7 +19,7 @@
     "test": "node test/test-ui-kit.js",
     "test:api": "node test/test-api-surface.js",
     "test:v280": "node test/test-v280-features.js",
-    "test:browser": "node test/test-issues-9-10-forms.js && node test/test-issue-11-accordion.js && node test/issue-12-optgroup-dark-theme.spec.js && node test/issue-13-14-focus-escape.spec.js && node test/issue-16-persist-size.js && node test/issue-21-ux.spec.js && node test/v290-layout-state.spec.js && node test/v290-width-only.spec.js && node test/v290-diagnostics.spec.js && node test/v290-theme-auto.spec.js && node test/v290-resize.spec.js",
+    "test:browser": "node test/test-issues-9-10-forms.js && node test/test-issue-11-accordion.js && node test/issue-12-optgroup-dark-theme.spec.js && node test/issue-13-14-focus-escape.spec.js && node test/issue-16-persist-size.js && node test/issue-21-ux.spec.js && node test/v290-layout-state.spec.js && node test/v290-width-only.spec.js && node test/v290-diagnostics.spec.js && node test/v290-theme-auto.spec.js && node test/v290-resize.spec.js && node test/v290-inputrow.spec.js",
     "test:issue16": "node test/issue-16-persist-size.js",
     "test:glass": "node test/st-glass-transparency.js",
     "test:e2e": "node test/test-e2e-v250.js",
@@ -37,7 +37,8 @@
     "test:widthonly": "node test/v290-width-only.spec.js",
     "test:diagnostics": "node test/v290-diagnostics.spec.js",
     "test:theme": "node test/v290-theme-auto.spec.js",
-    "test:resize": "node test/v290-resize.spec.js"
+    "test:resize": "node test/v290-resize.spec.js",
+    "test:inputrow": "node test/v290-inputrow.spec.js"
   },
   "devDependencies": {
     "playwright-core": "^1.64.0"
