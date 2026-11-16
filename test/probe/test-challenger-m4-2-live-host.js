@@ -33,7 +33,7 @@ const { chromium } = resolvePlaywright();
 const CHROME = process.env.ST_CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const HOST_URL = process.env.ST_HOST_URL || 'http://127.0.0.1:8000/';
 
-const ROOT_DIR = path.resolve(__dirname, '..');
+const ROOT_DIR = path.resolve(__dirname, '..', '..');
 const ASSETS = {
     tokensCss: path.join(ROOT_DIR, 'tokens.css'),
     componentsCss: path.join(ROOT_DIR, 'components.css'),

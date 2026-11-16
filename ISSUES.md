@@ -50,8 +50,8 @@
 | 11 | `.nvui-progress-bar::after` 的 shimmer 无限动画常驻（0% / 100% 时也在跑） | P2 性能 | 已修复 | `components.css` `.nvui-progress-bar::after`。扫光是「进行中」的语义装饰，0% 尚未开始、100% 已结束，此时跑无限循环动画纯属浪费合成层资源 | 新增**可选**状态类 `.nvui-progress.is-idle`（0%）/ `.is-complete`（100%），CSS 侧 `animation: none` 停掉扫光；`NVUI.progress()` 的 `setValue()` 自动维护这两个类（`syncActivity`）。**不确定进度（`is-indeterminate`）永远保持扫光**。未新增 token、未改既有 DOM 契约（手写 DOM 不加类时行为与旧版一致） |
 | 13 | `prefers-reduced-motion` 门禁只覆盖 `.nvui-scope *` / `dialog.nvui-tl *`，宿主容器内未加 `.nvui-scope` 时组件动画不会降级（无障碍红线被绕过） | P2 无障碍 | 已修复 | `components.css` reduced-motion 块（原 L2069-2072）。宿主把 kit 组件挂进自己的容器却没加 `.nvui-scope` → 层 1 通配不生效 → 组件动画照常播放 | 降级块改为**两层**：层 1 保留 `.nvui-scope *` / `dialog.nvui-tl *` 通配（覆盖作用域内的自定义子元素），层 2 用 `:is(...)` **逐个点名 27 个自身带 animation/transition 的 kit 类**（含 `::before`/`::after` 变体 + `.nvui-stagger > *` + 开关 checkbox）。**未新增 `!important`**（仍 5 个，预算 ≤ 8 保持不变）。回归断言：扫描 `components.css` 里所有带 `animation:`/`transition:` 的规则，提取其 kit 基类，逐一断言出现在降级块选择器中 |
 | 14 | `preview.html` 的 `replayMotion` 逐节点读 `offsetWidth` 强制回流（N 节点 = N 次同步布局）；滚动监听（`capture: true`）未节流，一次滚动触发数十次回调 | P3 性能 | 已修复 | `preview.html` 原 `replayMotion` 内 `void node.offsetWidth`（逐节点）+ `window.addEventListener('scroll', repositionTip, true)` 直接调用 | `replayMotion` 改为「批量摘类 → 全局只读一次 `document.body.offsetWidth` → 批量挂回」，并对 stagger 子项单独触发回流（子项数远小于摘类节点数）；`repositionTip` 用 `requestAnimationFrame` 合并为每帧至多一次。回归断言：断言重播函数不含 `void node.offsetWidth` 且含 `void document.body.offsetWidth`；断言滚动处理含 `requestAnimationFrame` + `repositionRaf` |
-| 15 | 宿主 `body.no-blur` 全局禁用 `backdrop-filter` 时，kit 玻璃只剩半透明底色，下层文字透出重影 | P2 视觉 | 已修复 | 宿主规则实为 `body.no-blur * { backdrop-filter: unset !important }`（`public/css/toggle-dependent.css` L368）。浏览器**仍支持** backdrop-filter，故 `@supports not` 降级块不触发 → 玻璃底色半透明 → 下层文字直接透出 | `nvui-api.js` 新增 `detectGlassSupport()` / `syncGlassFallback()`：**造隐藏 `.nvui-glass` 探针读渲染后的实际计算值**（`getComputedStyle().backdropFilter`），为 `none` 即判定被外部禁用 → 自动给根节点挂 `.nvui-solid` 实心回退。不猜宿主类名（避免耦合）。`createPanel()` / `showToast()` 已内置调用。实机 `test/st-glass-fallback-check.js` **9/9 全绿**：宿主 no-blur 下探测值 = `none`、面板背景 = `rgb(22,26,36)`（不透明）、移除 no-blur 后探测值恢复 `blur(20px) saturate(1.5)`、全程零控制台错误（v2.7.2 起改为 `.nvui-glass-fallback` 97% 近不透明回退，见 #21/#22） |
-| 17 | 宿主 `showModal()` 模态期间，kit 浮层被压住且**完全无法交互**（用户点了没反应，无任何视觉提示）；且 v2.3.0 README §13.5.1 对照表 F 行「`popover=manual` 能压过一切」为**错误论断** | P1 交互 / P1 文档 | 已修复 | 实机探针（`/tmp/probe-carrier*.js`，真实 ST 宿主）：① `popover="manual"` 无论 show 先后**都压不过** `showModal()` 模态；② 普通 div + `z-index:2147483647` 同样不行；③ 根因**不是 z-index**，而是 `showModal()` 给**整页**加 `inert`，`inert` 元素不参与命中测试（`elementsFromPoint` 不返回），也无法获得焦点 | **改为「主动让位」而非硬压**：① `components.css` 新增降级态 `dialog.nvui-tl.is-host-modal`（`pointer-events:none` + `opacity:0.35` + `grayscale(0.6)`，子浮层一并让位）；② `nvui-api.js` 新增 `countHostModals()` / `syncHostModalState()` / `getCarrierState()`；③ 装幂等 watcher（`MutationObserver` 监听 `dialog[open]` + 捕获 `close`），宿主模态**动态开关**时自动降级/还原；④ README §13.5.1 F 行更正 + 新增 §13.7。实机 `test/st-carrier-host-modal-check.js` **18/18 全绿**。GitHub Issue #4 |
+| 15 | 宿主 `body.no-blur` 全局禁用 `backdrop-filter` 时，kit 玻璃只剩半透明底色，下层文字透出重影 | P2 视觉 | 已修复 | 宿主规则实为 `body.no-blur * { backdrop-filter: unset !important }`（`public/css/toggle-dependent.css` L368）。浏览器**仍支持** backdrop-filter，故 `@supports not` 降级块不触发 → 玻璃底色半透明 → 下层文字直接透出 | `nvui-api.js` 新增 `detectGlassSupport()` / `syncGlassFallback()`：**造隐藏 `.nvui-glass` 探针读渲染后的实际计算值**（`getComputedStyle().backdropFilter`），为 `none` 即判定被外部禁用 → 自动给根节点挂 `.nvui-solid` 实心回退。不猜宿主类名（避免耦合）。`createPanel()` / `showToast()` 已内置调用。实机 `test/probe/st-glass-fallback-check.js` **9/9 全绿**：宿主 no-blur 下探测值 = `none`、面板背景 = `rgb(22,26,36)`（不透明）、移除 no-blur 后探测值恢复 `blur(20px) saturate(1.5)`、全程零控制台错误（v2.7.2 起改为 `.nvui-glass-fallback` 97% 近不透明回退，见 #21/#22） |
+| 17 | 宿主 `showModal()` 模态期间，kit 浮层被压住且**完全无法交互**（用户点了没反应，无任何视觉提示）；且 v2.3.0 README §13.5.1 对照表 F 行「`popover=manual` 能压过一切」为**错误论断** | P1 交互 / P1 文档 | 已修复 | 实机探针（`/tmp/probe-carrier*.js`，真实 ST 宿主）：① `popover="manual"` 无论 show 先后**都压不过** `showModal()` 模态；② 普通 div + `z-index:2147483647` 同样不行；③ 根因**不是 z-index**，而是 `showModal()` 给**整页**加 `inert`，`inert` 元素不参与命中测试（`elementsFromPoint` 不返回），也无法获得焦点 | **改为「主动让位」而非硬压**：① `components.css` 新增降级态 `dialog.nvui-tl.is-host-modal`（`pointer-events:none` + `opacity:0.35` + `grayscale(0.6)`，子浮层一并让位）；② `nvui-api.js` 新增 `countHostModals()` / `syncHostModalState()` / `getCarrierState()`；③ 装幂等 watcher（`MutationObserver` 监听 `dialog[open]` + 捕获 `close`），宿主模态**动态开关**时自动降级/还原；④ README §13.5.1 F 行更正 + 新增 §13.7。实机 `test/probe/st-carrier-host-modal-check.js` **18/18 全绿**。GitHub Issue #4 |
 | 18 | 宿主主题以「元素选择器 + `!important`」重写全局表单控件，浅色主题下 `.nvui-input` 呈「深底深字」不可读 | P1 宿主兼容 | 已修复（v2.6.0） | GitHub Issue #9 附 Chromium 实测：`input.nvui-input` 背景 `rgb(46,46,52)`（宿主深色）/ 文字 `rgb(31,36,48)`（kit 深色），同刻 `--nvui-input-bg` 本身正确。本地静态核对：`.nvui-input` 为裸类（0,1,0）、无隔离层、`select option` 无皮肤，`nvui-api.js` 中 `nvui-scope` 出现 0 次 | `components.css` 新增 §7.1 宿主表单隔离：仅 `dialog.nvui-tl` + `.nvui-panel` 双载体、7 条 `!important`（基础 `background`/`color`/`border` 3、`select margin` 1、`:hover background` 1、`option background`/`color` 2），值全走 token 或明确 reset；`:hover` 同作用域还原。`test/test-ui-kit.js` 预算 8 → 14，并新增分类计数 / 双载体选择器 / 精确属性值断言。验证入口：`node test/test-issues-9-10-forms.js`。**GitHub：随 v2.6.0 发布提交关闭（`Fixes #9`）** |
 | 19 | 缺少独立 checkbox 组件：批量选择场景每个下游插件都要自绘宿主隔离 | P2 组件缺失 | 已修复（v2.6.0） | GitHub Issue #10 附下游插件自绘 CSS（`appearance:none` + 显式宽高 + 压 `::before`）。本地核对：`components.css` 无 `.nvui-checkbox`，宿主隔离只覆盖 `.nvui-switch-row` | 新增 `.nvui-checkbox[type="checkbox"]`：16×16、`:checked` / `:indeterminate`、焦点环走 token、`::after` 纯 CSS 对勾；**复用既有 `::before` 压制、不新增 `!important`**；组件类 78 → 79；`preview.html` 补全选 / 半选 / 禁用示例；README §7.5.1 补文档。验证入口：`node test/test-issues-9-10-forms.js`（16px 几何 / `::before` 抑制 / 半选 / 焦点与 Space / disabled）。**GitHub：随 v2.6.0 发布提交关闭（`Fixes #10`）** |
 | 20 | `innerHTML` 注入的 `.nvui-acc` 无法进入 `accList`，`persist.accordion` 静默存成 `{}`（重开面板状态丢失） | P1 持久化 | 已修复（v2.6.0） | GitHub Issue #11 附浏览器实测 storage 内容（`accordion: {}` 而同份 `size`/`tab` 正常）。本地复核：原 `addNode` 注册门槛要求节点自带 `setOpen`（仅工厂产物满足），`trackAccordion` 为闭包私有、控制器无公开入口 | 新增 `panel.trackAccordion(node, id?, options?)` 与 `panel.adoptAccordions(root, options?)`：键按**原始字符串**保存（中文 / 非 ASCII 键不再折叠，`__proto__` 等特殊键安全存取）；**显式 / DOM / data 键被活动节点占用时告警并返回 `null`**，自动键与工厂标题兜底键才追加序号；同键旧节点已脱离面板时由新节点替换；注册幂等；**默认不接管点击**（`{ bind: true }` opt-in）；跨面板 / `document` / `body` 边界拒绝；`destroy()` 解绑并停止落盘；沿用既有 `nvui_state_*` 状态格式。验证入口：`node test/test-issue-11-accordion.js`（真实 Chromium）。**GitHub：随 v2.6.0 发布提交关闭（`Fixes #11`）** |
@@ -65,7 +65,7 @@
 
 | # | 问题 | 严重度 | 状态 | 证据 | 修复 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| G-02 | 焦点囚笼 / 销毁 / 打开三条生命周期路径与 `createPanel` 之间只有 INFERRED `indirect_call`，无显式契约，也缺少「改动 createPanel 必跑哪条回归」的映射 | P2 正确性风险 | 已关闭（2026-11-16） | 去噪后 `.graphify_analysis.json` 的 `surprises` 中三条为 `createPanel → isTrapFocusable`（C7→C32）、`→ destroy`（C7→C21）、`→ openPanel`（C7→C27），均 INFERRED。核查发现缺口**只在文档**：行为断言已存在于 `test/st-live-check.js`（6 项）、`test/st-destroy-close-check.js`（11 条）、`test/issue-13-14-focus-escape.spec.js`（真实 Tab / Shift+Tab / Esc） | `TEST_INFRA.md` 新增 §3.1「Implicit coupling map (G-02)」：三条「可观察行为 ↔ 路径」映射 + 「改动 `createPanel` 必跑脚本」约定；按 §1 黑盒原则**不断言内部符号**，测试脚本零改动 |
+| G-02 | 焦点囚笼 / 销毁 / 打开三条生命周期路径与 `createPanel` 之间只有 INFERRED `indirect_call`，无显式契约，也缺少「改动 createPanel 必跑哪条回归」的映射 | P2 正确性风险 | 已关闭（2026-11-16） | 去噪后 `.graphify_analysis.json` 的 `surprises` 中三条为 `createPanel → isTrapFocusable`（C7→C32）、`→ destroy`（C7→C21）、`→ openPanel`（C7→C27），均 INFERRED。核查发现缺口**只在文档**：行为断言已存在于 `test/probe/st-live-check.js`（6 项）、`test/probe/st-destroy-close-check.js`（11 条）、`test/issue-13-14-focus-escape.spec.js`（真实 Tab / Shift+Tab / Esc） | `TEST_INFRA.md` 新增 §3.1「Implicit coupling map (G-02)」：三条「可观察行为 ↔ 路径」映射 + 「改动 `createPanel` 必跑脚本」约定；按 §1 黑盒原则**不断言内部符号**，测试脚本零改动 |
 | G-03 | 知识图谱只含 AST、文档未进图；`GRAPH_REPORT.md` / 社区标签 / 建议问题缺失，构建止于建图 | P3 工具链 | 已关闭（2026-11-16，语义层另立 G-07） | 原 `graphify-out/` 只有 `graph.json` / `.graphify_analysis.json` / `manifest.json`，`questions` 为 `null`。**更正 11-13 的判断**：当时记录「`cluster-only` 会重算社区 id、作废引用」，实测否证——900 节点副本上重跑，**900/900 社区 id 完全不变**（`createPanel` 仍 C7），同一张图的聚类是确定性的 | `graphify cluster-only . --no-label` 生成 `GRAPH_REPORT.md`（10.6 KB：Corpus Check / Summary / Community Hubs / God Nodes / Surprising Connections / Import Cycles / 57 社区），`graph.html` 同步重导出（665 KB）；`.graphify_analysis.json` 的 `questions` 由 `null` → **7 条**（1 桥接 + 1 INFERRED 复核 + 5 低内聚）。社区标签仍为 `Community N` 占位，连同语义层转 G-07 |
 | G-04 | 模板内嵌的 4 资产副本使图谱节点翻倍、社区成对镜像，god nodes 与 surprising connections 全部重复计数 | P3 工具链 | 已关闭（2026-11-16） | 去噪前两份 `nvui-api.js` 各 120 节点，社区 C4/C6、C7/C8、C12/C13 为镜像对，god nodes 前三名成对（67/67、23/23、20/20）。副本本身**不是 bug**：`scripts/sync-template.js` L14 同步、`scripts/verify-release.js` L68–77 逐个 MD5 校验保护 | 排除配置持久化为 `graphify-out/.graphify_build.json`（`{"excludes":["st-extension-template/ui-kit/"],"code_only":true}`），`graphify extract . --code-only --force --exclude st-extension-template/ui-kit/` 重建：**1021→900 节点 / 1714→1366 边 / 64→57 社区 / 模板残留 0**，god nodes 不再成对；2026-11-16 复验结果一致。仓库零新增文件（配置在已 gitignore 的 `graphify-out/` 内），`graph.html` 已重导出；不影响 `verify:release` 的文件级 MD5 校验 |
 | G-08 | §3.1 的「改动 `createPanel` 必跑脚本」实际不可执行：`st-live-check.js` / `st-destroy-close-check.js` 依赖宿主侧 `window.__NVUI_LAB__`（lab 扩展），ST 1.19.0 默认不带；替代冒烟脚本又放在 gitignore 目录、未入库 | P2 测试可复跑性 | 已关闭（2026-11-16，部分采纳） | 实机：宿主已加载 `NVUI 2.8.0` 但 `window.__NVUI_LAB__ === undefined`，两份脚本首条断言即失败；`st-lab-out/smoke/` 两套虽能跑（54 条），但不在版本控制内 | 两套冒烟整理入库为 `test/host/smoke-panel.js`（35 条）+ `test/host/smoke-deep.js`（19 条）：路径改 `__dirname` 派生、Chrome 多候选探测、`playwright-core` 缺失时打印修复命令并以退出码 2 退出、版本断言改为读 `package.json`；入口 `npm run test:host`。新增 `test/README.md` 五类索引；`TEST_INFRA.md` §3.1 必跑入口改为 `test:host` + `test:browser`，§3.2 基线更新为 35/35 + 19/19。lab 扩展依赖留在 Roadmap A2（GH-#17）跟踪 |
@@ -119,8 +119,8 @@
 
 > 判定标准：**必须在真实 SillyTavern 宿主（`http://127.0.0.1:8000`，v1.19.0）里跑过**，
 > 且同时覆盖**正常路径**与**异常输入**；静态阅读不算数。
-> 复现脚本 `test/st-review-repro.js`（修复前 11 PASS / 18 FAIL → 修复后全绿）、
-> 复验脚本 `test/st-review-verify.js`（62 条断言）、harness `test/st-review-harness.js`。
+> 复现脚本 `test/probe/st-review-repro.js`（修复前 11 PASS / 18 FAIL → 修复后全绿）、
+> 复验脚本 `test/probe/st-review-verify.js`（62 条断言）、harness `test/probe/st-review-harness.js`。
 
 | # | 类别 | 严重度 | 问题 | 影响范围 | 修复方案 | 验证结果 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -281,40 +281,40 @@
 
 | 脚本 | 覆盖 |
 | :--- | :--- |
-| `test/st-live-check.js` | 运行时行为回归 6 项：冒泡截断 / Esc 单例 / destroy / id 唯一 / focus trap / 焦点归还 |
-| `test/st-template-check.js` | ST 模板实机 7 项：扩展加载 / 菜单开面板 / tab 同步 / 吐司 / Esc 焦点归还 / 设置回写 / 移动端布局 |
-| `test/st-layer-check.js` | 层级回归：面板 5 采样点是否在宿主之上 / 吐司是否高于面板 / 关闭后还原 |
-| `test/st-layer-probe.js` | 层级根因探针：对比 dialog.show / showModal / popover / 固定 div 四种载体的命中顺序 |
-| `test/st-glass-probe.js` | 玻璃生效探测：宿主 no-blur 下 backdrop-filter 是否被关掉 |
-| `test/st-glass-fallback-check.js` | 玻璃回退（#15/#21/#22）：宿主 no-blur 下探测值 / 根节点自动挂 `.nvui-glass-fallback`（不再 `.nvui-solid`）/ 面板 97% token 派生近不透明档 / 移除 no-blur 后自动恢复 / 用户 `.nvui-solid` 优先 / 零控制台错误 |
+| `test/probe/st-live-check.js` | 运行时行为回归 6 项：冒泡截断 / Esc 单例 / destroy / id 唯一 / focus trap / 焦点归还 |
+| `test/probe/st-template-check.js` | ST 模板实机 7 项：扩展加载 / 菜单开面板 / tab 同步 / 吐司 / Esc 焦点归还 / 设置回写 / 移动端布局 |
+| `test/probe/st-layer-check.js` | 层级回归：面板 5 采样点是否在宿主之上 / 吐司是否高于面板 / 关闭后还原 |
+| `test/probe/st-layer-probe.js` | 层级根因探针：对比 dialog.show / showModal / popover / 固定 div 四种载体的命中顺序 |
+| `test/probe/st-glass-probe.js` | 玻璃生效探测：宿主 no-blur 下 backdrop-filter 是否被关掉 |
+| `test/probe/st-glass-fallback-check.js` | 玻璃回退（#15/#21/#22）：宿主 no-blur 下探测值 / 根节点自动挂 `.nvui-glass-fallback`（不再 `.nvui-solid`）/ 面板 97% token 派生近不透明档 / 移除 no-blur 后自动恢复 / 用户 `.nvui-solid` 优先 / 零控制台错误 |
 | `test/st-glass-transparency.js` | 玻璃透明感（#21/#22，零依赖 CDP）：面板自身 blur（透明 + 背后模糊）/ `.nvui-solid` 实心 / no-blur 97% 近不透明回退 / CSS 未就绪时序竞争自愈 / reduced-transparency / solid 覆盖 fallback |
-| `test/st-focus-probe.js` | 焦点归还根因探针 |
-| `test/st-toplayer-probe.js` | top-layer 行为探针：实测非模态 `dialog.show()` 是否进浏览器 top layer（结论：不进） |
-| `test/st-perf-probe.js` | 性能总探针（#8 / #9 / #10 / #12）：CDP `Performance.getMetrics` 测布局次数 / 布局耗时 + 双层 blur 帧间隔对照 |
-| `test/st-perf-tabs-fine.js` | #9 精测：分离「创建 DOM」与「纯动画」成本，三组对照（width 过渡 / 无过渡 / transform） |
-| `test/st-perf-tabs-options.js` | #9 方案选型：`contain: layout` / `contain: strict` / `will-change: transform` / transform 缩放，四组对照 |
-| `test/st-perf-tabs-frames.js` | #9 帧间隔判定：过渡期间 rAF 帧间隔分布 vs 无动画基线（判定是否真掉帧） |
-| `test/st-modal-layer-check.js` | #16 模态层级：宿主 `showModal()` 打开时 kit 浮层是否被压住 / 是否可聚焦 / 关闭后是否还原 |
-| `test/st-carrier-host-modal-check.js` | #17 载体让位机制：宿主模态下 `.is-host-modal` 是否自动增删 / 不可点 / 压暗 / `getCarrierState()` 快照 / 还原 |
+| `test/probe/st-focus-probe.js` | 焦点归还根因探针 |
+| `test/probe/st-toplayer-probe.js` | top-layer 行为探针：实测非模态 `dialog.show()` 是否进浏览器 top layer（结论：不进） |
+| `test/probe/st-perf-probe.js` | 性能总探针（#8 / #9 / #10 / #12）：CDP `Performance.getMetrics` 测布局次数 / 布局耗时 + 双层 blur 帧间隔对照 |
+| `test/probe/st-perf-tabs-fine.js` | #9 精测：分离「创建 DOM」与「纯动画」成本，三组对照（width 过渡 / 无过渡 / transform） |
+| `test/probe/st-perf-tabs-options.js` | #9 方案选型：`contain: layout` / `contain: strict` / `will-change: transform` / transform 缩放，四组对照 |
+| `test/probe/st-perf-tabs-frames.js` | #9 帧间隔判定：过渡期间 rAF 帧间隔分布 vs 无动画基线（判定是否真掉帧） |
+| `test/probe/st-modal-layer-check.js` | #16 模态层级：宿主 `showModal()` 打开时 kit 浮层是否被压住 / 是否可聚焦 / 关闭后是否还原 |
+| `test/probe/st-carrier-host-modal-check.js` | #17 载体让位机制：宿主模态下 `.is-host-modal` 是否自动增删 / 不可点 / 压暗 / `getCarrierState()` 快照 / 还原 |
 
 ### 2026-10-20 系统性 Review 新增
 
 | 脚本 | 覆盖 |
 | :--- | :--- |
-| `test/st-review-harness.js` | **可复用实机脚手架**：`launch()` / `injectKit(page,{force:true})` 注入仓库版 kit / `assert()` / `summary()` / `cleanup()`；内部自动清代理并设 `NO_PROXY=*` |
-| `test/st-review-harness-selftest.js` | 脚手架自身自测（15 项：注入后 `NVUI.version`、面板 open/close/destroy、CSS 注入、零 pageerror） |
-| `test/st-review-host-probe.js` | 宿主环境与扩展安装状态探测（只读） |
-| `test/st-review-repro.js` | **修复前复现脚本**：29 条断言，断言语义为「正确行为必须成立」→ 修复前 11 PASS / 18 FAIL，修复后 **29/29** |
-| `test/st-review-verify.js` | **修复后复验脚本**：62 条断言，覆盖正常路径 + 异常输入 + 历史契约不破 → **62/62** |
-| `test/st-review-2026-verify.js` | **2026 深度加固实机复验脚本**：24 条断言，覆盖 NEW-25 ~ NEW-46 全量实机交互、异常渗透与宿主集成 → **24/24 PASS，0 pageerror** |
-| `test/st-review-diag.js` / `-n03` / `-n05` / `-n07` | 针对性诊断：焦点落点、input type 白名单、观察器收窄 |
-| `test/st-review-repro-n07-detail.js` | NEW-07 观察器触发频率细测 |
-| `test/st-review-legacy-preload.js` | 历史脚本预加载兼容层（应对宿主 LAB 夹具缺失） |
-| `test/st-template-new22-check.js` | NEW-22 非本地宿主门禁验证（用 `--host-resolver-rules` 构造真实非本地场景） |
-| `test/st-review-verify-r4.js` | 第四轮专项 27 条（含 NEW-16 destroy 摘除时机的 document 级委托验证） |
-| `test/st-review-verify-r5.js` | 最终收口专项 18 条（6 轮独立循环验证 document 委托稳定性 + DOM 不泄漏 + NEW-18 两分支 + 正常路径非回归） |
-| `test/st-destroy-close-check.js` | destroy → close 事件传播与兜底摘除的故障注入验证（11 条） |
-| `test/st-review-provenance.js` | **版本溯源**：用 HTTP 响应体字节 md5 对比仓库 md5，证明「测的到底是不是最新版」 |
+| `test/probe/st-review-harness.js` | **可复用实机脚手架**：`launch()` / `injectKit(page,{force:true})` 注入仓库版 kit / `assert()` / `summary()` / `cleanup()`；内部自动清代理并设 `NO_PROXY=*` |
+| `test/probe/st-review-harness-selftest.js` | 脚手架自身自测（15 项：注入后 `NVUI.version`、面板 open/close/destroy、CSS 注入、零 pageerror） |
+| `test/probe/st-review-host-probe.js` | 宿主环境与扩展安装状态探测（只读） |
+| `test/probe/st-review-repro.js` | **修复前复现脚本**：29 条断言，断言语义为「正确行为必须成立」→ 修复前 11 PASS / 18 FAIL，修复后 **29/29** |
+| `test/probe/st-review-verify.js` | **修复后复验脚本**：62 条断言，覆盖正常路径 + 异常输入 + 历史契约不破 → **62/62** |
+| `test/probe/st-review-2026-verify.js` | **2026 深度加固实机复验脚本**：24 条断言，覆盖 NEW-25 ~ NEW-46 全量实机交互、异常渗透与宿主集成 → **24/24 PASS，0 pageerror** |
+| `test/probe/st-review-diag.js` / `-n03` / `-n05` / `-n07` | 针对性诊断：焦点落点、input type 白名单、观察器收窄 |
+| `test/probe/st-review-repro-n07-detail.js` | NEW-07 观察器触发频率细测 |
+| `test/probe/st-review-legacy-preload.js` | 历史脚本预加载兼容层（应对宿主 LAB 夹具缺失） |
+| `test/probe/st-template-new22-check.js` | NEW-22 非本地宿主门禁验证（用 `--host-resolver-rules` 构造真实非本地场景） |
+| `test/probe/st-review-verify-r4.js` | 第四轮专项 27 条（含 NEW-16 destroy 摘除时机的 document 级委托验证） |
+| `test/probe/st-review-verify-r5.js` | 最终收口专项 18 条（6 轮独立循环验证 document 委托稳定性 + DOM 不泄漏 + NEW-18 两分支 + 正常路径非回归） |
+| `test/probe/st-destroy-close-check.js` | destroy → close 事件传播与兜底摘除的故障注入验证（11 条） |
+| `test/probe/st-review-provenance.js` | **版本溯源**：用 HTTP 响应体字节 md5 对比仓库 md5，证明「测的到底是不是最新版」 |
 
 > 本轮审查报告：`.workbuddy/review/AUDIT-2026-10-20.md`（904 行）+ `AUDIT-2026-10-20-appendix.md`
 > 修复前取证：`REPRO-2026-10-20.md` + `REPRO-raw-2026-10-20.json`
@@ -369,17 +369,17 @@
 1. **G-01 分区重组 [暂缓]**：把 `nvui-api.js` L1429–L2875 内 42 个嵌套函数按「宿主/层级、玻璃能力、
    DOM 与无障碍、布局/持久化」收进 4 个 factory，`createPanel` 只负责组装并返回 controller。导出面、DOM、CSS 全不变。
    **暂缓原因（16:31）**：本机 SillyTavern 宿主 `http://127.0.0.1:8000` 不可达（绕代理复测 `HTTP 000`，直连 `502`），
-   `test/st-review-verify.js`（62 条）/ `test/st-review-2026-verify.js`（24 条）等实机回归无法执行；
+   `test/probe/st-review-verify.js`（62 条）/ `test/probe/st-review-2026-verify.js`（24 条）等实机回归无法执行；
    在没有实机基线的情况下改 1447 行闭包体，违反本项目「先实机复现 / 复验再修」的规则 1 / 2。
    **待宿主恢复后单独确认再动刀。**
 2. **G-02 隐式耦合显式化 [已完成 16:31]**：`TEST_INFRA.md` 新增 §3.1，补三条「可观察行为 ↔ 路径」映射
    （Tab 焦点循环 → `isTrapFocusable`；destroy 后 document 监听数不增 → `destroy`；Esc 关闭与焦点归还 → `openPanel`），
    并写明「改动 `createPanel` 必跑脚本」。**方案修订**：原计划「补齐对应可观察断言」经核查**已存在**——
-   `test/st-live-check.js` 六项已含 focus trap / 焦点归还 / destroy DOM 清理 / Esc 单例无监听器泄漏 / 冒泡截断，
-   `test/st-destroy-close-check.js` 另有 11 条；按 §1 黑盒原则不新增内部符号断言，**测试脚本零改动**。
+   `test/probe/st-live-check.js` 六项已含 focus trap / 焦点归还 / destroy DOM 清理 / Esc 单例无监听器泄漏 / 冒泡截断，
+   `test/probe/st-destroy-close-check.js` 另有 11 条；按 §1 黑盒原则不新增内部符号断言，**测试脚本零改动**。
 3. **验收清单**：`npm test` → `npm run test:api` → `npm run test:v280` → `npm run test:browser` →
    `node test/test-e2e-v250.js --no-host` → `npm run verify:release` → `npm run downstream:check`，
-   实机前后对照 `test/st-review-verify.js`（62 条）与 `test/st-review-2026-verify.js`（24 条）；
+   实机前后对照 `test/probe/st-review-verify.js`（62 条）与 `test/probe/st-review-2026-verify.js`（24 条）；
    最后 `npm run sync:template` 重同步，确认 4 资产 MD5 与根版一致。
 
 ### P2 选择性项（先算成本）
@@ -389,8 +389,8 @@
    **建议分级**：先只接 `AI-GUIDE.md` + `README.md` §13 两个文件，验证 doc↔code 关联是否够用，再决定是否 `graphify extract . --mode deep` 全量重建。
    （原拟纳入的 `tokens.json` 因 G-06 的文件名启发式无法进图，暂不列入。）
 2. **G-05 测试脚本归档**：20 个一次性探针下游依赖均为 0，可移入 `test/archive/2026-10/`；
-   但探针内是 `require('./st-review-harness')`（`test/st-review-diag.js` L17 等），移动后须改相对路径，
-   而 `test/st-review-harness.js` 被 14 个脚本依赖，**不可移动**。同步更新本文件「实机测试脚本」表
+   但探针内是 `require('./st-review-harness')`（`test/probe/st-review-diag.js` L17 等），移动后须改相对路径，
+   而 `test/probe/st-review-harness.js` 被 14 个脚本依赖，**不可移动**。同步更新本文件「实机测试脚本」表
    与 `TEST_INFRA.md` 的脚本索引。
 3. **G-06 CSS / 令牌层 [已判定不修]**：`.css` 无提取器、`.graphifyrc` 无法补、`tokens.json` 命中 `tokens` 关键字启发式，
    证据与替代方案见「已确认-不修」区；本条不再作为待办。

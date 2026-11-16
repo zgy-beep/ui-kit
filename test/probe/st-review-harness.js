@@ -36,7 +36,7 @@ const { chromium } = require('playwright-core');
 
 /* ==================== 常量 ==================== */
 
-const KIT_ROOT = path.resolve(__dirname, '..');
+const KIT_ROOT = path.resolve(__dirname, '..', '..');
 const HOST_URL = process.env.ST_HOST_URL || 'http://127.0.0.1:8000/';
 const CHROME = process.env.ST_CHROME
     || 'C:/Program Files/Google/Chrome/Application/chrome.exe';

@@ -15,7 +15,7 @@
 
 | 入口 | 脚本 |
 | :--- | :--- |
-| `npm run test:browser` | `test-issues-9-10-forms.js` → `test-issue-11-accordion.js` → `issue-12-optgroup-dark-theme.spec.js` → `issue-13-14-focus-escape.spec.js` |
+| `npm run test:browser` | `test-issues-9-10-forms.js` → `test-issue-11-accordion.js` → `issue-12-optgroup-dark-theme.spec.js` → `issue-13-14-focus-escape.spec.js` → `issue-16-persist-size.js` |
 | `npm run test:stress` | `stress-m1-persistence.js`（19，持久化/损坏数据/竞态）→ `stress-m2-header.js`（15，头部控制流） |
 | `npm run test:e2e` | `test-e2e-v250.js`（58，v2.5.0 全路径） |
 | `npm run test:glass` | `st-glass-transparency.js` |
@@ -34,11 +34,14 @@
 产物（截图 / result.json）默认写 `st-lab-out/host/`，已被 `.gitignore` 排除。
 基线结果与覆盖范围见 `TEST_INFRA.md` §3.2。
 
-## 4. 历史实机脚本（`st-*.js`，需宿主 lab 扩展）
+## 4. 历史实机脚本与一次性探针 → `probe/`
 
-根目录的 `st-live-check.js`、`st-destroy-close-check.js`、`st-glass-fallback-check.js` 等依赖宿主侧
-`window.__NVUI_LAB__`（lab 扩展）。ST 1.19.0 默认不带该扩展，**这些脚本当前不可直接复跑**，
-保留作为历史证据与行为参考；新增回归请写到 `host/`。
+**2026-11-16 起根目录只保留可回归脚本**（上表 1–3 类），其余 30 个历史实机脚本与一次性探针统一收进
+[`probe/`](probe/README.md)：依赖宿主 lab 扩展的（`st-live-check.js` 等 8 个）、根因/性能探针
+（`st-layer-probe.js`、`st-perf-*.js` 等）、2026-10 审查批次（`st-review-*.js`）都在那里。
+
+它们**不进任何门禁**，清单、用途与 lab 依赖见 [`probe/README.md`](probe/README.md)。新增回归请写到
+`test/*.spec.js` / `test/stress-*.js` / `test/host/`，不要往根目录堆一次性探针。
 
 ## 5. 一次性探针（归档）
 

@@ -1817,8 +1817,8 @@ for (const f of TPL_ASSET_FILES) {
     }
     check('st-extension-template 副本 tokens.json 版本号与 --nvui-z-layer 载体档齐全', ok, detail);
 }
-check('新增实机脚本 st-carrier-host-modal-check.js 存在',
-    fs.existsSync(path.join(KIT, 'test', 'st-carrier-host-modal-check.js')));
+check('新增实机脚本 probe/st-carrier-host-modal-check.js 存在',
+    fs.existsSync(path.join(KIT, 'test', 'probe', 'st-carrier-host-modal-check.js')));
 check('README 排版规范（标题层级不跳级 / 表格列数一致 / 代码围栏配对 / 无连续空行）',
     (() => {
         const lines = readme.split(/\r?\n/);
@@ -2184,7 +2184,7 @@ check('ST 模板: getSettings 仅在 localhost / 127.0.0.1 暴露（NEW-22）',
 check('ST 模板: open 保持全量暴露（业务入口不因门禁而失效）',
     /window\.__MY_PLUGIN__ = \{ open: openSettings \}/.test(tplIndexSrc));
 check('NEW-22 实机取证脚本存在（本地 / 非本地双场景门禁）',
-    fs.existsSync(path.join(KIT, 'test', 'st-template-new22-check.js')));
+    fs.existsSync(path.join(KIT, 'test', 'probe', 'st-template-new22-check.js')));
 check('CHANGELOG 记录本批次（静态审查批次二 · 9 条中低危项，与 v2.4.0 同版本发布）',
     /静态审查批次二（9 条中低危项）/.test(changelog)
     && /NEW-09/.test(changelog) && /NEW-22/.test(changelog));

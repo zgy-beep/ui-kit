@@ -101,14 +101,14 @@ accordion 与持久化已抽到模块级 `createAccordionRegistry()` / `createPe
 与 `npm run test:browser`（4 个 spec）；另有三条**可直接跑、无需 lab 扩展**的历史回归，
 改动持久化 / 头部控制流时必须加跑：`npm run test:stress`（`stress-m1-persistence` 19 条 +
 `stress-m2-header` 15 条，含异步存储、损坏数据、初始化竞态）、`npm run test:e2e`（58 条）。
-下表 `test/st-*.js` 保留为历史实机脚本，但它们依赖
+下表 `test/probe/st-*.js` 保留为历史实机脚本（2026-11-16 起统一收进 `test/probe/`），但它们依赖
 宿主侧 `window.__NVUI_LAB__`（lab 扩展），ST 1.19.0 默认不带，**不能作为唯一门禁**。
 
 | Graph path (INFERRED) | Community bridge | Observable behaviour | Existing assertion |
 | :--- | :--- | :--- | :--- |
-| `createPanel() → isTrapFocusable()` | C7 → C32 | Tab / Shift+Tab stay inside the panel; focus returns to the opener on close | `test/st-live-check.js` ("focus trap 生效", "焦点归还正确"); `test/issue-13-14-focus-escape.spec.js` |
-| `createPanel() → destroy()` | C7 → C21 | dialog count drops after destroy; `keydown` listeners do not accumulate across panels | `test/st-live-check.js` ("destroy() 清理 DOM", "Esc 单例 + 无监听器泄漏"); `test/st-destroy-close-check.js` (11 cases) |
-| `createPanel() → openPanel()` | C7 → C27 | Esc closes and restores focus; overlay exit animation is not truncated by a child `animationend` | `test/st-live-check.js` ("冒泡截断已修复", "焦点归还正确") |
+| `createPanel() → isTrapFocusable()` | C7 → C32 | Tab / Shift+Tab stay inside the panel; focus returns to the opener on close | `test/probe/st-live-check.js` ("focus trap 生效", "焦点归还正确"); `test/issue-13-14-focus-escape.spec.js` |
+| `createPanel() → destroy()` | C7 → C21 | dialog count drops after destroy; `keydown` listeners do not accumulate across panels | `test/probe/st-live-check.js` ("destroy() 清理 DOM", "Esc 单例 + 无监听器泄漏"); `test/probe/st-destroy-close-check.js` (11 cases) |
+| `createPanel() → openPanel()` | C7 → C27 | Esc closes and restores focus; overlay exit animation is not truncated by a child `animationend` | `test/probe/st-live-check.js` ("冒泡截断已修复", "焦点归还正确") |
 
 > No new test code was added: all three observable behaviours were already asserted.
 > The gap was documentation-only. Two further INFERRED bridges (`warn() → logAt()`,

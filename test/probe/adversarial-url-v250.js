@@ -24,7 +24,7 @@ function resolvePlaywright() {
 }
 
 const { chromium } = resolvePlaywright();
-const KIT_ROOT = path.resolve(__dirname, '..');
+const KIT_ROOT = path.resolve(__dirname, '..', '..');
 const CHROME_PATH = process.env.ST_CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 
 const PATHS = {

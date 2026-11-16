@@ -15,7 +15,7 @@ const path = require('path');
 const fs = require('fs');
 
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const KIT = path.resolve(__dirname, '..');
+const KIT = path.resolve(__dirname, '..', '..');
 const OUT = process.argv[2] || path.join(KIT, 'st-lab-out', 'st-glass-fallback');
 
 const checks = [];

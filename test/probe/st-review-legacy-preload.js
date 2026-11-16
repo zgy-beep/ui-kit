@@ -22,7 +22,7 @@ const fs = require('fs');
 const path = require('path');
 const Module = require('module');
 
-const KIT_ROOT = path.resolve(__dirname, '..');
+const KIT_ROOT = path.resolve(__dirname, '..', '..');
 const INTERCEPT_ENABLED = process.env.ST_LEGACY_INTERCEPT !== '0';
 
 /* 宿主 third-party 副本目录（相对宿主站点） */
