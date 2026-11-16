@@ -75,6 +75,7 @@
 | [`README.md`](README.md) | 本规范：定位、接入、令牌、组件、宿主红线、迁移、API |
 | [`AI-GUIDE.md`](AI-GUIDE.md) | 给 AI 编码助手的操作手册：硬约束、读文件顺序、面板标准流程、提示词模板、验收清单 |
 | [`CHANGELOG.md`](CHANGELOG.md) | 变更记录与版本时间线（**历史事实的唯一来源**） |
+| [`MAINTAINING.md`](MAINTAINING.md) | 维护流程规范：提交时机与信息格式、版本三态与升位判定、GitHub issue 关闭判据、每轮 DoD |
 | [`AUDIT.md`](AUDIT.md) | 架构审核报告：v1.1.0 评估、v2.0.0/v2.0.1 复核与问题清单 |
 | [`package.json`](package.json) | 项目元信息与 `npm test` / `test:browser` / `test:e2e` 入口 |
 | [`LICENSE`](LICENSE) | MIT 许可 |
@@ -1837,6 +1838,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 2. **附注标签**：使用 `git tag -a vX.Y.Z -m "..."`，禁止轻量标签；发布包含版本概要。
 3. **Release Notes**：每个 GitHub Release 包含版本定位、核心更新/缺陷（关联 Issue 编号）、兼容性说明与自动化验证数据。
 4. **发布顺序**：`npm test` 通过 → 同步 10 处版本与模板副本（或 `npm run sync:template`）→ `npm run verify:release` → `preview.html` 目测 → 打 tag → 创建 Release。
+5. **完整判据**：版本三态（开发中 / 待发布 / 已发布）、升位判定树、发布后必做的三件事，见 [`MAINTAINING.md`](MAINTAINING.md) §2。`CHANGELOG.md` 不使用 `Unreleased` 标题——「已 bump 未打 tag」就是「待发布」，是一个允许停留多天的合法状态。
 
 ### 11.4 版本时间线（摘要）
 

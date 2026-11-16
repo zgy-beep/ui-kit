@@ -1873,6 +1873,15 @@ check('AI-GUIDE.md 覆盖 AI 协作指南关键词（SillyTavern / nvui-api / to
     ['SillyTavern', 'nvui-api', 'tokens.json', '提示词', '验收', '其它软件']
         .every((k) => aiGuide.includes(k)));
 check('README 文件结构表补充 AUDIT.md', readme.includes('AUDIT.md'));
+check('MAINTAINING.md 存在且覆盖提交 / 版本 / Issue 三套流程判据',
+    (() => {
+        const p = path.join(KIT, 'MAINTAINING.md');
+        if (!fs.existsSync(p)) return false;
+        const doc = readText(p);
+        return ['## 1. 提交规范', '## 2. 版本迭代规范', '## 3. GitHub Issue 维护规范',
+            '## 4. 每轮的 Definition of Done', 'fixed-pending-release']
+            .every((k) => doc.includes(k));
+    })());
 check('AUDIT.md 存在且同时覆盖 v1.1.0 与 v2.0.0',
     auditExists && audit.includes('v1.1.0') && audit.includes('v2.0.0'),
     auditExists ? 'AUDIT.md 缺少版本号' : 'AUDIT.md 不存在');

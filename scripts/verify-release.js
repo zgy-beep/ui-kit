@@ -65,6 +65,14 @@ for (const doc of ['UPGRADING.md', 'MIGRATION-v2.md']) {
     else ok(`升级文档 ${doc}`);
 }
 
+/* 流程规范文档：发布动作、提交纪律、issue 关闭判据的唯一出处。
+   缺章节说明有人只删了文档没改流程，发布前必须拦住。 */
+const maintainDoc = read('MAINTAINING.md');
+const maintainSections = ['## 1. 提交规范', '## 2. 版本迭代规范', '## 3. GitHub Issue 维护规范'];
+const missingSections = maintainSections.filter((h) => !maintainDoc.includes(h));
+if (missingSections.length) fail(`MAINTAINING.md 缺少章节：${missingSections.join(' / ')}`);
+else ok('MAINTAINING.md 三章齐全（提交 / 版本 / Issue）');
+
 const TPL = path.join(ROOT, 'st-extension-template', 'ui-kit');
 for (const name of ['tokens.css', 'components.css', 'nvui-api.js', 'tokens.json']) {
     const rootFile = path.join(ROOT, name);
