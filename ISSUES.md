@@ -28,10 +28,10 @@
 | :--- | :--- | :--- |
 | [GH-#15](https://github.com/zgy-beep/ui-kit/issues/15) | v2.7.0 forms 浏览器回归一次并行运行得到 453/455，半选 checkbox 背景和横杠透明度读到过渡中间帧；串行复跑 455/455。 | **已关闭**（v2.7.1）：等待两项计算样式终值并保留最终断言；三份并行 forms 各 455/455。发布提交关联 `Fixes #15`。 |
 | [GH-#17](https://github.com/zgy-beep/ui-kit/issues/17) | 线路 A · v2.8.2 / v2.8.3 工程化收尾（A1–A5）。 | **CLOSED（v2.8.3，2026-11-16）**：A1 尺寸矩阵 8 → 12（`c42f3f7`）、A2 依赖解析统一（`f68f4ce`）、A3 `verify:all` 9 步 + 产物校验（`2c763e6`）随 v2.8.3 发布；A4 `test/probe/` 30 个脚本 + 索引（`0301d68`）、A5 已在 v2.8.2 交付。tag `v2.8.3` + Release 3 产物已推，关闭评论含版本 / commit / 实测数字。 |
-| [GH-#18](https://github.com/zgy-beep/ui-kit/issues/18) | 线路 B · v2.9.0 下游可维护性与可观测性（B1–B6，全 additive）。 | **OPEN**（未开始）：无线程内提交；`ROADMAP.md` 已补建并记录顺序建议 B1 → B3 → B2 → B6 → B4 / B5。 |
+| [GH-#18](https://github.com/zgy-beep/ui-kit/issues/18) | 线路 B · v2.9.0 下游可维护性与可观测性（B1–B6，全 additive）。 | **CLOSED（v2.9.0，2026-11-16）**：B1 `f601260` / B3 `8b7f4be` / B2 `e200899` / B6 `98dd3b3` / B4 `9b37425` / B5 `05e3db0`，六套 spec 共 56 项全绿；组件类 81 → 84、顶层导出 27 → 28。DOM 契约条目未做（需先定破坏性检测语义，与线路 C 同源），已在关闭评论注明。tag `v2.9.0` + Release 3 产物已推。 |
 | [GH-#19](https://github.com/zgy-beep/ui-kit/issues/19) | 线路 C · v3.0.0 内联尺寸停写与命名收敛（C1–C4，破坏性）。 | **OPEN**（未开始）：需迁移器与下游公告；`ROADMAP.md` 已记录「读 `panel.style.width/height` 的下游代码会失效」。 |
 | [GH-#20](https://github.com/zgy-beep/ui-kit/issues/20) | 焦点陷阱尾项误判：`tabindex="-1"` 的未激活 tab 被计入可 Tab 项，纯文本面板一次 Tab 即逃出模态（对应本文件 `#23`）。 | **CLOSED（v2.8.2，2026-11-16）**：tag `v2.8.2` + [Release](https://github.com/zgy-beep/ui-kit/releases/tag/v2.8.2) 已建，关闭评论记录了版本 / commit / 验证数据；按 `MAINTAINING.md` §3.3 第 1 条关闭。 |
-| [GH-#21](https://github.com/zgy-beep/ui-kit/issues/21) | UX 观察 3 条：移动端底部导航项 26px、进度条 `label` 仅 `aria-label` 无可视标签、长内容滚动边缘硬切。 | **OPEN · 待设计确认**：三条均未改代码，验收口径与取舍已写在 issue；对应本文件「需求与特性规划」区的三条「（冒烟观察 2026-11-16）」。 |
+| [GH-#21](https://github.com/zgy-beep/ui-kit/issues/21) | UX 观察 3 条：移动端底部导航项 26px、进度条 `label` 仅 `aria-label` 无可视标签、长内容滚动边缘硬切。 | **CLOSED（v2.9.0，2026-11-16）**：触控 40px 已随 v2.8.2 交付（`7818192`）；进度可视标签与边缘渐隐随 v2.9.0 交付（`e37b446`，`test/issue-21-ux.spec.js` 11/11）。三条全部 additive，关闭评论含取舍说明（mask-image 而非内阴影、可视文本 `aria-hidden` 防重复播报）。 |
 
 > `ROADMAP.md` 于 2026-11-16 补建：此前三个 open issue 均引用该文件，但仓库从未提交过（`git log --all -- ROADMAP.md` 为空），属**死链**，现已修复。
 
@@ -211,9 +211,9 @@
 | [Issue #6](https://github.com/zgy-beep/ui-kit/issues/6) | 面板头部交互 | 预置主题切换按钮（`themeToggle`）与版本更新提示按钮（`update` / `panel.showUpdate`）：规范右上角标准操作流（Actions → 主题切换 → 关闭）及左上角版本更新动态点亮入口 | v2.5.0 | **Closed (v2.5.0)**：全量实现并实机验证。规范操作流标准次序（`.nvui-panel-actions` 严格保证 `[自定义 actions...]` -> `[themeToggle]` -> `[closeBtn]`）；预置主题切换按钮（日/月图标平滑过渡动效、直连 `NVUI.setTheme` 切换 `.nvui-theme-light` 并失效 Token 缓存、联动 `onThemeChange` 回调）；标题区预置版本更新提示胶囊（`opts.update` 静态配置与 `panel.showUpdate` 动态点亮/隐藏/更新接口）；严格遵守 WAI-ARIA APG 无障碍规范（`role="button"`, `tabindex="0"`, 键盘 Enter/Space 触发）、纯文本注入（杜绝 XSS）与 Flat Glass 无实体外描边红线。 |
 | [Issue #10](https://github.com/zgy-beep/ui-kit/issues/10) | 组件层 | 独立复选框 `.nvui-checkbox`：批量选择场景的 16px 小方块，自带宿主隔离，支持 `:checked` / `:indeterminate`，避免每个下游插件自绘 | v2.6.0 | **Implemented (v2.6.0)**：组件、示例与文档已落地并在 Chromium 回归中验证；GitHub issue 由本次发布提交关闭（`Fixes #10`）；同批的 #9 / #11 见「已修复」表第 18 / 20 行。 |
 | —（规划） | 表单作用域 | opt-in `.nvui-form-scope`：自定义普通容器显式加类后，既有 `.nvui-input` 的 input / select / textarea / option 共享既有 7 条宿主表单隔离；默认双载体不变，非 kit 控件不接管，不创建定位 / 遮罩 / 模态，`!important` 预算仍 14 | v2.7.0 | **已打 tag，本地验收通过**：Codex 独立复验静态门禁 362/362、forms 455/455、accordion 18/18、reporting 31/31、本地 E2E 52 PASS / 0 FAIL / 6 SKIP（真实宿主未执行）；模板 4 资产已同步。详见 `CHANGELOG.md` 的 v2.7.0 条目。announce API 与尺寸令牌扩展暂缓。 |
-| —（冒烟观察 2026-11-16） | 移动端底部导航 | `.nvui-bottom-nav-item` 在 390×844 实测高 **26px**（图标 + 2 字标签，padding 仅 `space-15`） | 待定 | **仅观察，未改**：满足 WCAG 2.5.8 AA 下限（24px），但低于 iOS 44pt / Material 48dp 的拇指建议。若改 `min-height: 40–44px`，抽屉整体高 +14~18px，属视觉取舍，需设计确认后再动 |
-| —（冒烟观察 2026-11-16） | 进度条 | `progress({ label, value })` 的 `label` 只落到 `aria-label`，视觉上只有一条 4px 进度线，没有标题与数值 | 待定 | **仅观察，未改**：符合 §7.13（规范只要求 `aria-*`，不要求可视标签）；但纯视觉用户无法判断「这是什么进度 / 完成多少」。建议加可选 `showLabel` / `showValue`（默认关闭，不破坏既有契约） |
-| —（冒烟观察 2026-11-16） | 长内容滚动 | 面板 body 滚动时内容在 tabs 下沿与 footer 上沿硬切（正常裁剪，无渐隐/阴影提示） | 待定 | **仅观察，未改**：滚动、sticky footer、页面不跟随滚动均实测通过；建议加 `mask-image` 边缘渐隐或 1px 内阴影，提示「还有内容」，属纯视觉增强 |
+| —（冒烟观察 2026-11-16） | 移动端底部导航 | `.nvui-bottom-nav-item` 在 390×844 实测高 **26px**（图标 + 2 字标签，padding 仅 `space-15`） | 待定 | **已交付（v2.8.2，GH-#21）**：`min-height: 40px`（抽屉整体 +14px）；原判断「属视觉取舍、需设计确认」经用户拍板按 40px 落地 |
+| —（冒烟观察 2026-11-16） | 进度条 | `progress({ label, value })` 的 `label` 只落到 `aria-label`，视觉上只有一条 4px 进度线，没有标题与数值 | 待定 | **已交付（v2.9.0，GH-#21）**：`progress({ showLabel, showValue })` 默认关闭；开启后容器变 `.nvui-progress-field`，可视文本 `aria-hidden` 防重复播报，不确定进度不渲染数值 |
+| —（冒烟观察 2026-11-16） | 长内容滚动 | 面板 body 滚动时内容在 tabs 下沿与 footer 上沿硬切（正常裁剪，无渐隐/阴影提示） | 待定 | **已交付（v2.9.0，GH-#21）**：`data-nvui-fade`（top/bottom/both）+ `mask-image`，方向按滚动位置动态决定；选 mask 而非内阴影（内阴影会随内容滚走，覆盖层还要处理 pointer-events 与 sticky footer） |
 
 ### v2.5.0 特性结项与关闭明细 (Feature Resolution Details)
 
@@ -450,6 +450,14 @@
 | 尺寸矩阵 A1（11-16） | `issue-16` 8 → 12 项（T9 三项全关 / T10 `persist:true` / T11 `persist:{}` / T12 异步 adapter；错误面移到末尾为 T13） | 变异测试：`anyPersistEnabled()` 改成 `!!persistConfig` 时 T9 变红；12/12 绿 |
 | 依赖解析 A2（11-16） | `scripts/resolve-browser.js` 统一 playwright/Chrome 解析 + 可执行修复命令（退出码 2）；`playwright-core@^1.64.0` 进 devDependencies；11 个脚本改用；运行时仍零依赖 | 未设 `NODE_PATH` 跑 `test:browser` 455+18+217+15+12 全绿；缺包模拟 exit=2 |
 | 一键门禁 A3（11-16） | `npm run verify:all`：9 步 = 静态 4 → `verify:release` → `pack` + 产物校验 → browser / stress / e2e；`--no-browser` / `--only=` / `--list`；CI 改单条命令 | 9/9；`--no-browser` 6 通过 3 跳过；模拟无 playwright 6 通过 3 跳过且 exit=0 |
+| 布局读写 B1（11-16） | `panel.getLayoutState()` / `setLayoutState(state,{silent})`；`flushPersistSave` 的 DOM 反解抽成 `collectState()` 供 flush 与 get 共用；`pendingState` 承接待落盘导入值 | `v290-layout-state` 10/10；变异：get 不克隆时 L3 红；`issue-16` 12/12；行数删重复 `syncGlassFallback()` 维持 531 |
+| 尺寸三态 B3（11-16） | `persist.size: 'width-only'`；`sizeMode()` 三态出口；`applyClamping` 的 `useSavedSize` 拆 `useSavedW`/`useSavedH`；`collectState` 下 `height` 恒 null 且不记 `isMaximized` | `v290-width-only` 9/9；变异：`useSavedH` 与 `useSavedW` 同源时 W1 红；非法字符串按 true + 告警 |
+| 运行诊断 B2（11-16） | `NVUI.diagnostics()` 8 字段纯只读；`on/off` 活体计数 + `isGlobalListenerTarget()` 过滤；12 处直连 `addEventListener` 改走助手；三条源码形态断言改写（负向前瞻失效 → 抓处理函数名） | `v290-diagnostics` 8/8；D6 实测销毁后 resize/scroll/change/keydown 回落基线；`test:api` 28 导出 |
+| 主题跟随 B6（11-16） | `setTheme('auto')` 双信号并集；`themeAuto` 状态 + `teardownAutoTheme/syncAutoTheme`；采样排除自写类；显式主题摘监听 | `v290-theme-auto` 10/10；判据改为「后注册的 change 探针收到事件时类名已更新」；变异：去掉 `hostLightSignal` 时 A4 红 |
+| 调尺寸手柄 B4（11-16） | `createPanel({ resizable })` + `createResizeGrip(ctx)`；Pointer Events + `setPointerCapture`；方向键 ±8 / Shift ±32 / Home 复位；写入一律「内联 px → `applyClamping()`」 | `v290-resize` 11/11；已知边界：高度受 `max-height: 88vh`，只在可收缩区间可调；行数合并 `var disposed/acc` 维持 531 |
+| 表单补齐 B5（11-16） | `inputRow` 的 `textarea` 伪类型（`data-nvui-type`，不覆盖 IDL）+ `rows`；`hint`/`error` 各占独立 `aria-describedby` id | `v290-inputrow` 8/8；组件类 83 → 84（`.nvui-input-msg`）；`is-msg`/`is-error` 状态类 |
+| 发布 v2.9.0（11-16） | MINOR，全 opt-in：13 处版本 2.9.0、CHANGELOG 实体条目、UPGRADING 新增「2.8.3 → 2.9.0」（含七行接入对照表）、README §10.10 + §11.4 各补一行、ROADMAP 线路 B 标为到出口；GH-#18 / GH-#21 关闭 | `verify:all` 9/9；浏览器 455+18+217+15+12+11+10+9+8+10+11+8；实机 35/35 + 19/19；`verify:release` 20 项 + `--self-test` 3/3；`pack` 出 `ui-kit-2.9.0.zip`；tag `v2.9.0` + Release 3 产物 |
+| 夹具失效修复（11-16） | `test-v280-features.js` 用 `{ min: '2.9.0' }` 当「高于当前版本」，v2.9.0 收口后它等于当前版本，`verify:all` 必红；改 `99.0.0` 并注明原因 | `test:v280` 8/8；这是会随版本推进自己失效的夹具，不是 API 缺陷 |
 | 发布 v2.8.3（11-16） | PATCH，只含测试与工程脚本：13 处版本 2.8.3、CHANGELOG 条目、README §10.10 + §11.4 各补一行、UPGRADING 新增「2.8.2 → 2.8.3」、ROADMAP 线路 A 标为到出口；GH-#17 关闭 | `verify:all` 9/9；实机 35/35 + 19/19；`verify:release` 20 项 + `--self-test` 3/3；`pack` 出 `ui-kit-2.8.3.zip`；tag `v2.8.3` + Release 3 产物 |
 | 发布 v2.8.2（11-16） | 远端已先行发布 v2.8.1（#16），本批按语义化版本改号 v2.8.2；`git tag -a v2.8.2` + Release + 资产（zip / SHA256SUMS）；GH-#20 关闭 | `verify:release` 20 项 + `--self-test` 3/3；实机 35/35 + 19/19；浏览器 455+18+217+15+8 |
 
@@ -460,8 +468,8 @@
 
 | 线路 | 目标版本 | 追踪 | Milestone |
 | :--- | :--- | :--- | :--- |
-| A · 工程化收尾（测试可复跑、门禁可信任） | v2.8.2 | [#17](https://github.com/zgy-beep/ui-kit/issues/17) | v2.8.2 · 工程化收尾（2026-11-14） |
-| B · 下游可维护性与可观测性（6 项 additive） | v2.9.0 | [#18](https://github.com/zgy-beep/ui-kit/issues/18) | v2.9.0 · 下游可维护性（2026-12-04） |
+| A · 工程化收尾（测试可复跑、门禁可信任） | v2.8.2 / v2.8.3 | [#17](https://github.com/zgy-beep/ui-kit/issues/17) | v2.8.2 · 工程化收尾（2026-11-14） |
+| B · 下游可维护性与可观测性（6 项 additive） | v2.9.0 **已交付** | [#18](https://github.com/zgy-beep/ui-kit/issues/18) | v2.9.0 · 下游可维护性（2026-12-04） |
 | C · 内联尺寸停写与命名收敛（破坏性 + 迁移器） | v3.0.0 | [#19](https://github.com/zgy-beep/ui-kit/issues/19) | v3.0.0 · 尺寸与命名重构（2027-01-14） |
 
 排期原则：**先让断言可信（A）→ 再让下游少写代码（B）→ 最后才动破坏性契约（C）**。
