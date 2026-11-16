@@ -48,10 +48,12 @@
 | A1 | 尺寸语义矩阵 | `test/issue-16-persist-size.js` 增 T9~T12：`{size:false,tab:false,accordion:false}` / `persist:true` / `persist:{}` / 异步 StorageAdapter | 12/12 绿；异步 adapter 下 `size:null` 落盘 | 0.5d |
 | A2 | 浏览器套件免 NODE_PATH | `playwright-core` 进 `devDependencies`；新增 `scripts/resolve-browser.js`，缺包/缺 Chrome 输出**可执行修复命令** | 新机器 `npm i && npm run test:browser` 一次通过 | 0.5d |
 | A3 | 一键门禁 | 新增 `scripts/verify-all.js`：静态 4 项 → `verify:release` → `pack` 产物校验 →（有 Chrome 时）浏览器段 | 本机全绿；CI 自动跳过浏览器段且不报错 | 0.5d |
-| A4 | 测试目录收敛 | 按「回归 / 宿主实机 / 一次性探针」分到 `test/host/`、`test/probe/`，新增 `test/README.md` 索引；探针结论留在 `ISSUES.md` | `test/*.js` 顶层只剩可回归脚本；README §13 同步 | 1d |
-| A5 | 版本一致性门禁 | `verify-release.js` 增加「CHANGELOG 首条 == `package.json.version`」「README §11.4 时间线含当前版本行」 | 故意写错版本号 → `verify:release` 必红 | 0.5d |
+| A4 | 测试目录收敛 | 按「回归 / 宿主实机 / 一次性探针」分到 `test/host/`、`test/probe/`，新增 `test/README.md` 索引；探针结论留在 `ISSUES.md` | `test/*.js` 顶层只剩可回归脚本；README §13 同步。**状态：v2.8.2 已交付 `test/host/` + `test/README.md`；`test/probe/` 待做** | 1d |
+| A5 | 版本一致性门禁 | `verify-release.js` 增加「CHANGELOG 首条 == `package.json.version`」「README §11.4 时间线含当前版本行」 | 故意写错版本号 → `verify:release` 必红。**状态：v2.8.2 已交付，`--self-test` 反向 3/3** | 0.5d |
 
 **出口**：`npm run verify:all` 绿 + CI 绿 + 4 资产 md5 一致 + 下游零改动（无 API / 样式 / 状态格式变化）。
+
+> **2026-11-16 实际发布**：v2.8.2 先以补丁形式发出（焦点陷阱 / 40px 触控 / 宿主实机基线 / `createPanel` 七步拆分），交付了 A5 与 A4 的 `test/host/` + `test/README.md` 部分。A1–A3 与 A4 剩余的 `test/probe/` 收敛转入 **v2.8.3**，本线路尚未到出口。
 
 ---
 

@@ -31,7 +31,7 @@
   导出面、DOM、CSS、状态存储格式零变化；真实宿主 35/35 + 19/19、持久化压力 19/19、e2e 58/58、浏览器 4 spec 全绿。
 - 维护流程：新增 [`MAINTAINING.md`](MAINTAINING.md)，把「何时提交 / 提交信息格式」「版本三态与升位判定树」「GitHub issue 关闭判据与巡查节奏」写成可执行规范；`verify:release` 增加该文档三章存在性校验（19 → 20 项），`npm test` 增加一条同源断言（369 → 370）。同时统一措辞：`CHANGELOG.md` 不再使用 `Unreleased` 标题，「已 bump 未打 tag」记为**待发布**。
 - 兼容：本版含 v2.8.1 的 `persist.size:false` 尺寸隔离修复（#16）。该修复的三处语义（clamp 只读存档门禁、恢复前摘掉 size、落盘写 `size:null`）已移植进重构后的 `createPersistence(ctx)`，`test/issue-16-persist-size.js` 8/8 保持全绿，状态格式不变。
-- 关联：GitHub [GH-#20](https://github.com/zgy-beep/ui-kit/issues/20)（已修复待发布，关闭条件见 `MAINTAINING.md` §3.3）。GH-#21 的另两条（进度条可视标签、滚动边缘渐隐）**本版不含**，仍待设计确认。
+- 关联：GitHub [GH-#20](https://github.com/zgy-beep/ui-kit/issues/20)（已随 v2.8.2 发布关闭）。GH-#21 的另两条（进度条可视标签、滚动边缘渐隐）**本版不含**，仍待设计确认。
 
 ## v2.8.1（2026-11-05）· `persist.size: false` 尺寸隔离修复（PATCH）
 
