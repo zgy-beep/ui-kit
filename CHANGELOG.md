@@ -6,6 +6,46 @@
 - 新增组件 / 新增 token（不破坏既有 DOM 与取值）：小版本（2.x.0）
 - 重命名类 / token、删除 token、修改 DOM 契约：大版本（x.0.0）
 
+## v3.1.0（2026-11-16）· 移除尺寸过渡开关，载体收敛为唯一路径（MINOR）
+
+> 小版本，**兑现 v3.0.0 发布时写下的唯一承诺**：移除 `data-nvui-legacy-size` 过渡开关。
+> token（111 / 47）、组件类（84）、关键帧（16）、`!important`（18）、顶层导出（29）、
+> DOM 契约、状态格式 v2、兼容矩阵 **全部不变**。4 资产仅版本号与载体实现变化。
+>
+> **唯一要动的下游**：还在用 `data-nvui-legacy-size` 回到内联 px 的，改用
+> `panel.style.setProperty('--nvui-panel-w', ...)` 或自己的 CSS 选择器（见 MIGRATION-v3 §1.4）。
+> 其余下游覆盖 4 资产即可。
+
+### 变更
+
+- **删掉 `LEGACY_SIZE_ATTR` / `usesLegacySize()` / `writePanelSize()` 的 legacy 分支与 `warnOnce`**。
+  v3.0.0 为了给「读 `panel.style.width` 的下游」一版缓冲期，允许在面板元素或 `<html>` 上加
+  `data-nvui-legacy-size` 回到内联 px。现在**只有一条写入路径**：CSS 变量。
+  设了属性也完全无效 —— 不写内联、不告警（专门有断言守住，见下）。
+- `writePanelSize()` 的 `applyOne()` 简化：清空与写入都先摘内联，再按需 `setProperty`，
+  避免「变量清了、内联还在」的假回落（下游历史上直接写 `style.width` 时会遇到）。
+- 源码注释明确写**不要再为读 `style.width` 的下游加回内联分支** —— 那会让下游 CSS 重新失去
+  接管能力，等于退回 v2.x 的根本冲突（#16 只是那个冲突的一个症状）。
+
+### 测试（8/8，不减反增）
+
+- **V2 改写**：原来靠「legacy 载体被内联 px 压住为 860」反衬 v3 载体生效；开关移除后改成
+  **直接断言** kit 把 860 写进变量、下游 `.nvui-panel { width: 500px }` 不加 `!important` 真实生效
+  （实测 `renderedWidth=500`、`varW=860px`、内联为空）。这才是 C1 的存在理由，原来那条是借开关的对照。
+- **V3 改写为防复活断言**：设了 `data-nvui-legacy-size` 后仍只写变量、内联为空、legacy 告警数 0。
+  开关一旦被谁加回来，四个条件至少红三个 —— 比原来的「验证开关有效」更适合移除后的版本。
+
+### 验证
+
+`npm run verify:all` **10/10**；`npm test` 373/0；`test:api` 29 导出；`test:compat` 9/9；
+`test:v300-size-vars` 8/8；浏览器 13 套全绿；`test:stress` 19 + 15；`test:e2e` 58/0；
+`test:host` 35/35 + 19/19；`verify:release` 21 项 + `--self-test` 3/3。
+
+### 关联
+
+GitHub [GH-#22](https://github.com/zgy-beep/ui-kit/issues/22)（线路 D）随本版交付并关闭，
+milestone 4 closed。这是 v3.x 内最后一次契约变更；MIGRATION-v3 §6 明示除此之外不再有破坏性变更。
+
 ## v3.0.0（2026-11-16）· 尺寸载体换轨 + 命名收敛 + 令牌元信息 + 兼容矩阵门禁（MAJOR）
 
 > 大版本，线路 C（GitHub [GH-#19](https://github.com/zgy-beep/ui-kit/issues/19)）四项随本版交付。

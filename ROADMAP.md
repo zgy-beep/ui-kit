@@ -1,4 +1,4 @@
-# ROADMAP · v2.8.1 → v3.1（线路 A / B / C 已结项，D 进行中）
+# ROADMAP · v2.8.1 → v3.1（线路 A / B / C / D 全部结项）
 
 > 本文件是**计划详情的单一来源**；执行进度在 GitHub 追踪：
 > [#17 · 线路 A（v2.8.2）](https://github.com/zgy-beep/ui-kit/issues/17) ·
@@ -29,6 +29,7 @@
 
 | 版本 | 日期 | 类型 | 内容一句话 | 出口数据 |
 | :--- | :--- | :--- | :--- | :--- |
+| v3.1.0 | 2026-11-16 | MINOR | 线路 D：移除 `data-nvui-legacy-size` 过渡开关，尺寸只走 CSS 变量一条路径；V2 改直接证明下游 CSS 接管、V3 改防复活断言 | `verify:all` 10/10；373/0；`test:sizevars` 8/8；实机 35+19；e2e 58/0；token / 组件类 / 导出面不变 |
 | v3.0.0 | 2026-11-16 | MAJOR | 线路 C 四项：尺寸载体换轨（内联 px → `--nvui-panel-w` / `--nvui-panel-h`）+ 状态 v2 + `migrateStateV1toV2()` + `data-nvui-legacy-size` 过渡开关；四套按钮组归一为零 specificity；`tokens.json` schema 2；兼容矩阵硬门禁 | `verify:all` 10/10；373/0；浏览器 455+18+217+12+11+10+9+8+10+11+8+8；实机 35+19；e2e 58/0；组件类 84 / 导出 29 |
 | v2.9.0 | 2026-11-16 | MINOR | 线路 B 六项（布局导入导出 / `width-only` / `diagnostics` / `setTheme('auto')` / 调尺寸手柄 / `textarea`+`hint`+`error`）+ GH-#21 剩余两条（进度可视标签、边缘渐隐） | `verify:all` 9/9；370/0；浏览器 455+18+217+15+12+11+10+9+8+10+11+8；实机 35+19；组件类 84 / 导出 28 |
 | v2.8.3 | 2026-11-16 | PATCH | 测试基建收尾：`test/probe/` 归档、`issue-16` 矩阵 8 → 12、`scripts/resolve-browser.js`、`npm run verify:all`（线路 A 到出口） | `verify:all` 9/9；370/0；实机 35+19；`verify:release` 20 项 |
@@ -44,12 +45,13 @@
 | **v2.8.2 / v2.8.3** 工程化收尾 | [#17](https://github.com/zgy-beep/ui-kit/issues/17) | 2026-11-06 → 11-16 | `npm run verify:all` 一次通过；新机器 `npm i` 后浏览器套件可复跑；零行为变更 | **已交付**（2026-11-16，§2） |
 | **v2.9.0** 下游可维护性 | [#18](https://github.com/zgy-beep/ui-kit/issues/18) | 2026-11-15 → 12-04 | 6 项 additive 能力 + 双绿断言 + 文档与 API 表同步 | **已交付**（2026-11-16，§3） |
 | **v3.0.0** 尺寸与命名重构 | [#19](https://github.com/zgy-beep/ui-kit/issues/19) | 2026-12-05 → 2027-01-14 | 迁移器测试通过；旧类 alias 一版；`MIGRATION-v3.md` + 下游公告 | **已交付**（2026-11-16，提前于窗口，§4 + §9 公告模板） |
-| **v3.1.0** 移除过渡尺寸开关 | [#22](https://github.com/zgy-beep/ui-kit/issues/22) | 2026-11-16 → 11-30 | `data-nvui-legacy-size` 零残留；开关无效断言；文档不再有将来时 | **进行中**（§5） |
+| **v3.1.0** 移除过渡尺寸开关 | [#22](https://github.com/zgy-beep/ui-kit/issues/22) | 2026-11-16 → 11-30 | `data-nvui-legacy-size` 零残留；开关无效断言；文档不再有将来时 | **已交付**（2026-11-16，§5） |
 
-三条线路全部结项。下一阶段（v3.1.0 / v4.0.0）尚未立项，先按「v3.1 移除 `data-nvui-legacy-size`」这一条
-已承诺的技术债排期。
+线路 A / B / C 已全部到出口；线路 D（v3.1.0）已立项（§5）。
+**四条线路全部结项**：A 让断言可信 → B 让下游少写代码 → C 动破坏性契约 → D 收掉 C 留的过渡开关。
 
-排期原则：**先让断言可信（A），再让下游少写代码（B），最后才动破坏性契约（C）**。
+**未立项 / 无版本归属**：G-07 语义层 / 社区标签（四种 LLM key 环境变量实测全空，阻塞）；
+ST 1.20 实机补跑（本机无环境）。二者不阻塞 v3.1.0 发布，已写进 GH-#19 关闭评论与 MIGRATION-v3。
 
 ---
 
@@ -125,15 +127,15 @@ MAJOR。**C1 是核心**：把「kit 写内联 px」与「下游用 CSS 接管�
 
 ---
 
-## 5. 线路 D · v3.1.0 移除过渡尺寸开关（[#22](https://github.com/zgy-beep/ui-kit/issues/22)）
+## 5. 线路 D · v3.1.0 移除过渡尺寸开关（[#22](https://github.com/zgy-beep/ui-kit/issues/22)）· **2026-11-16 结项**
 
 v3.0.0 发布时明确承诺：`data-nvui-legacy-size` 过渡开关 v3.1 移除。本线路兑现该承诺，是 v3.x 内最后一次契约变更。
 
 | # | 任务 | 验收 |
 | :--- | :--- | :--- |
-| D1 | 删掉 `LEGACY_SIZE_ATTR` / `usesLegacySize()` / `writePanelSize()` 的 legacy 分支与 warnOnce | 代码与模板副本零残留；`writePanelSize()` 恒写 CSS 变量 |
-| D2 | 改写 `test/v300-size-vars.spec.js` V2 / V3 | V2 直接证明下游 CSS 覆盖生效；V3 改为「设了开关也完全无效、不告警」防复活；8/8 |
-| D3 | 清理 7 份文档的开关引用 | CHANGELOG / MIGRATION-v3 / README / AI-GUIDE / UPGRADING / ROADMAP / ISSUES 无「v3.1 移除」将来时 |
+| D1 | 删掉 `LEGACY_SIZE_ATTR` / `usesLegacySize()` / `writePanelSize()` 的 legacy 分支与 warnOnce | ✅ `d6c26cc`：代码与模板副本零残留；`writePanelSize()` 恒写 CSS 变量，顺手简化 `applyOne()` |
+| D2 | 改写 `test/v300-size-vars.spec.js` V2 / V3 | ✅ V2 实测 `renderedWidth=500 / varW=860px`（下游 CSS 直接生效）；V3 设属性后 `legacyWarns=0`、内联为空（防复活）；8/8 |
+| D3 | 清理 7 份文档的开关引用 | ✅ README / AI-GUIDE / MIGRATION-v3 / UPGRADING 改为「已移除」+ 替代方案；CHANGELOG / ISSUES / ROADMAP 的 v3.0 历史行保留事实，由 v3.1 新条目承载移除 |
 
 **出口**：`verify:all` 10/10；`test:host` 35/35 + 19/19；`verify:release` 21 项；tag + Release 3 产物；GH-#22 关闭。
 

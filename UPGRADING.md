@@ -1,8 +1,28 @@
-# UPGRADING · v3.0.0
+# UPGRADING · v3.1.0
 
-本文件是**常青升级指南**：当前版本是 v3.0.0。**v3.0.0 是 MAJOR，四类破坏性变更的完整对照见
+本文件是**常青升级指南**：当前版本是 v3.1.0。**v3.0.0 是 MAJOR，四类破坏性变更的完整对照见
 [MIGRATION-v3.md](MIGRATION-v3.md)**；再往前的历史版本差异见 [MIGRATION-v2.md](MIGRATION-v2.md)。
 下文各节按版本从新到旧排列，历史小节保留其**当时**的版本号，不要拿它当当前版本。
+
+## 3.0.0 → 3.1.0
+
+v3.1.0 是 **MINOR**，但包含一项 v3.0.0 发布时就承诺的移除：`data-nvui-legacy-size` 过渡开关。
+
+| 变了什么 | 谁必须动 | 怎么改 |
+| :--- | :--- | :--- |
+| `data-nvui-legacy-size`（面板元素或 `<html>`）已移除。设了属性也不再写内联 px、不再告警 | **只有**靠这个开关回到内联 px 的下游 | 改用 `panel.style.setProperty('--nvui-panel-w', '640px')`，或自己的 CSS 选择器 `#my_layer .nvui-panel { width: 500px }`。详见 MIGRATION-v3 §1.4 |
+
+其余全部不变：token 111 / 47、组件类 84、关键帧 16、`!important` 18、顶层导出 29、
+DOM 必需层级、状态格式 v2、兼容矩阵与 `engines.node`。**不依赖该开关的下游覆盖 4 资产即可，
+不改任何调用代码。**
+
+### 验收清单
+
+1. `NVUI.version === '3.1.0'`，`NVUI.selfCheck({ expect: '3.1.0' })` 干净；
+2. 面板尺寸仍是你期望的值 —— 尤其确认没有代码路径依赖开关写的内联 px；
+3. 有下游 CSS 覆盖面板宽度的，确认不加 `!important` 仍能生效；
+4. `node ui-kit/test/downstream-check.js` exit 0；
+5. 零 pageerror。
 
 ## 2.9.0 → 3.0.0
 
