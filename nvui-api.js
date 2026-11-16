@@ -2429,132 +2429,32 @@
     }
 
 
-    function createPanel(options) {
-        var opts = options || {};
-        /* 宿主若全局禁用了 backdrop-filter，先恢复回退态，避免玻璃只剩半透明底色 */
-        syncGlassFallback();
-        var glassMode = normalizeGlassMode(opts.glass);
-        var effectiveGlassMode = glassMode;
-        var glassMediaCleanup = null;
-        /* 面板 id 会被派生出 -layer / -overlay / -title / -tab-* / -pane-* 等多个 DOM id，
-           所以它本身也必须是合法 id（不能含空格 / 引号 / < >）。 */
-        var id = uniqueId(sanitizeIdPart(opts.id || 'nvui-panel', 'nvui-panel'));
-        var opener = null;
-
-        /* 宿主若全局禁用了 backdrop-filter，先做实心回退，避免玻璃只剩半透明底色 */
-        syncGlassFallback();
-        /* 宿主若正处于模态弹窗（showModal），kit 载体应主动让位而非硬压 */
-        syncHostModalState();
-        /* 装一次监听：宿主模态动态开关时自动降级/还原 */
-        installHostModalWatcher();
-
-        /* 生命周期标志：持久化子系统与 accordion 注册表都要读它 */
-        var disposed = false;
-        var acc = null;
-        /* 持久化子系统（G-01 第二步）在 DOM 骨架建好后创建，见下 */
-        var persist = null;
-        /* 标签控制器（G-01 第四步）：activeDom 由它独占，本函数只读 getActiveDom() */
-        var tabCtl = null;
-
-        /* NEW-36：显式设置 closing="" 与 role="presentation"，杜绝 SillyTavern fixToastrForDialogs 劫持注入 */
-        var dialogTitleStr = (typeof opts.title === 'symbol') ? '面板' : (opts.title || '面板');
-        var dialog = el('dialog', 'nvui-tl', {
-            id: id + '-layer',
-            closing: '',
-            role: 'presentation',
-            'aria-label': dialogTitleStr + ' 浮层',
-            'data-nvui-version': VERSION,
-            'data-nvui-glass-mode': glassMode,
-        });
-        stampVersion(dialog);
-        var overlay = el('div', 'nvui-overlay is-panel', { id: id + '-overlay', hidden: '' });
-        var panel = el('div', 'nvui-panel', { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': id + '-title' });
-        /* 持久化子系统（G-01 第二步）：7 个函数已抽到模块级 createPersistence。
-           依赖全部以 getter 形式注入 —— 此刻 tabs / keyMap / acc 尚未初始化，
-           直接传值会得到 undefined（这是本类重构最容易踩的坑）。 */
-        persist = createPersistence({
-            panel: panel,
-            overlay: overlay,
-            opts: opts,
-            id: id,
-            isDisposed: function () { return disposed; },
-            accordion: function () { return acc; },
-            tabs: function () { return tabs; },
-            /* tabCtl 在本行之后才创建，故走惰性闭包；bootstrap 时已就绪 */
-            activeDom: function () { return tabCtl ? tabCtl.getActiveDom() : null; },
-            keyMap: function () { return keyMap; },
-            setTab: function (key) { if (tabCtl) tabCtl.setByKey(key); },
-            setTabByDom: function (domKey) { if (tabCtl) tabCtl.switchTo(domKey); },
-            tabsNav: function () { return tabsNav; },
-            syncTabsIndicator: syncTabsIndicator,
-            isSuppressed: function () { return isSuppressedForUpdate; },
-            warn: warn,
-        });
-
-        /* G-01：accordion 子系统以 ctx 注入，持久化能力由 createPersistence 提供 */
-        acc = createAccordionRegistry({
-            panel: panel,
-            persistConfig: persist.config,
-            loadedState: persist.loaded,
-            isRestoring: persist.isRestoring,
-            isDisposed: function () { return disposed; },
-            schedulePersistSave: persist.schedule,
-            restoreFocus: restoreFocusFromCollapsedAccordion,
-            sanitizeIdPart: sanitizeIdPart,
-            warn: warn,
-        });
-        effectiveGlassMode = applyPanelGlassMode(dialog, glassMode);
-
-        /* force 模式需要跟随系统「减少透明度 / 强制颜色」动态让位；auto/solid 也同步一次。 */
-        function refreshPanelGlassMode() {
-            effectiveGlassMode = applyPanelGlassMode(dialog, glassMode);
-        }
-        if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
-            var glassMqs = [
-                window.matchMedia('(prefers-reduced-transparency: reduce)'),
-                window.matchMedia('(forced-colors: active)'),
-            ];
-            var onGlassPrefChange = function () { refreshPanelGlassMode(); };
-            glassMqs.forEach(function (mq) {
-                if (mq && typeof mq.addEventListener === 'function') mq.addEventListener('change', onGlassPrefChange);
-            });
-            glassMediaCleanup = function () {
-                glassMqs.forEach(function (mq) {
-                    if (mq && typeof mq.removeEventListener === 'function') mq.removeEventListener('change', onGlassPrefChange);
-                });
-            };
-        }
-
-        /* 初始自定义宽度（opts.width，默认交由 CSS / token 720px） */
-        if (typeof opts.width === 'number' && !isNaN(opts.width)) {
-            var initClamp = clampPanelLayout({ width: opts.width }, null, opts);
-            if (!initClamp.isMobile && initClamp.styleWidth) {
-                panel.style.width = initClamp.styleWidth;
-            }
-        }
-
-        /* 手机拖拽把手（纯视觉） */
-        panel.appendChild(el('div', 'nvui-sheet-handle', { 'aria-hidden': 'true' }));
-
-        /* 标题栏 */
-        var header = el('div', 'nvui-panel-header');
-        var title = el('b', 'nvui-panel-title', { id: id + '-title', text: opts.title || '面板' });
-        if (opts.version) title.appendChild(el('span', 'nvui-badge', { text: opts.version }));
-
-        /* 版本更新提示胶囊与动态点亮接口 (Issue #6) */
+    /**
+     * 版本更新提示胶囊（Issue #6，G-01 第五步）。
+     *
+     * 从 createPanel 抽出 showUpdate 及它的三份状态：updatePill /
+     * currentUpdateConfig / isSuppressed。suppressed 标志的用途是告诉持久化
+     * 「这次 DOM 变动不是用户操作，别写盘」，所以必须与胶囊同生共死，
+     * 由本 factory 独占并对外暴露 isSuppressed()。
+     */
+    function createUpdatePillController(ctx) {
+        var title = ctx.title;
+        var warn = ctx.warn;
         var updatePill = null;
         var currentUpdateConfig = null;
-        var isSuppressedForUpdate = false;
+        var isSuppressed = false;
 
-        function showUpdate(updateConfig) {
-            isSuppressedForUpdate = true;
+        function clear() {
+            if (updatePill && updatePill.parentNode) updatePill.parentNode.removeChild(updatePill);
+            updatePill = null;
+            currentUpdateConfig = null;
+        }
+
+        function show(updateConfig) {
+            isSuppressed = true;
             try {
                 if (!updateConfig || updateConfig.hidden === true) {
-                    if (updatePill && updatePill.parentNode) {
-                        updatePill.parentNode.removeChild(updatePill);
-                    }
-                    updatePill = null;
-                    currentUpdateConfig = null;
+                    clear();
                     return null;
                 }
 
@@ -2621,14 +2521,135 @@
                 return updatePill;
             } finally {
                 setTimeout(function () {
-                    isSuppressedForUpdate = false;
+                    isSuppressed = false;
                 }, 100);
             }
         }
 
-        if (opts.update) {
-            showUpdate(opts.update);
+        return {
+            show: show,
+            clear: clear,
+            isSuppressed: function () { return isSuppressed; },
+        };
+    }
+
+    function createPanel(options) {
+        var opts = options || {};
+        /* 宿主若全局禁用了 backdrop-filter，先恢复回退态，避免玻璃只剩半透明底色 */
+        syncGlassFallback();
+        var glassMode = normalizeGlassMode(opts.glass);
+        var effectiveGlassMode = glassMode;
+        var glassMediaCleanup = null;
+        /* 面板 id 会被派生出 -layer / -overlay / -title / -tab-* / -pane-* 等多个 DOM id，
+           所以它本身也必须是合法 id（不能含空格 / 引号 / < >）。 */
+        var id = uniqueId(sanitizeIdPart(opts.id || 'nvui-panel', 'nvui-panel'));
+        var opener = null;
+
+        /* 宿主若全局禁用了 backdrop-filter，先做实心回退，避免玻璃只剩半透明底色 */
+        syncGlassFallback();
+        /* 宿主若正处于模态弹窗（showModal），kit 载体应主动让位而非硬压 */
+        syncHostModalState();
+        /* 装一次监听：宿主模态动态开关时自动降级/还原 */
+        installHostModalWatcher();
+
+        /* 生命周期标志：持久化子系统与 accordion 注册表都要读它 */
+        var disposed = false;
+        var acc = null;
+        /* 持久化子系统（G-01 第二步）在 DOM 骨架建好后创建，见下 */
+        var persist = null;
+        /* 标签控制器（G-01 第四步）：activeDom 由它独占，本函数只读 getActiveDom() */
+        var tabCtl = null;
+        /* 更新胶囊控制器（G-01 第五步）：胶囊状态与 suppressed 标志同生共死 */
+        var updateCtl = null;
+
+        /* NEW-36：显式设置 closing="" 与 role="presentation"，杜绝 SillyTavern fixToastrForDialogs 劫持注入 */
+        var dialogTitleStr = (typeof opts.title === 'symbol') ? '面板' : (opts.title || '面板');
+        var dialog = el('dialog', 'nvui-tl', {
+            id: id + '-layer',
+            closing: '',
+            role: 'presentation',
+            'aria-label': dialogTitleStr + ' 浮层',
+            'data-nvui-version': VERSION,
+            'data-nvui-glass-mode': glassMode,
+        });
+        stampVersion(dialog);
+        var overlay = el('div', 'nvui-overlay is-panel', { id: id + '-overlay', hidden: '' });
+        var panel = el('div', 'nvui-panel', { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': id + '-title' });
+        /* 持久化子系统（G-01 第二步）：7 个函数已抽到模块级 createPersistence。
+           依赖全部以 getter 形式注入 —— 此刻 tabs / keyMap / acc 尚未初始化，
+           直接传值会得到 undefined（这是本类重构最容易踩的坑）。 */
+        persist = createPersistence({
+            panel: panel,
+            overlay: overlay,
+            opts: opts,
+            id: id,
+            isDisposed: function () { return disposed; },
+            accordion: function () { return acc; },
+            tabs: function () { return tabs; },
+            /* tabCtl 在本行之后才创建，故走惰性闭包；bootstrap 时已就绪 */
+            activeDom: function () { return tabCtl ? tabCtl.getActiveDom() : null; },
+            keyMap: function () { return keyMap; },
+            setTab: function (key) { if (tabCtl) tabCtl.setByKey(key); },
+            setTabByDom: function (domKey) { if (tabCtl) tabCtl.switchTo(domKey); },
+            tabsNav: function () { return tabsNav; },
+            syncTabsIndicator: syncTabsIndicator,
+            isSuppressed: function () { return updateCtl ? updateCtl.isSuppressed() : false; },
+            warn: warn,
+        });
+
+        /* G-01：accordion 子系统以 ctx 注入，持久化能力由 createPersistence 提供 */
+        acc = createAccordionRegistry({
+            panel: panel,
+            persistConfig: persist.config,
+            loadedState: persist.loaded,
+            isRestoring: persist.isRestoring,
+            isDisposed: function () { return disposed; },
+            schedulePersistSave: persist.schedule,
+            restoreFocus: restoreFocusFromCollapsedAccordion,
+            sanitizeIdPart: sanitizeIdPart,
+            warn: warn,
+        });
+        effectiveGlassMode = applyPanelGlassMode(dialog, glassMode);
+
+        /* force 模式需要跟随系统「减少透明度 / 强制颜色」动态让位；auto/solid 也同步一次。 */
+        function refreshPanelGlassMode() {
+            effectiveGlassMode = applyPanelGlassMode(dialog, glassMode);
         }
+        if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+            var glassMqs = [
+                window.matchMedia('(prefers-reduced-transparency: reduce)'),
+                window.matchMedia('(forced-colors: active)'),
+            ];
+            var onGlassPrefChange = function () { refreshPanelGlassMode(); };
+            glassMqs.forEach(function (mq) {
+                if (mq && typeof mq.addEventListener === 'function') mq.addEventListener('change', onGlassPrefChange);
+            });
+            glassMediaCleanup = function () {
+                glassMqs.forEach(function (mq) {
+                    if (mq && typeof mq.removeEventListener === 'function') mq.removeEventListener('change', onGlassPrefChange);
+                });
+            };
+        }
+
+        /* 初始自定义宽度（opts.width，默认交由 CSS / token 720px） */
+        if (typeof opts.width === 'number' && !isNaN(opts.width)) {
+            var initClamp = clampPanelLayout({ width: opts.width }, null, opts);
+            if (!initClamp.isMobile && initClamp.styleWidth) {
+                panel.style.width = initClamp.styleWidth;
+            }
+        }
+
+        /* 手机拖拽把手（纯视觉） */
+        panel.appendChild(el('div', 'nvui-sheet-handle', { 'aria-hidden': 'true' }));
+
+        /* 标题栏 */
+        var header = el('div', 'nvui-panel-header');
+        var title = el('b', 'nvui-panel-title', { id: id + '-title', text: opts.title || '面板' });
+        if (opts.version) title.appendChild(el('span', 'nvui-badge', { text: opts.version }));
+
+        /* 版本更新提示胶囊（G-01 第五步）：状态与生命周期由 factory 独占 */
+        updateCtl = createUpdatePillController({ title: title, warn: warn });
+        if (opts.update) updateCtl.show(opts.update);
 
         /* 头部操作流区：严格保证 [自定义 actions...] -> [主题切换 themeToggle] -> [关闭 closeBtn] */
         var actions = el('span', 'nvui-panel-actions');
@@ -3011,11 +3032,7 @@
                 removed = true;
                 if (dialog && dialog.parentNode) dialog.parentNode.removeChild(dialog);
                 if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
-                if (updatePill && updatePill.parentNode) {
-                    updatePill.parentNode.removeChild(updatePill);
-                }
-                updatePill = null;
-                currentUpdateConfig = null;
+                updateCtl.clear();
             }
             opener = null;
             /* 先冲刷最后一次状态，再置 disposed —— 顺序不能反，否则 flush 会被拦掉 */
@@ -3037,7 +3054,7 @@
             close: closePanel,
             destroy: destroy,
             setTab: tabCtl.setByKey,
-            showUpdate: showUpdate,
+            showUpdate: updateCtl.show,
             syncIndicator: function () { if (tabsNav) syncTabsIndicator(tabsNav, false); },
             addNode: addNode,
             addSwitch: function (key, o) { return addNode(key, switchRow(o)); },
