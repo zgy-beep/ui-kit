@@ -1537,9 +1537,9 @@
         var bSize = b.size;
         if (!aSize !== !bSize) return false;
         if (aSize && bSize) {
-            if (aSize.width !== bSize.width) return false;
-            if (aSize.height !== bSize.height) return false;
-            if (!!aSize.isMaximized !== !!bSize.isMaximized) return false;
+            if (aSize.w !== bSize.w) return false;
+            if (aSize.h !== bSize.h) return false;
+            if (aSize.mode !== bSize.mode) return false;
         }
         var aAcc = a.accordion;
         var bAcc = b.accordion;
@@ -1567,15 +1567,42 @@
      *
      * `timestamp` 是可选的存储元数据：有就保留，没有就不补（导出的布局态不该带时刻）。
      */
+    /* v1 存档（`{ width, height, isMaximized }`）→ v2（`{ w, h, mode }`）。
+       v2 把「最大化」并进 mode：最大化本质是二维状态，留一个独立布尔字段会让
+       「w/h 还有没有意义」取决于另一个字段，读的人必须同时看两处。合并后语义单向：
+       mode 决定 w/h 是否生效（`normal` 全生效 / `maximized` 全不生效 /
+       `width-only` 只有 w 生效 / `off` 都不生效）。幂等 —— 已是 v2 原样返回。
+       导出给下游：把布局存进自己的 `extension_settings` 时同样需要迁移。 */
+    function migrateStateV1toV2(state) {
+        if (!state || typeof state !== 'object') return null;
+        if (state.version === 2) return state;
+        var out = {
+            version: 2,
+            timestamp: typeof state.timestamp === 'number' ? state.timestamp : Date.now(),
+            tab: (state.tab === undefined || state.tab === null) ? null : String(state.tab),
+            accordion: (state.accordion && typeof state.accordion === 'object') ? state.accordion : null,
+            size: null,
+        };
+        var size = state.size;
+        if (size && typeof size === 'object') {
+            out.size = {
+                w: (typeof size.w === 'number') ? size.w : ((typeof size.width === 'number') ? size.width : null),
+                h: (typeof size.h === 'number') ? size.h : ((typeof size.height === 'number') ? size.height : null),
+                mode: size.isMaximized ? 'maximized' : ((typeof size.mode === 'string' && size.mode) ? size.mode : 'normal'),
+            };
+        }
+        return out;
+    }
+
     function cloneLayoutState(state) {
         if (!state || typeof state !== 'object') return null;
-        var out = { version: 1 };
+        var out = { version: 2 };
         if (typeof state.timestamp === 'number') out.timestamp = state.timestamp;
         if (state.size && typeof state.size === 'object') {
             out.size = {
-                width: (typeof state.size.width === 'number' && !isNaN(state.size.width)) ? state.size.width : null,
-                height: (typeof state.size.height === 'number' && !isNaN(state.size.height)) ? state.size.height : null,
-                isMaximized: !!state.size.isMaximized,
+                w: (typeof state.size.w === 'number' && !isNaN(state.size.w)) ? state.size.w : null,
+                h: (typeof state.size.h === 'number' && !isNaN(state.size.h)) ? state.size.h : null,
+                mode: (typeof state.size.mode === 'string' && state.size.mode) ? state.size.mode : 'normal',
             };
         } else {
             out.size = null;
@@ -1649,6 +1676,75 @@
             res.y = clampedY;
         }
         return res;
+    }
+
+    /* ---------------------- 面板尺寸载体（v3.0.0 / C1） ---------------------- */
+
+    /* 尺寸从「内联 px」改为「CSS 变量」。原因不是洁癖：内联 width/height 是作者级
+       声明，下游写 `height: 94vh` / `height: var(--nvui-panel-max-h)` 永远抢不过它，
+       #16 只是这个冲突的一个症状。变量同样在元素上，但只要不给 `!important`，
+       下游一条普通规则就能接管，kit 默认值与下游覆盖也自然分层。
+
+       `data-nvui-legacy-size` 是过渡开关（加在 <html> 或面板根节点都认）：v3.x 内
+       仍写内联 px 并只告警一次，v3.1 移除 —— 给下游一个版本的缓冲期。 */
+    var SIZE_VAR_W = '--nvui-panel-w';
+    var SIZE_VAR_H = '--nvui-panel-h';
+    var LEGACY_SIZE_ATTR = 'data-nvui-legacy-size';
+
+    function usesLegacySize(panel) {
+        if (panel && panel.hasAttribute && panel.hasAttribute(LEGACY_SIZE_ATTR)) return true;
+        var doc = panel && panel.ownerDocument;
+        return !!(doc && doc.documentElement && doc.documentElement.hasAttribute(LEGACY_SIZE_ATTR));
+    }
+
+    /* w / h 接受 number（写 px）、字符串（calc(...) 等）、null（清空该维度）。
+       清空一律两个载体都清，避免切换开关后残留上一次的写入。 */
+    function writePanelSize(panel, w, h) {
+        if (!panel || !panel.style) return;
+        var legacy = usesLegacySize(panel);
+        if (legacy) {
+            warnOnce('legacy-size', '检测到 ' + LEGACY_SIZE_ATTR + '：面板仍在写内联 px。该开关 v3.1 移除，'
+                + '请改用 ' + SIZE_VAR_W + ' / ' + SIZE_VAR_H + '，或直接由 CSS 接管尺寸。');
+        }
+        var applyOne = function (prop, cssVar, value) {
+            var css = null;
+            if (typeof value === 'number' && isFinite(value)) css = Math.round(value) + 'px';
+            else if (typeof value === 'string' && value) css = value;
+            if (css === null) {
+                panel.style[prop] = '';
+                panel.style.removeProperty(cssVar);
+                return;
+            }
+            if (legacy) {
+                panel.style[prop] = css;
+            } else {
+                panel.style[prop] = '';
+                panel.style.setProperty(cssVar, css);
+            }
+        };
+        applyOne('width', SIZE_VAR_W, w);
+        applyOne('height', SIZE_VAR_H, h);
+    }
+
+    /* 读回「当前目标尺寸」。变量优先，其次兼容 v2.x 遗留的内联 px
+       （下游脚本可能仍在直接写 panel.style.width）。只认 px，calc 之类交给 CSS。 */
+    function readPanelSize(panel, axis) {
+        if (!panel || !panel.style) return null;
+        var raw = panel.style.getPropertyValue(axis === 'height' ? SIZE_VAR_H : SIZE_VAR_W);
+        if (!raw) raw = axis === 'height' ? panel.style.height : panel.style.width;
+        raw = String(raw || '').trim();
+        if (!raw || raw.indexOf('px') === -1) return null;
+        var n = parseInt(raw, 10);
+        return isNaN(n) ? null : n;
+    }
+
+    /* 把尺寸主权整个交回 CSS（移动端抽屉、销毁复位）。两个载体都要清。 */
+    function clearPanelSize(panel) {
+        if (!panel || !panel.style) return;
+        panel.style.width = '';
+        panel.style.height = '';
+        panel.style.removeProperty(SIZE_VAR_W);
+        panel.style.removeProperty(SIZE_VAR_H);
     }
 
     /* ---------------------- 面板（布局标准） ---------------------- */
@@ -2086,24 +2182,27 @@
                 var isMobile = vp.isMobile;
 
                 if (isMobile && loadedState && loadedState.size) {
-                    currentW = loadedState.size.width;
-                    currentH = loadedState.size.height;
-                    isMax = !!loadedState.size.isMaximized;
+                    currentW = loadedState.size.w;
+                    currentH = loadedState.size.h;
+                    isMax = loadedState.size.mode === 'maximized';
                 } else {
-                    if (panel.style.width && panel.style.width.indexOf('px') !== -1) {
-                        currentW = parseInt(panel.style.width, 10);
+                    /* v3.0.0：目标尺寸先读 CSS 变量，其次才是兼容 v2.x 的内联 px */
+                    var vw = readPanelSize(panel, 'width');
+                    if (vw !== null) {
+                        currentW = vw;
                     } else if (panel.offsetWidth > 0) {
                         currentW = panel.offsetWidth;
-                    } else if (loadedState && loadedState.size && typeof loadedState.size.width === 'number') {
-                        currentW = loadedState.size.width;
+                    } else if (loadedState && loadedState.size && typeof loadedState.size.w === 'number') {
+                        currentW = loadedState.size.w;
                     }
 
-                    if (panel.style.height && panel.style.height.indexOf('px') !== -1) {
-                        currentH = parseInt(panel.style.height, 10);
+                    var vh = readPanelSize(panel, 'height');
+                    if (vh !== null) {
+                        currentH = vh;
                     } else if (panel.offsetHeight > 0 && !isMobile) {
                         currentH = panel.offsetHeight;
-                    } else if (loadedState && loadedState.size && typeof loadedState.size.height === 'number') {
-                        currentH = loadedState.size.height;
+                    } else if (loadedState && loadedState.size && typeof loadedState.size.h === 'number') {
+                        currentH = loadedState.size.h;
                     }
                 }
 
@@ -2140,16 +2239,17 @@
                 }
 
                 var widthOnly = sizeMode() === 'width-only';
+                var sizeModeOut = widthOnly ? 'width-only' : (isMax ? 'maximized' : 'normal');
                 return {
-                    version: 1,
+                    version: 2,
                     timestamp: Date.now(),
                     /* Issue #16：persist.size:false 时不得把历史 size 原样回存，
-                       否则旧像素高度永远清不掉，每次打开都会被 applyClamping() 写回内联样式。
-                       B3：width-only 同理 —— height 恒为 null，最大化本质是二维状态，不记。 */
+                       否则旧像素高度永远清不掉，每次打开都会被 applyClamping() 写回。
+                       B3：width-only 同理 —— h 恒为 null，最大化本质是二维状态，不记。 */
                     size: sizeOn ? {
-                        width: currentW,
-                        height: widthOnly ? null : currentH,
-                        isMaximized: widthOnly ? false : isMax,
+                        w: currentW,
+                        h: widthOnly ? null : currentH,
+                        mode: sizeModeOut,
                     } : (loadedState ? loadedState.size : null),
                     tab: tabOn ? currentTabKey : (loadedState ? loadedState.tab : null),
                     accordion: accOn ? currentAccState : (loadedState ? loadedState.accordion : null),
@@ -2194,6 +2294,9 @@
                 isInitialized = true;
                 return;
             }
+            /* v3.0.0：存档可能是 v1（v2.9.0 及更早写下的）。统一迁移到 v2 再读，
+               写回时自然落成 v2 —— 下游不需要为迁移做任何事。 */
+            saved = migrateStateV1toV2(saved) || saved;
             isRestoring = true;
             try {
                 /* Issue #16：persist.size:false 时，「不恢复尺寸」还不够 ——
@@ -2215,23 +2318,16 @@
                 // 1. 恢复尺寸（width-only 只回写宽，高度留给下游 CSS）
                 if (persistConfig && persistConfig.size && saved.size) {
                     var widthOnly = persistConfig.size === 'width-only';
-                    if (!widthOnly && saved.size.isMaximized) {
-                        panel.classList.add('is-maximized');
-                    } else {
-                        panel.classList.remove('is-maximized');
-                    }
-                    var clamped = clampPanelLayout(saved.size, saved.position, opts);
+                    var maximized = !widthOnly && saved.size.mode === 'maximized';
+                    panel.classList.toggle('is-maximized', maximized);
+                    var clamped = clampPanelLayout({ width: saved.size.w, height: saved.size.h }, saved.position, opts);
                     if (clamped.isMobile) {
-                        panel.style.width = '';
-                        panel.style.height = '';
+                        clearPanelSize(panel);
+                    } else if (maximized) {
+                        writePanelSize(panel, 'calc(100vw - 32px)', 'calc(100vh - 32px)');
                     } else {
-                        if (!widthOnly && saved.size.isMaximized) {
-                            panel.style.width = 'calc(100vw - 32px)';
-                            panel.style.height = 'calc(100vh - 32px)';
-                        } else {
-                            if (clamped.styleWidth) panel.style.width = clamped.styleWidth;
-                            if (!widthOnly && clamped.styleHeight) panel.style.height = clamped.styleHeight;
-                        }
+                        writePanelSize(panel, clamped.styleWidth || null,
+                            (!widthOnly && clamped.styleHeight) ? clamped.styleHeight : null);
                     }
                 }
 
@@ -2277,48 +2373,48 @@
             if (!isDomAvailable()) return;
             var vp = getViewport();
             if (vp.isMobile) {
-                panel.style.width = '';
-                panel.style.height = '';
+                clearPanelSize(panel);
                 return;
             }
-            var isMax = panel.classList.contains('is-maximized');
-            if (isMax) {
-                panel.style.width = 'calc(100vw - 32px)';
-                panel.style.height = 'calc(100vh - 32px)';
+            if (panel.classList.contains('is-maximized')) {
+                writePanelSize(panel, 'calc(100vw - 32px)', 'calc(100vh - 32px)');
                 return;
             }
 
             /* Issue #16：persist.size:false 表示本面板**完全不参与**尺寸持久化。
-               此时存档里的 size 一律不可读 —— 否则历史 px 高度会被钳回内联样式，
-               覆盖下游 CSS（如 `height: var(--nvui-panel-max-h)` / 94vh）。
-               注意只拦「存档尺寸」：面板自身的内联 px（用户拖拽 / opts.width / 最大化）
+               此时存档里的 size 一律不可读 —— 否则历史 px 高度会被钳回，覆盖下游 CSS
+               （如 `height: var(--nvui-panel-max-h)` / 94vh）。
+               注意只拦「存档尺寸」：面板自身的目标尺寸（用户拖拽 / opts.width / 最大化）
                仍然照常参与钳制，clamp 的视口安全语义不变。 */
-            /* B3：宽/高分别判定 —— 'width-only' 只读存档宽度，高度一律交给下游 CSS；
-               内联 px（用户拖拽 / opts.width / 最大化）仍照常参与钳制。 */
+            /* B3：宽/高分别判定 —— 'width-only' 只读存档宽度，高度一律交给下游 CSS。 */
             var mode = sizeMode();
             var useSavedW = mode !== 'off';
             var useSavedH = mode === 'full';
 
-            var targetW = null;
-            if (panel.style.width && panel.style.width.indexOf('px') !== -1) {
-                targetW = parseInt(panel.style.width, 10);
-            } else if (useSavedW && loadedState && loadedState.size && typeof loadedState.size.width === 'number') {
-                targetW = loadedState.size.width;
-            } else if (typeof opts.width === 'number' && !isNaN(opts.width)) {
-                targetW = opts.width;
+            var targetW = readPanelSize(panel, 'width');
+            if (targetW === null) {
+                if (useSavedW && loadedState && loadedState.size && typeof loadedState.size.w === 'number') {
+                    targetW = loadedState.size.w;
+                } else if (typeof opts.width === 'number' && !isNaN(opts.width)) {
+                    targetW = opts.width;
+                }
             }
 
-            var targetH = null;
-            if (panel.style.height && panel.style.height.indexOf('px') !== -1) {
-                targetH = parseInt(panel.style.height, 10);
-            } else if (useSavedH && loadedState && loadedState.size && typeof loadedState.size.height === 'number') {
-                targetH = loadedState.size.height;
+            var targetH = readPanelSize(panel, 'height');
+            if (targetH === null && useSavedH && loadedState && loadedState.size && typeof loadedState.size.h === 'number') {
+                targetH = loadedState.size.h;
             }
 
             if (targetW !== null || targetH !== null) {
                 var clamped = clampPanelLayout({ width: targetW, height: targetH }, null, opts);
-                if (clamped.styleWidth) panel.style.width = clamped.styleWidth;
-                if (clamped.styleHeight) panel.style.height = clamped.styleHeight;
+                writePanelSize(panel, clamped.styleWidth || null, clamped.styleHeight || null);
+                return;
+            }
+            /* 目标两个维度都读不到 px，但身上还挂着 calc（多半是「最大化 → 还原」）：
+               留着这条 calc 会让面板一直保持最大化宽度。清掉，把主权交回 CSS 默认值。 */
+            if (panel.style.getPropertyValue(SIZE_VAR_W) || panel.style.getPropertyValue(SIZE_VAR_H)
+                || panel.style.width || panel.style.height) {
+                clearPanelSize(panel);
             }
         }
 
@@ -2383,20 +2479,22 @@
             }
             var base = collectState();
             var has = function (k) { return Object.prototype.hasOwnProperty.call(state, k); };
+            /* v3.0.0：接受 v1 与 v2 两种形态 —— 下游可能把 v2.9 时代导出的东西再导回来 */
+            var incoming = migrateStateV1toV2(state) || state;
             var next = {
-                version: 1,
+                version: 2,
                 timestamp: Date.now(),
                 /* 未提供的键落回当前 DOM 事实；显式传 null 视为「清空该项」 */
-                size: has('size') ? state.size : base.size,
-                tab: has('tab') ? state.tab : base.tab,
-                accordion: has('accordion') ? state.accordion : base.accordion,
+                size: has('size') ? incoming.size : base.size,
+                tab: has('tab') ? incoming.tab : base.tab,
+                accordion: has('accordion') ? incoming.accordion : base.accordion,
             };
             var normalized = cloneLayoutState(next);
             if (!persistConfig.size) {
                 normalized.size = null;
             } else if (persistConfig.size === 'width-only' && normalized.size) {
-                normalized.size.height = null;
-                normalized.size.isMaximized = false;
+                normalized.size.h = null;
+                normalized.size.mode = 'width-only';
             }
             if (!persistConfig.tab) normalized.tab = loadedState ? loadedState.tab : null;
             if (!persistConfig.accordion) normalized.accordion = loadedState ? loadedState.accordion : null;
@@ -2423,8 +2521,7 @@
             clearLayoutState(opts.id || id, storage);
             loadedState = null;
             hasSaved = false;
-            panel.style.width = '';
-            panel.style.height = '';
+            clearPanelSize(panel);
             panel.classList.remove('is-maximized');
             var tabList = ctx.tabs();
             if (tabList.length) {
@@ -3088,9 +3185,11 @@
 
         function write(w, h) {
             if (isDisposed()) return;
-            if (typeof w === 'number' && isFinite(w)) panel.style.width = Math.round(w) + 'px';
-            if (typeof h === 'number' && isFinite(h)) panel.style.height = Math.round(h) + 'px';
-            else if (h === null) panel.style.height = '';
+            /* 手柄不自己算边界，也不自己选载体：一律「落目标尺寸 → applyClamping()」，
+               钳制 / 移动端 / 持久化 / legacy 开关的语义才和 setSize() 完全一致。 */
+            writePanelSize(panel,
+                (typeof w === 'number' && isFinite(w)) ? w : null,
+                (typeof h === 'number' && isFinite(h)) ? h : null);
             persist.applyClamping();
             persist.scheduleIfSize();
             syncValue();
@@ -3241,7 +3340,7 @@
         if (typeof opts.width === 'number' && !isNaN(opts.width)) {
             var initClamp = clampPanelLayout({ width: opts.width }, null, opts);
             if (!initClamp.isMobile && initClamp.styleWidth) {
-                panel.style.width = initClamp.styleWidth;
+                writePanelSize(panel, initClamp.styleWidth, null);
             }
         }
 
@@ -3659,8 +3758,8 @@
             setLayoutState: persist.setLayout,
             flushPersistSave: persist.flush,
             setSize: function (w, h) {
-                if (typeof w === 'number') panel.style.width = w + 'px';
-                if (typeof h === 'number') panel.style.height = h + 'px';
+                /* 载体由 writePanelSize 决定（变量 / legacy 内联） */
+                writePanelSize(panel, (typeof w === 'number') ? w : null, (typeof h === 'number') ? h : null);
                 persist.applyClamping();
                 persist.scheduleIfSize();
             },
@@ -4003,6 +4102,7 @@
         selfCheck: selfCheck,
         diagnostics: diagnostics,
         checkCompatibility: checkCompatibility,
+        migrateStateV1toV2: migrateStateV1toV2,
         defaults: DEFAULTS,
         detectGlassSupport: detectGlassSupport,
         syncGlassFallback: syncGlassFallback,

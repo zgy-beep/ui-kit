@@ -487,6 +487,9 @@ const usedVars = new Set([...componentsClean.matchAll(/var\(\s*(--nvui-[\w-]+)/g
  */
 const RUNTIME_VARS = new Set([
     '--nvui-tab-ind-x', '--nvui-tab-ind-y', '--nvui-tab-ind-w', '--nvui-tab-ind-h',
+    /* v3.0.0 / C1：面板尺寸载体。JS 写、CSS 读，值为 px 或 calc()；
+       它不是「有默认取值的设计令牌」（空表示交给 kit 默认值），因此不进 tokens.css。 */
+    '--nvui-panel-w', '--nvui-panel-h',
 ]);
 const undefinedVars = [...usedVars].filter((t) => !allTokens.has(t) && !RUNTIME_VARS.has(t));
 check('components.css 引用的 token 全部有定义（JS 运行时几何变量除外）', undefinedVars.length === 0,
@@ -1302,7 +1305,7 @@ if (!/var\(--nvui-glass-bg\)|color-mix\(in srgb,\s*var\(--nvui-bg\)/.test(panelB
 if (!/backdrop-filter\s*:/.test(panelTopLevelBodies)) panelStructureMissing.push('面板自身 backdrop-filter（背后模糊）');
 if (!/display:\s*flex/.test(panelBaseBodies)) panelStructureMissing.push('display:flex');
 if (!/flex-direction:\s*column/.test(panelBaseBodies)) panelStructureMissing.push('flex-direction:column');
-if (!/width:\s*min\(var\(--nvui-panel-width\),\s*100%\)/.test(panelBaseBodies)) panelStructureMissing.push('width:min(--nvui-panel-width,100%)');
+if (!/width:\s*var\(--nvui-panel-w,\s*min\(var\(--nvui-panel-width\),\s*100%\)\)/.test(panelBaseBodies)) panelStructureMissing.push('width:var(--nvui-panel-w, min(--nvui-panel-width,100%))');
 if (!/max-height:\s*var\(--nvui-panel-max-h\)/.test(panelBaseBodies)) panelStructureMissing.push('max-height:--nvui-panel-max-h');
 check('.nvui-panel 面板容器：玻璃底 + 面板自身 backdrop-filter（背后模糊）+ flex 列 + 固定宽高',
     panelStructureMissing.length === 0, `缺少/违规: ${panelStructureMissing.join(', ')}`);
@@ -1360,8 +1363,8 @@ check('功能行 .nvui-switch-row.is-feature：主色左边条 + 淡底 + 去底
     featureRowMissing.length === 0, `缺少: ${featureRowMissing.join(', ')}`);
 
 // ---- 4.14 v2.1.1 打磨：单圈焦点环 / 面板固定尺寸 / 隐藏滚动条 ----
-check('.nvui-panel 固定高度：height:var(--nvui-panel-max-h)（折叠展开不改变外框）',
-    /(?<![\w-])height:\s*var\(--nvui-panel-max-h\)/.test(plainRuleBodies('.nvui-panel').join('\n')));
+check('.nvui-panel 固定高度：height 走 --nvui-panel-h 变量、回落 --nvui-panel-max-h（折叠展开不改变外框）',
+    /(?<![\w-])height:\s*var\(--nvui-panel-h,\s*var\(--nvui-panel-max-h\)\)/.test(plainRuleBodies('.nvui-panel').join('\n')));
 const narrowPanelHeightRules = rulesFor('.nvui-panel')
     .filter((r) => r.context.some((c) => /max-width:\s*600px/.test(c)));
 check('≤600px 手机抽屉固定高度：height:92dvh 且保留 max-height',

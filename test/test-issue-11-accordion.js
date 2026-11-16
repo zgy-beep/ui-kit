@@ -610,7 +610,7 @@ function record(id, name, pass, detail, ms) {
             return window.__wait(80).then(() => {
                 const st2 = window.__state('acc-t16b');
                 return {
-                    pass: closedBoth && !!st && st.tab === 'b' && st.size && st.size.width === 640
+                    pass: closedBoth && !!st && st.tab === 'b' && st.size && st.size.w === 640
                         && st2 === null,
                     detail: JSON.stringify({
                         closedBoth,

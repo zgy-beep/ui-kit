@@ -260,10 +260,10 @@ function record(id, name, pass, detail, ms) {
         const grip = p.panel.querySelector('.nvui-resize');
         grip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true }));
         return window.__wait(120).then(() => ({
-            pass: p.panel.style.width === '720px' && p.panel.style.height === '',
+            pass: p.panel.style.getPropertyValue('--nvui-panel-w') === '720px' && p.panel.style.getPropertyValue('--nvui-panel-h') === '',
             detail: JSON.stringify({
-                width: p.panel.style.width,
-                height: p.panel.style.height,
+                width: p.panel.style.getPropertyValue('--nvui-panel-w'),
+                height: p.panel.style.getPropertyValue('--nvui-panel-h'),
                 rect: window.__w(p),
             }),
         }));
@@ -299,7 +299,7 @@ function record(id, name, pass, detail, ms) {
         return window.__wait(420).then(() => {
             const saved = store.data['nvui_state_k2'];
             return {
-                pass: !!saved && !!saved.size && saved.size.width === 752,
+                pass: !!saved && !!saved.size && saved.size.w === 752,
                 detail: JSON.stringify(saved),
             };
         });

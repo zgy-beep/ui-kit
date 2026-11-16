@@ -204,13 +204,13 @@ function recordStressTest(id, name, pass, detail, durationMs) {
         const lastWrite = writeLog[0];
         const writeDelay = lastWrite ? Math.round(lastWrite.time - tEndUpdates) : -1;
         const correctFinalState = lastWrite && lastWrite.val && lastWrite.val.size &&
-            lastWrite.val.size.width === 700 && lastWrite.val.size.height === 450;
+            lastWrite.val.size.w === 700 && lastWrite.val.size.h === 450;
         const exactOneWrite = countFinal === 1 && countAtSettled === 1;
         const timingValid = countAtEndUpdates === 0 && countAt100After === 0 && writeDelay >= 240 && writeDelay <= 1000;
 
         return {
             pass: exactOneWrite && timingValid && correctFinalState,
-            detail: `writeCount=${countFinal}, writeDelay=${writeDelay}ms (expected ~250ms), finalW=${lastWrite?.val?.size?.width}`,
+            detail: `writeCount=${countFinal}, writeDelay=${writeDelay}ms (expected ~250ms), finalW=${lastWrite?.val?.size?.w}`,
         };
     });
 
@@ -254,11 +254,11 @@ function recordStressTest(id, name, pass, detail, durationMs) {
 
         const flushedImmediately = countImmediatelyAfterClose === 1;
         const noDuplicateTimer = countAfterDebounceWindow === 1;
-        const correctSize = savedVal?.size?.width === 777 && savedVal?.size?.height === 555;
+        const correctSize = savedVal?.size?.w === 777 && savedVal?.size?.h === 555;
 
         return {
             pass: flushedImmediately && noDuplicateTimer && correctSize,
-            detail: `flushedImmediate=${flushedImmediately}, countAfter350ms=${countAfterDebounceWindow}, width=${savedVal?.size?.width}`,
+            detail: `flushedImmediate=${flushedImmediately}, countAfter350ms=${countAfterDebounceWindow}, width=${savedVal?.size?.w}`,
         };
     });
 
@@ -289,8 +289,8 @@ function recordStressTest(id, name, pass, detail, durationMs) {
         const countAfterWait = writeLog.length;
 
         return {
-            pass: countAfterDestroy === 1 && countAfterWait === 1 && writeLog[0]?.val?.size?.width === 820,
-            detail: `countAfterDestroy=${countAfterDestroy}, countAfterWait=${countAfterWait}, width=${writeLog[0]?.val?.size?.width}`,
+            pass: countAfterDestroy === 1 && countAfterWait === 1 && writeLog[0]?.val?.size?.w === 820,
+            detail: `countAfterDestroy=${countAfterDestroy}, countAfterWait=${countAfterWait}, width=${writeLog[0]?.val?.size?.w}`,
         };
     });
 
@@ -325,12 +325,12 @@ function recordStressTest(id, name, pass, detail, durationMs) {
         p.destroy();
 
         // 10 cycles of immediate close flush 10 times, settled cleanly with 700x500
-        const correctEndWidth = lastState?.size?.width === 700;
+        const correctEndWidth = lastState?.size?.w === 700;
         const noRunawayTimers = countAfterQuiet === countAtEndCycles;
 
         return {
             pass: correctEndWidth && noRunawayTimers,
-            detail: `countAtEnd=${countAtEndCycles}, countAfterQuiet=${countAfterQuiet}, finalWidth=${lastState?.size?.width}`,
+            detail: `countAtEnd=${countAtEndCycles}, countAfterQuiet=${countAfterQuiet}, finalWidth=${lastState?.size?.w}`,
         };
     });
 
@@ -522,7 +522,7 @@ function recordStressTest(id, name, pass, detail, durationMs) {
             });
             p.open();
             const panelEl = p.dialog.querySelector('.nvui-panel');
-            const styleW = panelEl.style.width;
+            const styleW = (panelEl.style.getPropertyValue('--nvui-panel-w') || panelEl.style.width);
             p.close();
             p.destroy();
             return {
@@ -601,8 +601,8 @@ function recordStressTest(id, name, pass, detail, durationMs) {
             });
             p.open();
             const panelEl = p.dialog.querySelector('.nvui-panel');
-            const styleW = panelEl.style.width;
-            const styleH = panelEl.style.height;
+            const styleW = (panelEl.style.getPropertyValue('--nvui-panel-w') || panelEl.style.width);
+            const styleH = (panelEl.style.getPropertyValue('--nvui-panel-h') || panelEl.style.height);
 
             const hasNaN = styleW.includes('NaN') || styleH.includes('NaN');
             p.close();
@@ -631,8 +631,8 @@ function recordStressTest(id, name, pass, detail, durationMs) {
         });
         p.open();
         const panelEl = p.dialog.querySelector('.nvui-panel');
-        const styleW = parseInt(panelEl.style.width, 10);
-        const styleH = parseInt(panelEl.style.height, 10);
+        const styleW = parseInt((panelEl.style.getPropertyValue('--nvui-panel-w') || panelEl.style.width), 10);
+        const styleH = parseInt((panelEl.style.getPropertyValue('--nvui-panel-h') || panelEl.style.height), 10);
         const maxAllowedW = window.innerWidth - 32;
         const maxAllowedH = window.innerHeight - 32;
 
@@ -660,8 +660,8 @@ function recordStressTest(id, name, pass, detail, durationMs) {
         });
         p.open();
         const panelEl = p.dialog.querySelector('.nvui-panel');
-        const styleW = parseInt(panelEl.style.width, 10);
-        const styleH = parseInt(panelEl.style.height, 10);
+        const styleW = parseInt((panelEl.style.getPropertyValue('--nvui-panel-w') || panelEl.style.width), 10);
+        const styleH = parseInt((panelEl.style.getPropertyValue('--nvui-panel-h') || panelEl.style.height), 10);
 
         p.close();
         p.destroy();
@@ -789,8 +789,8 @@ function recordStressTest(id, name, pass, detail, durationMs) {
         });
         p.open();
         const panelEl = p.dialog.querySelector('.nvui-panel');
-        const styleW = panelEl.style.width;
-        const styleH = panelEl.style.height;
+        const styleW = (panelEl.style.getPropertyValue('--nvui-panel-w') || panelEl.style.width);
+        const styleH = (panelEl.style.getPropertyValue('--nvui-panel-h') || panelEl.style.height);
         p.close();
         p.destroy();
 

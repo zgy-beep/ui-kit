@@ -2170,9 +2170,12 @@ dialog.nvui-tl.nvui-theme-light select.nvui-input,
 .nvui-panel {
     display: flex;
     flex-direction: column;
-    /* v2.1.1：固定尺寸，折叠/展开内容不会改变面板外框（宽 720 上限、高 88vh） */
-    width: min(var(--nvui-panel-width), 100%);
-    height: var(--nvui-panel-max-h);
+    /* v2.1.1：固定尺寸，折叠/展开内容不会改变面板外框（宽 720 上限、高 88vh）
+       v3.0.0：尺寸载体由内联 px 改成 CSS 变量（--nvui-panel-w / --nvui-panel-h）。
+       变量留空时回落到 kit 默认值，因此「未设变量」与 v2.x「无内联宽高」视觉一致；
+       下游写普通 CSS 即可接管，不必再和元素上的内联声明抢优先级。 */
+    width: var(--nvui-panel-w, min(var(--nvui-panel-width), 100%));
+    height: var(--nvui-panel-h, var(--nvui-panel-max-h));
     max-height: var(--nvui-panel-max-h);
     min-height: 0;
     overflow: hidden;

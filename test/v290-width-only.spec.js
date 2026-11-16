@@ -169,12 +169,12 @@ function record(id, name, pass, detail, ms) {
         return window.__wait(140).then(() => {
             const rect = p.panel.getBoundingClientRect();
             return {
-                pass: p.panel.style.width === '700px'
-                    && p.panel.style.height === ''
+                pass: p.panel.style.getPropertyValue('--nvui-panel-w') === '700px'
+                    && p.panel.style.getPropertyValue('--nvui-panel-h') === ''
                     && Math.abs(Math.round(rect.height) - Math.round(window.innerHeight * 0.94)) <= 2,
                 detail: JSON.stringify({
-                    inlineWidth: p.panel.style.width,
-                    inlineHeight: p.panel.style.height,
+                    inlineWidth: p.panel.style.getPropertyValue('--nvui-panel-w'),
+                    inlineHeight: p.panel.style.getPropertyValue('--nvui-panel-h'),
                     rectHeight: Math.round(rect.height),
                     expected: Math.round(window.innerHeight * 0.94),
                 }),
@@ -190,9 +190,9 @@ function record(id, name, pass, detail, ms) {
             const saved = window.__saved('w1');
             return {
                 pass: !!saved && !!saved.size
-                    && saved.size.height === null
-                    && saved.size.isMaximized === false
-                    && saved.size.width === 700,
+                    && saved.size.h === null
+                    && saved.size.mode === 'width-only'
+                    && saved.size.w === 700,
                 detail: JSON.stringify(saved),
             };
         });
@@ -206,10 +206,10 @@ function record(id, name, pass, detail, ms) {
             const q = window.__open({ id: 'w1', title: 'W1 again', persist: { size: 'width-only' } });
             return window.__wait(140).then(() => {
                 const out = {
-                    pass: q.panel.style.height === '' && q.panel.style.width === '700px',
+                    pass: q.panel.style.getPropertyValue('--nvui-panel-h') === '' && q.panel.style.getPropertyValue('--nvui-panel-w') === '700px',
                     detail: JSON.stringify({
-                        inlineWidth: q.panel.style.width,
-                        inlineHeight: q.panel.style.height,
+                        inlineWidth: q.panel.style.getPropertyValue('--nvui-panel-w'),
+                        inlineHeight: q.panel.style.getPropertyValue('--nvui-panel-h'),
                         saved: window.__saved('w1'),
                     }),
                 };
@@ -226,10 +226,10 @@ function record(id, name, pass, detail, ms) {
         const p = window.__open({ id: 'w4', title: 'W4', persist: { size: true } });
         return window.__wait(140).then(() => {
             const out = {
-                pass: p.panel.style.width === '700px' && p.panel.style.height === '500px',
+                pass: p.panel.style.getPropertyValue('--nvui-panel-w') === '700px' && p.panel.style.getPropertyValue('--nvui-panel-h') === '500px',
                 detail: JSON.stringify({
-                    inlineWidth: p.panel.style.width,
-                    inlineHeight: p.panel.style.height,
+                    inlineWidth: p.panel.style.getPropertyValue('--nvui-panel-w'),
+                    inlineHeight: p.panel.style.getPropertyValue('--nvui-panel-h'),
                 }),
             };
             p.destroy();
@@ -247,8 +247,8 @@ function record(id, name, pass, detail, ms) {
             return window.__wait(80).then(() => {
                 const saved = window.__saved('w5');
                 const out = {
-                    pass: p.panel.style.height === '' && !!saved && saved.size === null,
-                    detail: JSON.stringify({ inlineHeight: p.panel.style.height, saved: saved }),
+                    pass: p.panel.style.getPropertyValue('--nvui-panel-h') === '' && !!saved && saved.size === null,
+                    detail: JSON.stringify({ inlineHeight: p.panel.style.getPropertyValue('--nvui-panel-h'), saved: saved }),
                 };
                 p.destroy();
                 return out;
@@ -262,12 +262,12 @@ function record(id, name, pass, detail, ms) {
         const p = window.__open({ id: 'w6', title: 'W6', persist: { size: 'width-only' } });
         p.setSize(900, 700);
         return window.__wait(140).then(() => {
-            const h = parseInt(p.panel.style.height, 10);
+            const h = parseInt(p.panel.style.getPropertyValue('--nvui-panel-h'), 10);
             const out = {
-                pass: p.panel.style.width === '900px' && !isNaN(h) && h > 0 && h <= window.innerHeight - 32,
+                pass: p.panel.style.getPropertyValue('--nvui-panel-w') === '900px' && !isNaN(h) && h > 0 && h <= window.innerHeight - 32,
                 detail: JSON.stringify({
-                    inlineWidth: p.panel.style.width,
-                    inlineHeight: p.panel.style.height,
+                    inlineWidth: p.panel.style.getPropertyValue('--nvui-panel-w'),
+                    inlineHeight: p.panel.style.getPropertyValue('--nvui-panel-h'),
                     viewportH: window.innerHeight,
                 }),
             };
@@ -283,9 +283,9 @@ function record(id, name, pass, detail, ms) {
         const p = window.__open({ id: 'w7', title: 'W7', persist: { size: 'widthOnly' } });
         return window.__wait(140).then(() => {
             const out = {
-                pass: p.panel.style.height === '500px',
+                pass: p.panel.style.getPropertyValue('--nvui-panel-h') === '500px',
                 detail: JSON.stringify({
-                    inlineHeight: p.panel.style.height,
+                    inlineHeight: p.panel.style.getPropertyValue('--nvui-panel-h'),
                     saved: window.__saved('w7'),
                 }),
             };
@@ -303,11 +303,11 @@ function record(id, name, pass, detail, ms) {
             const saved = window.__saved('w8');
             const out = {
                 pass: !!applied && !!applied.size
-                    && applied.size.width === 640
-                    && applied.size.height === null
-                    && applied.size.isMaximized === false
+                    && applied.size.w === 640
+                    && applied.size.h === null
+                    && applied.size.mode === 'width-only'
                     && !!saved && !!saved.size
-                    && saved.size.height === null && saved.size.isMaximized === false,
+                    && saved.size.h === null && saved.size.mode === 'width-only',
                 detail: JSON.stringify({ applied: applied, saved: saved }),
             };
             p.destroy();

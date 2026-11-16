@@ -12,6 +12,7 @@ const EXPECTED_EXPORTS = [
     'VERSION', 'PANEL_CLASS', 'accordion', 'checkCompatibility', 'classes', 'clearLayoutState', 'diagnostics',
     'clampPanelLayout', 'closeLayer', 'config', 'countHostModals', 'createPanel', 'defaultStorageAdapter',
     'defaults', 'detectGlassSupport', 'getCarrierState', 'getToken', 'inputRow', 'invalidateTokenCache',
+    'migrateStateV1toV2',
     'openLayer', 'progress', 'selfCheck', 'setTheme', 'showToast', 'switchRow', 'syncGlassFallback',
     'syncHostModalState', 'version',
 ];

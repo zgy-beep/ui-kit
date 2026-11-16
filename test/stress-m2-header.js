@@ -753,7 +753,7 @@ function recordStressTest(id, name, pass, detail, durationMs) {
         p.destroy();
         document.body.classList.remove('nvui-theme-light');
 
-        const pass = savedState && savedState.size && savedState.size.width === 750 && savedState.size.height === 500;
+        const pass = savedState && savedState.size && savedState.size.w === 750 && savedState.size.h === 500;
 
         return {
             pass,

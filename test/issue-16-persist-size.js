@@ -180,10 +180,17 @@ function record(id, name, pass, detail, ms) {
         window.__metrics = (p) => {
             const el = p.panel;
             const rect = el.getBoundingClientRect();
+            /* v3.0.0：尺寸载体是 CSS 变量，内联 px 停写。这里读「kit 实际施加的尺寸」：
+               变量优先，其次才是 v2.x 遗留的内联 px（legacy 开关下仍会写）。 */
+            const applied = (axis) => {
+                const v = el.style.getPropertyValue(axis === 'h' ? '--nvui-panel-h' : '--nvui-panel-w');
+                if (v) return v;
+                return (axis === 'h' ? el.style.height : el.style.width) || '';
+            };
             return {
-                inlineHeight: el.style.height || '',
+                appliedHeight: applied('h'),
+                appliedWidth: applied('w'),
                 rectHeight: Math.round(rect.height),
-                inlineWidth: el.style.width || '',
                 maximized: el.classList.contains('is-maximized'),
             };
         };
@@ -221,7 +228,7 @@ function record(id, name, pass, detail, ms) {
             p.destroy();
             window.__setToken('--nvui-panel-max-h', '');
             return {
-                pass: m.inlineHeight === '' && Math.abs(m.rectHeight - expected) <= 2,
+                pass: m.appliedHeight === '' && Math.abs(m.rectHeight - expected) <= 2,
                 detail: JSON.stringify({ ...m, expected, viewportH: window.innerHeight }),
             };
         });
@@ -264,8 +271,8 @@ function record(id, name, pass, detail, ms) {
             const m = window.__metrics(p);
             p.destroy();
             return {
-                pass: parseInt(m.inlineHeight || '0', 10) < 5000
-                    && parseInt(m.inlineHeight || '0', 10) <= window.innerHeight
+                pass: parseInt(m.appliedHeight || '0', 10) < 5000
+                    && parseInt(m.appliedHeight || '0', 10) <= window.innerHeight
                     && m.rectHeight <= window.innerHeight,
                 detail: JSON.stringify({ ...m, viewportH: window.innerHeight }),
             };
@@ -281,7 +288,7 @@ function record(id, name, pass, detail, ms) {
             const m = window.__metrics(p);
             p.destroy();
             return {
-                pass: m.inlineHeight === '400px' && m.rectHeight === 400,
+                pass: m.appliedHeight === '400px' && m.rectHeight === 400,
                 detail: JSON.stringify(m),
             };
         });
@@ -302,7 +309,7 @@ function record(id, name, pass, detail, ms) {
             return window.__wait(80).then(() => {
                 const st = window.__state('p16-t5');
                 return {
-                    pass: m.inlineHeight === '' && Math.abs(m.rectHeight - expected) <= 2
+                    pass: m.appliedHeight === '' && Math.abs(m.rectHeight - expected) <= 2
                         && !!st && st.size === null && !!st.accordion && st.accordion.keep === true,
                     detail: JSON.stringify({ ...m, expected, savedSize: st && st.size, savedAcc: st && st.accordion }),
                 };
@@ -317,7 +324,7 @@ function record(id, name, pass, detail, ms) {
             const m = window.__metrics(p);
             p.destroy();
             return {
-                pass: m.inlineHeight === '' && m.inlineWidth === ''
+                pass: m.appliedHeight === '' && m.appliedWidth === ''
                     && window.__state('p16-t6') === null,
                 detail: JSON.stringify({ ...m, state: window.__state('p16-t6') }),
             };
@@ -338,8 +345,8 @@ function record(id, name, pass, detail, ms) {
             const m = window.__metrics(p);
             p.destroy();
             return {
-                pass: m.maximized === false && m.inlineHeight === ''
-                    && !/calc\(100v[w|h]/.test(m.inlineHeight),
+                pass: m.maximized === false && m.appliedHeight === ''
+                    && !/calc\(100v[w|h]/.test(m.appliedHeight),
                 detail: JSON.stringify(m),
             };
         });
@@ -366,7 +373,7 @@ function record(id, name, pass, detail, ms) {
             return window.__wait(120).then(() => {
                 const st = window.__state('p16-t9');
                 return {
-                    pass: m.inlineHeight === '' && m.inlineWidth === ''
+                    pass: m.appliedHeight === '' && m.appliedWidth === ''
                         && !!st && st.timestamp === 111
                         && !!st.size && st.size.width === 720
                         && st.tab === 'ghost'
@@ -393,8 +400,8 @@ function record(id, name, pass, detail, ms) {
             return window.__wait(120).then(() => {
                 const st = window.__state('p16-t10');
                 return {
-                    pass: m.inlineHeight === '400px' && m.inlineWidth === '720px' && m.rectHeight === 400
-                        && !!st && !!st.size && st.size.width === 720 && st.size.height === 400,
+                    pass: m.appliedHeight === '400px' && m.appliedWidth === '720px' && m.rectHeight === 400
+                        && !!st && !!st.size && st.size.w === 720 && st.size.h === 400,
                     detail: JSON.stringify({ ...m, savedSize: st && st.size }),
                 };
             });
@@ -412,7 +419,7 @@ function record(id, name, pass, detail, ms) {
                 /* 「参与持久化」= 落的是 size 对象（对比 T9 的原样不动 / T2 的 null）；
                    高度可以为 null —— 关闭时面板已隐藏，offsetHeight 读不到是既有语义。 */
                 return {
-                    pass: !!st && !!st.size && st.size.width === 720
+                    pass: !!st && !!st.size && st.size.w === 720
                         && Object.prototype.hasOwnProperty.call(st, 'tab')
                         && Object.prototype.hasOwnProperty.call(st, 'accordion'),
                     detail: JSON.stringify(st),
@@ -458,7 +465,7 @@ function record(id, name, pass, detail, ms) {
                 return {
                     pass: window.__asyncGets.length === 1
                         && window.__asyncGets[0] === 'nvui_state_p16-t12'
-                        && m.inlineHeight === ''
+                        && m.appliedHeight === ''
                         && !!st && st.size === null
                         && !!st.accordion && st.accordion.a1 === true,
                     detail: JSON.stringify({ metrics: m, gets: window.__asyncGets, stored: st }),

@@ -396,7 +396,7 @@ async function main() {
         if (!raw) return { pass: false, detail: 'No state found in localStorage under key nvui_state_' + id };
         try {
             const data = JSON.parse(raw);
-            const hasSize = data.size && (data.size.width === 780 || data.size.width === '780px');
+            const hasSize = data.size && (data.size.w === 780 || data.size.w === '780px');
             return {
                 pass: !!data.size,
                 detail: `Stored state: ${JSON.stringify(data.size)}`,
@@ -421,8 +421,8 @@ async function main() {
         });
         p.open();
         const panelEl = p.dialog.querySelector('.nvui-panel');
-        const styleW = panelEl ? panelEl.style.width : '';
-        const styleH = panelEl ? panelEl.style.height : '';
+        const styleW = panelEl ? (panelEl.style.getPropertyValue('--nvui-panel-w') || panelEl.style.width) : '';
+        const styleH = panelEl ? (panelEl.style.getPropertyValue('--nvui-panel-h') || panelEl.style.height) : '';
         p.destroy();
         const restored = styleW.includes('850') && styleH.includes('550');
         return {
@@ -517,7 +517,7 @@ async function main() {
         p.destroy();
         if (!raw) return { pass: false, detail: 'No state saved' };
         const data = JSON.parse(raw);
-        const sizeIgnored = !data.size || data.size.width === undefined;
+        const sizeIgnored = !data.size || data.size.w === undefined;
         const tabSaved = data.tab === 'tabB';
         return {
             pass: sizeIgnored && tabSaved,
@@ -660,7 +660,7 @@ async function main() {
         p.clearLayoutState();
         const stored = localStorage.getItem(key);
         const panelEl = p.dialog.querySelector('.nvui-panel');
-        const styleW = panelEl ? panelEl.style.width : '';
+        const styleW = panelEl ? (panelEl.style.getPropertyValue('--nvui-panel-w') || panelEl.style.width) : '';
         p.destroy();
         return {
             pass: stored === null && (styleW === '' || styleW === 'initial'),
@@ -1230,7 +1230,7 @@ async function main() {
         });
         p.open();
         const panelEl = p.dialog.querySelector('.nvui-panel');
-        const styleW = panelEl ? panelEl.style.width : '';
+        const styleW = panelEl ? (panelEl.style.getPropertyValue('--nvui-panel-w') || panelEl.style.width) : '';
         const rect = panelEl ? panelEl.getBoundingClientRect() : { width: 0 };
         p.destroy();
 
@@ -1548,7 +1548,7 @@ async function main() {
         p.clearLayoutState();
         const stored = localStorage.getItem(`nvui_state_${id}`);
         const panelEl = p.dialog.querySelector('.nvui-panel');
-        const styleW = panelEl ? panelEl.style.width : '';
+        const styleW = panelEl ? (panelEl.style.getPropertyValue('--nvui-panel-w') || panelEl.style.width) : '';
         p.destroy();
         return {
             pass: stored === null && (styleW === '' || styleW === 'initial'),

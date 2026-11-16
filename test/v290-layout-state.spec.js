@@ -187,10 +187,10 @@ function record(id, name, pass, detail, ms) {
         return window.__wait(60).then(() => ({
             pass: !!st
                 && Object.keys(st).sort().join(',') === 'accordion,size,tab,version'
-                && st.version === 1
-                && !!st.size && typeof st.size.width === 'number'
-                && Object.prototype.hasOwnProperty.call(st.size, 'height')
-                && Object.prototype.hasOwnProperty.call(st.size, 'isMaximized')
+                && st.version === 2
+                && !!st.size && typeof st.size.w === 'number'
+                && Object.prototype.hasOwnProperty.call(st.size, 'h')
+                && typeof st.size.mode === 'string' && st.size.mode.length > 0
                 && typeof st.tab === 'string' && st.tab.length > 0
                 && st.accordion !== null && typeof st.accordion === 'object',
             detail: JSON.stringify(st),
@@ -213,12 +213,12 @@ function record(id, name, pass, detail, ms) {
     await run('L3', '返回值是游离副本：改返回值不污染内部状态', () => {
         const p = window.__p1;
         const a = p.getLayoutState();
-        a.size.width = 12345;
+        a.size.w = 12345;
         a.tab = '__hacked__';
         a.accordion.injected = true;
         const b = p.getLayoutState();
         return {
-            pass: b.size.width !== 12345 && b.tab !== '__hacked__'
+            pass: b.size.w !== 12345 && b.tab !== '__hacked__'
                 && !Object.prototype.hasOwnProperty.call(b.accordion, 'injected'),
             detail: JSON.stringify(b),
         };
@@ -228,14 +228,14 @@ function record(id, name, pass, detail, ms) {
     await run('L4', 'set 不动当前视图：已打开的 tab 与内联宽度都不变', () => {
         const p = window.__p1;
         p.setTab('two');
-        const widthBefore = p.panel.style.width;
+        const widthBefore = p.panel.style.getPropertyValue('--nvui-panel-w');
         p.setLayoutState({ tab: 'one', size: { width: 640, height: 420, isMaximized: false } });
         return window.__wait(60).then(() => ({
-            pass: p.activeTab === 'two' && p.panel.style.width === widthBefore,
+            pass: p.activeTab === 'two' && p.panel.style.getPropertyValue('--nvui-panel-w') === widthBefore,
             detail: JSON.stringify({
                 activeTab: p.activeTab,
                 widthBefore: widthBefore,
-                widthAfter: p.panel.style.width,
+                widthAfter: p.panel.style.getPropertyValue('--nvui-panel-w'),
             }),
         }));
     });
@@ -251,7 +251,7 @@ function record(id, name, pass, detail, ms) {
             return {
                 pass: store.calls.set === before + 1
                     && !!saved && saved.tab === 'one'
-                    && saved.size && saved.size.width === 800 && saved.size.height === 520
+                    && saved.size && saved.size.w === 800 && saved.size.h === 520
                     && typeof saved.timestamp === 'number',
                 detail: JSON.stringify({ saved: saved, calls: store.calls }),
             };
@@ -288,7 +288,7 @@ function record(id, name, pass, detail, ms) {
             return {
                 pass: !!applied && applied.size === null && applied.tab === 'two'
                     && !!saved && saved.size === null && saved.tab === 'two'
-                    && p.panel.style.height === '',
+                    && p.panel.style.getPropertyValue('--nvui-panel-h') === '',
                 detail: JSON.stringify({ applied: applied, saved: saved }),
             };
         });
@@ -325,7 +325,7 @@ function record(id, name, pass, detail, ms) {
             return {
                 pass: store.calls.set === before + 1
                     && !!saved && saved.tab === 'one'
-                    && saved.size && saved.size.width === 760,
+                    && saved.size && saved.size.w === 760,
                 detail: JSON.stringify({ calls: store.calls, before: before, saved: saved }),
             };
         });
