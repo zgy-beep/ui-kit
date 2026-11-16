@@ -14,7 +14,13 @@
  *   T5  清理后再开：同名面板依然没有内联 height（不会死灰复燃）
  *   T6  完全没有 persist 时不写任何尺寸内联样式
  *   T7  旧存档 isMaximized:true + persist.size:false：不进最大化态、不写 calc 尺寸
- *   T8  全程 0 pageerror / 0 console error
+ *   T13 全程 0 pageerror / 0 console error（置于末尾，涵盖 T1–T12）
+ *
+ * 尺寸语义矩阵（A1，2026-11-16）：
+ *   T9  三项全关 {size:false,tab:false,accordion:false}：既不写存储也不写内联尺寸
+ *   T10 persist:true 三项全开：尺寸照常恢复并回写
+ *   T11 persist:{} 未显式关闭的项默认开启：空配置等价于全开
+ *   T12 异步 StorageAdapter：size:false 下 size:null 落盘，tab/accordion 保留
  *
  * 运行（与仓库其它实机脚本同一套依赖解析顺序）：
  *   node test/issue-16-persist-size.js
@@ -339,9 +345,131 @@ function record(id, name, pass, detail, ms) {
         });
     });
 
-    // ------------------------------------------------------------------ T8
+    // ------------------------------------------------------------------ T9
+    await run('T9', '三项全关（size/tab/accordion:false）：既不写存储也不写内联尺寸', () => {
+        localStorage.clear();
+        /* timestamp 是「有没有被重写」的指纹：全关时存档必须原样不动 */
+        window.__seed('p16-t9', {
+            version: 1,
+            timestamp: 111,
+            size: window.__staleSize,
+            tab: 'ghost',
+            accordion: { keep: true },
+        });
+        const p = window.__open({
+            id: 'p16-t9', title: 'T9',
+            persist: { size: false, tab: false, accordion: false },
+        });
+        return window.__wait(150).then(() => {
+            const m = window.__metrics(p);
+            p.destroy();
+            return window.__wait(120).then(() => {
+                const st = window.__state('p16-t9');
+                return {
+                    pass: m.inlineHeight === '' && m.inlineWidth === ''
+                        && !!st && st.timestamp === 111
+                        && !!st.size && st.size.width === 720
+                        && st.tab === 'ghost'
+                        && !!st.accordion && st.accordion.keep === true,
+                    detail: JSON.stringify({ ...m, stored: st }),
+                };
+            });
+        });
+    });
+
+    // ------------------------------------------------------------------ T10
+    await run('T10', 'persist:true 三项全开：尺寸照常恢复并回写', () => {
+        localStorage.clear();
+        window.__seed('p16-t10', {
+            version: 1,
+            size: { width: 720, height: 400, isMaximized: false },
+            tab: null,
+            accordion: null,
+        });
+        const p = window.__open({ id: 'p16-t10', title: 'T10', persist: true });
+        return window.__wait(150).then(() => {
+            const m = window.__metrics(p);
+            p.destroy();
+            return window.__wait(120).then(() => {
+                const st = window.__state('p16-t10');
+                return {
+                    pass: m.inlineHeight === '400px' && m.inlineWidth === '720px' && m.rectHeight === 400
+                        && !!st && !!st.size && st.size.width === 720 && st.size.height === 400,
+                    detail: JSON.stringify({ ...m, savedSize: st && st.size }),
+                };
+            });
+        });
+    });
+
+    // ------------------------------------------------------------------ T11
+    await run('T11', 'persist:{} 未显式关闭的项默认开启（空配置等价于全开）', () => {
+        localStorage.clear();
+        const p = window.__open({ id: 'p16-t11', title: 'T11', persist: {} });
+        return window.__wait(150).then(() => {
+            p.destroy();
+            return window.__wait(120).then(() => {
+                const st = window.__state('p16-t11');
+                /* 「参与持久化」= 落的是 size 对象（对比 T9 的原样不动 / T2 的 null）；
+                   高度可以为 null —— 关闭时面板已隐藏，offsetHeight 读不到是既有语义。 */
+                return {
+                    pass: !!st && !!st.size && st.size.width === 720
+                        && Object.prototype.hasOwnProperty.call(st, 'tab')
+                        && Object.prototype.hasOwnProperty.call(st, 'accordion'),
+                    detail: JSON.stringify(st),
+                };
+            });
+        });
+    });
+
+    // ------------------------------------------------------------------ T12
+    await run('T12', '异步 StorageAdapter：size:false 下 size:null 落盘，tab/accordion 保留', () => {
+        localStorage.clear();
+        window.__asyncStore = {};
+        window.__asyncGets = [];
+        window.__asyncAdapter = {
+            get: function (key) {
+                window.__asyncGets.push(key);
+                return Promise.resolve(window.__asyncStore[key] || null);
+            },
+            set: function (key, val) {
+                window.__asyncStore[key] = val;
+                return Promise.resolve();
+            },
+            delete: function (key) {
+                delete window.__asyncStore[key];
+                return Promise.resolve();
+            },
+        };
+        window.__asyncStore['nvui_state_p16-t12'] = {
+            version: 1,
+            size: window.__staleSize,
+            tab: null,
+            accordion: { a1: true },
+        };
+        const p = window.__open({
+            id: 'p16-t12', title: 'T12',
+            persist: { size: false, tab: true, accordion: true, storage: window.__asyncAdapter },
+        });
+        return window.__wait(200).then(() => {
+            const m = window.__metrics(p);
+            p.destroy();
+            return window.__wait(200).then(() => {
+                const st = window.__asyncStore['nvui_state_p16-t12'];
+                return {
+                    pass: window.__asyncGets.length === 1
+                        && window.__asyncGets[0] === 'nvui_state_p16-t12'
+                        && m.inlineHeight === ''
+                        && !!st && st.size === null
+                        && !!st.accordion && st.accordion.a1 === true,
+                    detail: JSON.stringify({ metrics: m, gets: window.__asyncGets, stored: st }),
+                };
+            });
+        });
+    });
+
+    // ----------------------------------------------------------------- T13
     await new Promise((r) => setTimeout(r, 120));
-    record('T8', '全程 0 pageerror / 0 console error',
+    record('T13', '全程 0 pageerror / 0 console error（涵盖 T1–T12）',
         pageErrors.length === 0 && consoleErrors.length === 0,
         JSON.stringify({ pageErrors, consoleErrors }), 0);
 
