@@ -30,7 +30,8 @@
     "sync:template": "node scripts/sync-template.js",
     "verify:release": "node scripts/verify-release.js",
     "pack": "node scripts/pack.js",
-    "downstream:check": "node test/downstream-check.js"
+    "downstream:check": "node test/downstream-check.js",
+    "verify:all": "node scripts/verify-all.js"
   },
   "devDependencies": {
     "playwright-core": "^1.64.0"

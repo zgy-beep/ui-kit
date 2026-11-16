@@ -22,12 +22,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-      - name: 静态规范 + API 表面
-        run: |
-          npm test
-          npm run test:api
-          npm run test:v280
-          npm run verify:release
+      - name: 一键门禁（静态 + 打包；无 Chrome 自动跳过浏览器段）
+        run: npm run verify:all -- --no-browser
       - name: 下游 4 资产自检
         run: |
           mkdir -p /tmp/downstream/ui-kit/test
