@@ -1,9 +1,9 @@
-# ROADMAP · v2.8.1 → v3.1（线路 A / B / C 已全部结项）
+# ROADMAP · v2.8.1 → v3.1（线路 A / B / C 已结项，D 进行中）
 
 > 本文件是**计划详情的单一来源**；执行进度在 GitHub 追踪：
 > [#17 · 线路 A（v2.8.2）](https://github.com/zgy-beep/ui-kit/issues/17) ·
 > [#18 · 线路 B（v2.9.0）](https://github.com/zgy-beep/ui-kit/issues/18) ·
-> [#19 · 线路 C（v3.0.0）](https://github.com/zgy-beep/ui-kit/issues/19)。
+> [#19 · 线路 C（v3.0.0）](https://github.com/zgy-beep/ui-kit/issues/19) · [#22 · 线路 D（v3.1.0）](https://github.com/zgy-beep/ui-kit/issues/22)。
 > 已发生的缺陷与修复历史仍记在 [`ISSUES.md`](ISSUES.md)，版本事实以 [`CHANGELOG.md`](CHANGELOG.md) 为准。
 
 ---
@@ -43,7 +43,8 @@
 | :--- | :--- | :--- | :--- | :--- |
 | **v2.8.2 / v2.8.3** 工程化收尾 | [#17](https://github.com/zgy-beep/ui-kit/issues/17) | 2026-11-06 → 11-16 | `npm run verify:all` 一次通过；新机器 `npm i` 后浏览器套件可复跑；零行为变更 | **已交付**（2026-11-16，§2） |
 | **v2.9.0** 下游可维护性 | [#18](https://github.com/zgy-beep/ui-kit/issues/18) | 2026-11-15 → 12-04 | 6 项 additive 能力 + 双绿断言 + 文档与 API 表同步 | **已交付**（2026-11-16，§3） |
-| **v3.0.0** 尺寸与命名重构 | [#19](https://github.com/zgy-beep/ui-kit/issues/19) | 2026-12-05 → 2027-01-14 | 迁移器测试通过；旧类 alias 一版；`MIGRATION-v3.md` + 下游公告 | **已交付**（2026-11-16，提前于窗口，§4 + §8 公告模板） |
+| **v3.0.0** 尺寸与命名重构 | [#19](https://github.com/zgy-beep/ui-kit/issues/19) | 2026-12-05 → 2027-01-14 | 迁移器测试通过；旧类 alias 一版；`MIGRATION-v3.md` + 下游公告 | **已交付**（2026-11-16，提前于窗口，§4 + §9 公告模板） |
+| **v3.1.0** 移除过渡尺寸开关 | [#22](https://github.com/zgy-beep/ui-kit/issues/22) | 2026-11-16 → 11-30 | `data-nvui-legacy-size` 零残留；开关无效断言；文档不再有将来时 | **进行中**（§5） |
 
 三条线路全部结项。下一阶段（v3.1.0 / v4.0.0）尚未立项，先按「v3.1 移除 `data-nvui-legacy-size`」这一条
 已承诺的技术债排期。
@@ -116,7 +117,7 @@ MAJOR。**C1 是核心**：把「kit 写内联 px」与「下游用 CSS 接管�
 
 其余：C2 三套按钮组（`.nvui-btn-row` / `.nvui-actions` / `*-footer`）合一 + 旧类 alias 一版；C3 `tokens.json` schema v2（分组 / 类型 / 描述）+ `scripts/tokens-v1-to-v2.js`；C4 兼容矩阵硬门禁（`checkCompatibility({ min })` + `engines` + README 版本矩阵）。
 
-**出口核对**：迁移器测试（v1 存档 → v2 → 布局等价）✅ V4；alias `warnOnce` 断言 ✅ V3（合并进 `v300-size-vars`，不单开 spec）；`MIGRATION-v3.md` ✅；下游公告模板 ✅ 见 §8；ST 实机双跑 ✅ `test:host` 35/35 + 19/19（宿主 1.19，1.20 待有条件时补）。
+**出口核对**：迁移器测试（v1 存档 → v2 → 布局等价）✅ V4；alias `warnOnce` 断言 ✅ V3（合并进 `v300-size-vars`，不单开 spec）；`MIGRATION-v3.md` ✅；下游公告模板 ✅ 见 §9；ST 实机双跑 ✅ `test:host` 35/35 + 19/19（宿主 1.19，1.20 待有条件时补）。
 
 **额外收获**：C1 顺手修掉一个 v2 就有的缺陷 —— 「最大化 → 还原」后宽度一直挂着 `calc(100vw - 32px)`
 （`applyClamping()` 读不到 px 目标时直接 return，从不清那条 calc）。现在两个维度都读不到 px 且身上还挂着
@@ -124,27 +125,20 @@ MAJOR。**C1 是核心**：把「kit 写内联 px」与「下游用 CSS 接管�
 
 ---
 
-## 8. 下游公告模板（v3.0.0 发布用）
+## 5. 线路 D · v3.1.0 移除过渡尺寸开关（[#22](https://github.com/zgy-beep/ui-kit/issues/22)）
 
-> **ui-kit v3.0.0 是 MAJOR，四类契约变更**
->
-> 1. **面板尺寸不再写内联 px**，改用 CSS 变量 `--nvui-panel-w` / `--nvui-panel-h`。用 CSS 覆盖面板宽度的
->    写法**从这版起才真的生效**；反过来，读 `panel.style.width` 的代码要改读变量或 `panel.getLayoutState().size`。
-> 2. **布局状态格式升 v2**：`{ version: 2, size: { w, h, mode } }`（`mode` = `normal` / `maximized` /
->    `width-only` / `off`）。v1 存档自动迁移、落盘写 v2，你不需要清存储。
-> 3. **四套按钮组规则归一**（零 specificity），`.nvui-btn-row` 在 v3.x 内是 `.nvui-actions` 的别名。可见差异：
->    窄屏按钮换行而不是溢出。
-> 4. **`tokens.json` 升 schema 2**：值结构不变，新增 `schema` / `meta` / `groupDescriptions`。遍历顶层键当
->    令牌名的代码要改成遍历 `dark` / `light`。
->
-> 另：新增 `engines.node: >=18.0.0`（只影响开发期脚本）与 README §11.5 兼容矩阵硬门禁。
->
-> **只覆盖 4 资产、不碰上述四类的插件不用改代码。** 过渡开关 `data-nvui-legacy-size` 可临时回到内联 px 行为，
-> v3.1 移除。完整对照与升级步骤见 [MIGRATION-v3.md](MIGRATION-v3.md)。
+v3.0.0 发布时明确承诺：`data-nvui-legacy-size` 过渡开关 v3.1 移除。本线路兑现该承诺，是 v3.x 内最后一次契约变更。
+
+| # | 任务 | 验收 |
+| :--- | :--- | :--- |
+| D1 | 删掉 `LEGACY_SIZE_ATTR` / `usesLegacySize()` / `writePanelSize()` 的 legacy 分支与 warnOnce | 代码与模板副本零残留；`writePanelSize()` 恒写 CSS 变量 |
+| D2 | 改写 `test/v300-size-vars.spec.js` V2 / V3 | V2 直接证明下游 CSS 覆盖生效；V3 改为「设了开关也完全无效、不告警」防复活；8/8 |
+| D3 | 清理 7 份文档的开关引用 | CHANGELOG / MIGRATION-v3 / README / AI-GUIDE / UPGRADING / ROADMAP / ISSUES 无「v3.1 移除」将来时 |
+
+**出口**：`verify:all` 10/10；`test:host` 35/35 + 19/19；`verify:release` 21 项；tag + Release 3 产物；GH-#22 关闭。
 
 ---
-
-## 5. 全局完成定义（DoD）
+## 6. 全局完成定义（DoD）
 
 任何版本发布前必须全部为真：
 
@@ -166,7 +160,7 @@ npm run pack
 
 ---
 
-## 6. 风险登记
+## 7. 风险登记
 
 | 风险 | 触发信号 | 缓解 |
 | :--- | :--- | :--- |
@@ -176,14 +170,34 @@ npm run pack
 | 浏览器套件在 CI 上不可用 | CI 需要 Chrome | 正因如此，A3 的浏览器段必须**可跳过**，CI 只跑静态 + `pack` |
 | 计划文档与实现漂移 | ROADMAP 写的与 CHANGELOG 不一致 | 每个里程碑关闭时同步更新本文件与 `ISSUES.md` |
 
-## 7. 已拍板决策（原「待拍板」）
+## 8. 已拍板决策（原「待拍板」）
 
 1. **B3 命名** → 定为 `'width-only'`（v2.9.0 已交付）。与 `size` 名词一致，`persist.size: 'width-only'` 读起来就是「只记宽」。
 2. **A2 依赖策略**：`playwright-core` 进 `devDependencies` 会不会影响「零依赖」宣传口径？倾向：运行时仍零依赖，README 明确「开发期可选依赖」。
 3. **C1 变量名** → 定为 `--nvui-panel-w` / `--nvui-panel-h`（v3.0.0 已交付）。与既有 `--nvui-panel-width` 同族，且 `-w` / `-h` 与状态里的 `w` / `h` 对齐；`--nvui-size-*` 太泛，会让人以为管所有尺寸。
 4. **C4 支持下限** → 仍承诺 SillyTavern 1.12.0（v3.0.0 已交付，README §11.5 第一行）。v3.0 的新依赖只有 `style.setProperty` 自定义属性支持，不构成抬高门槛；1.19 / 1.20 实机都已在 `test:host` 覆盖。
 
-## 9. 明确不做
+## 9. 下游公告模板（v3.0.0 发布用）
+
+> **ui-kit v3.0.0 是 MAJOR，四类契约变更**
+>
+> 1. **面板尺寸不再写内联 px**，改用 CSS 变量 `--nvui-panel-w` / `--nvui-panel-h`。用 CSS 覆盖面板宽度的
+>    写法**从这版起才真的生效**；反过来，读 `panel.style.width` 的代码要改读变量或 `panel.getLayoutState().size`。
+> 2. **布局状态格式升 v2**：`{ version: 2, size: { w, h, mode } }`（`mode` = `normal` / `maximized` /
+>    `width-only` / `off`）。v1 存档自动迁移、落盘写 v2，你不需要清存储。
+> 3. **四套按钮组规则归一**（零 specificity），`.nvui-btn-row` 在 v3.x 内是 `.nvui-actions` 的别名。可见差异：
+>    窄屏按钮换行而不是溢出。
+> 4. **`tokens.json` 升 schema 2**：值结构不变，新增 `schema` / `meta` / `groupDescriptions`。遍历顶层键当
+>    令牌名的代码要改成遍历 `dark` / `light`。
+>
+> 另：新增 `engines.node: >=18.0.0`（只影响开发期脚本）与 README §11.5 兼容矩阵硬门禁。
+>
+> **只覆盖 4 资产、不碰上述四类的插件不用改代码。** 过渡开关 `data-nvui-legacy-size` 可临时回到内联 px 行为，
+> v3.1 移除。完整对照与升级步骤见 [MIGRATION-v3.md](MIGRATION-v3.md)。
+
+---
+
+## 10. 明确不做
 
 - 不再开「逐帧重排」性能改造轮次：#3 / #8~#12 已用帧间隔实测证伪（`test/st-perf-*.js`）。
 - v2.x 内不动 DOM 必需层级与载体结构（留给 C1 / C2）。
