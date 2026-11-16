@@ -29,7 +29,7 @@
 | [GH-#15](https://github.com/zgy-beep/ui-kit/issues/15) | v2.7.0 forms 浏览器回归一次并行运行得到 453/455，半选 checkbox 背景和横杠透明度读到过渡中间帧；串行复跑 455/455。 | **已关闭**（v2.7.1）：等待两项计算样式终值并保留最终断言；三份并行 forms 各 455/455。发布提交关联 `Fixes #15`。 |
 | [GH-#17](https://github.com/zgy-beep/ui-kit/issues/17) | 线路 A · v2.8.2 / v2.8.3 工程化收尾（A1–A5）。 | **CLOSED（v2.8.3，2026-11-16）**：A1 尺寸矩阵 8 → 12（`c42f3f7`）、A2 依赖解析统一（`f68f4ce`）、A3 `verify:all` 9 步 + 产物校验（`2c763e6`）随 v2.8.3 发布；A4 `test/probe/` 30 个脚本 + 索引（`0301d68`）、A5 已在 v2.8.2 交付。tag `v2.8.3` + Release 3 产物已推，关闭评论含版本 / commit / 实测数字。 |
 | [GH-#18](https://github.com/zgy-beep/ui-kit/issues/18) | 线路 B · v2.9.0 下游可维护性与可观测性（B1–B6，全 additive）。 | **CLOSED（v2.9.0，2026-11-16）**：B1 `f601260` / B3 `8b7f4be` / B2 `e200899` / B6 `98dd3b3` / B4 `9b37425` / B5 `05e3db0`，六套 spec 共 56 项全绿；组件类 81 → 84、顶层导出 27 → 28。DOM 契约条目未做（需先定破坏性检测语义，与线路 C 同源），已在关闭评论注明。tag `v2.9.0` + Release 3 产物已推。 |
-| [GH-#19](https://github.com/zgy-beep/ui-kit/issues/19) | 线路 C · v3.0.0 内联尺寸停写与命名收敛（C1–C4，破坏性）。 | **OPEN**（未开始）：需迁移器与下游公告；`ROADMAP.md` 已记录「读 `panel.style.width/height` 的下游代码会失效」。 |
+| [GH-#19](https://github.com/zgy-beep/ui-kit/issues/19) | 线路 C · v3.0.0 内联尺寸停写与命名收敛（C1–C4，破坏性）。 | **CLOSED（v3.0.0，2026-11-16）**：C1 尺寸载体换轨 `5865946`（`test/v300-size-vars.spec.js` 8/8，V2 用同一段下游 CSS 双向证明「变量载体 500px / legacy 载体 860px」）、C2 按钮组归一 `e2cf4e4`、C3 tokens schema 2 `f619a77`、C4 兼容矩阵门禁 `427a50a` + 解析器修复 `f782076`；`verify:all` 9 → 10 步、顶层导出 28 → 29、`MIGRATION-v3.md` 新建。**未做项**：ST 1.20 实机（本机无环境，兼容矩阵只声明到 1.12.0，不承诺未验证版本）。tag `v3.0.0` + Release 3 产物已推，milestone 3 已 closed。 |
 | [GH-#20](https://github.com/zgy-beep/ui-kit/issues/20) | 焦点陷阱尾项误判：`tabindex="-1"` 的未激活 tab 被计入可 Tab 项，纯文本面板一次 Tab 即逃出模态（对应本文件 `#23`）。 | **CLOSED（v2.8.2，2026-11-16）**：tag `v2.8.2` + [Release](https://github.com/zgy-beep/ui-kit/releases/tag/v2.8.2) 已建，关闭评论记录了版本 / commit / 验证数据；按 `MAINTAINING.md` §3.3 第 1 条关闭。 |
 | [GH-#21](https://github.com/zgy-beep/ui-kit/issues/21) | UX 观察 3 条：移动端底部导航项 26px、进度条 `label` 仅 `aria-label` 无可视标签、长内容滚动边缘硬切。 | **CLOSED（v2.9.0，2026-11-16）**：触控 40px 已随 v2.8.2 交付（`7818192`）；进度可视标签与边缘渐隐随 v2.9.0 交付（`e37b446`，`test/issue-21-ux.spec.js` 11/11）。三条全部 additive，关闭评论含取舍说明（mask-image 而非内阴影、可视文本 `aria-hidden` 防重复播报）。 |
 
@@ -456,6 +456,12 @@
 | 主题跟随 B6（11-16） | `setTheme('auto')` 双信号并集；`themeAuto` 状态 + `teardownAutoTheme/syncAutoTheme`；采样排除自写类；显式主题摘监听 | `v290-theme-auto` 10/10；判据改为「后注册的 change 探针收到事件时类名已更新」；变异：去掉 `hostLightSignal` 时 A4 红 |
 | 调尺寸手柄 B4（11-16） | `createPanel({ resizable })` + `createResizeGrip(ctx)`；Pointer Events + `setPointerCapture`；方向键 ±8 / Shift ±32 / Home 复位；写入一律「内联 px → `applyClamping()`」 | `v290-resize` 11/11；已知边界：高度受 `max-height: 88vh`，只在可收缩区间可调；行数合并 `var disposed/acc` 维持 531 |
 | 表单补齐 B5（11-16） | `inputRow` 的 `textarea` 伪类型（`data-nvui-type`，不覆盖 IDL）+ `rows`；`hint`/`error` 各占独立 `aria-describedby` id | `v290-inputrow` 8/8；组件类 83 → 84（`.nvui-input-msg`）；`is-msg`/`is-error` 状态类 |
+| 尺寸载体 C1（11-16） | 停写内联 px，改写 `--nvui-panel-w` / `--nvui-panel-h`；`writePanelSize/readPanelSize/clearPanelSize` 三个助手收敛读写；状态 v2 `{ w, h, mode }` + `migrateStateV1toV2()` + `data-nvui-legacy-size` 开关；`applyClamping` 在「两维都读不到 px 但身上挂着尺寸」时清 calc（修掉 v2 的「最大化→还原」残留） | `v300-size-vars` 8/8；V2 用同一段下游 CSS 双向证明（v3 载体 500px / legacy 860px）；`test:api` 29 导出；行数删注释维持 531 |
+| 按钮组归一 C2（11-16） | 四段 `display:flex + align-items + gap` 收成一条 `:where(...)`（零 specificity）；差异只剩「操作区右对齐」与 `.nvui-btn-row` 内按钮等宽；`.nvui-btn-row` 降为 `.nvui-actions` 别名 | `npm test` 372/0（+2 条防分叉断言：同一组必须恰好一条规则、`.nvui-actions` 仍 `flex-end`） |
+| tokens schema v2 C3（11-16） | `scripts/tokens-v1-to-v2.js` 从 CSS 注释生成 `schema` / `meta{group,type,description}` / `groupDescriptions`；`tokens:migrate` / `tokens:check`；值结构逐字节不变 | 111 token / 16 组 / 9 段说明 / 75 个空 description（不编造）；`npm test` 373/0（+1 条 schema 断言）；踩坑：块结束不清 current 会把 `.nvui-theme-light` 整段吸进 dark 表 |
+| 兼容矩阵 C4（11-16） | README §11.5 表 ↔ `manifest.minimum_client_version` ↔ `engines.node` ↔ `checkCompatibility` 四方自洽；`verify:all` 9 → 10 步；`MAINTAINING` §2.4 改用 `verify:all` 作唯一入口 | `test:compat` 9/9；判据按大版本线（`vX.0.0`）而非逐版本一行 |
+| 解析器修复（11-16） | `test-compat-matrix.js` 裸搜「兼容矩阵」会命中 §10.10 / §11.4，把日期当宿主版本读（实测 `README=2026-11-16 / manifest=1.12.0`）；改以 §11.5 标题为锚 + 下一个标题截断（`rest.slice(1)` 也是错的，`## 11.5` 自己又以 `##` 开头） | `test:compat` 9/9；`npm test` 373/0 |
+| 发布 v3.0.0（11-16） | MAJOR，线路 C 四项：13 处版本 3.0.0、CHANGELOG 实体条目（C1–C4 + 工程 + 验证 + 关联）、`MIGRATION-v3.md` 新建、UPGRADING 重写「2.9.0 → 3.0.0」四行变更表、README §10.10 + §11.4 各补一行、ROADMAP 三条线路全标已交付 + §8 公告模板、`verify:release` 20 → 21 项；GH-#19 关闭 + milestone 3 closed | `verify:all` 10/10；373/0；浏览器 455+18+217+12+11+10+9+8+10+11+8+8；实机 35/35 + 19/19；e2e 58/0；`pack` 出 `ui-kit-3.0.0.zip`（258,184 B）；tag `v3.0.0` + Release 3 产物（body 4326 字符，CI 占位已被 `release edit` 覆盖） |
 | 发布 v2.9.0（11-16） | MINOR，全 opt-in：13 处版本 2.9.0、CHANGELOG 实体条目、UPGRADING 新增「2.8.3 → 2.9.0」（含七行接入对照表）、README §10.10 + §11.4 各补一行、ROADMAP 线路 B 标为到出口；GH-#18 / GH-#21 关闭 | `verify:all` 9/9；浏览器 455+18+217+15+12+11+10+9+8+10+11+8；实机 35/35 + 19/19；`verify:release` 20 项 + `--self-test` 3/3；`pack` 出 `ui-kit-2.9.0.zip`；tag `v2.9.0` + Release 3 产物 |
 | 夹具失效修复（11-16） | `test-v280-features.js` 用 `{ min: '2.9.0' }` 当「高于当前版本」，v2.9.0 收口后它等于当前版本，`verify:all` 必红；改 `99.0.0` 并注明原因 | `test:v280` 8/8；这是会随版本推进自己失效的夹具，不是 API 缺陷 |
 | 发布 v2.8.3（11-16） | PATCH，只含测试与工程脚本：13 处版本 2.8.3、CHANGELOG 条目、README §10.10 + §11.4 各补一行、UPGRADING 新增「2.8.2 → 2.8.3」、ROADMAP 线路 A 标为到出口；GH-#17 关闭 | `verify:all` 9/9；实机 35/35 + 19/19；`verify:release` 20 项 + `--self-test` 3/3；`pack` 出 `ui-kit-2.8.3.zip`；tag `v2.8.3` + Release 3 产物 |
@@ -468,8 +474,12 @@
 
 | 线路 | 目标版本 | 追踪 | Milestone |
 | :--- | :--- | :--- | :--- |
-| A · 工程化收尾（测试可复跑、门禁可信任） | v2.8.2 / v2.8.3 | [#17](https://github.com/zgy-beep/ui-kit/issues/17) | v2.8.2 · 工程化收尾（2026-11-14） |
-| B · 下游可维护性与可观测性（6 项 additive） | v2.9.0 **已交付** | [#18](https://github.com/zgy-beep/ui-kit/issues/18) | v2.9.0 · 下游可维护性（2026-12-04） |
-| C · 内联尺寸停写与命名收敛（破坏性 + 迁移器） | v3.0.0 | [#19](https://github.com/zgy-beep/ui-kit/issues/19) | v3.0.0 · 尺寸与命名重构（2027-01-14） |
+| A · 工程化收尾（测试可复跑、门禁可信任） | v2.8.2 / v2.8.3 **已交付** | [#17](https://github.com/zgy-beep/ui-kit/issues/17) | v2.8.2 · 工程化收尾（已 closed） |
+| B · 下游可维护性与可观测性（6 项 additive） | v2.9.0 **已交付** | [#18](https://github.com/zgy-beep/ui-kit/issues/18) | v2.9.0 · 下游可维护性（已 closed） |
+| C · 内联尺寸停写与命名收敛（破坏性 + 迁移器） | v3.0.0 **已交付** | [#19](https://github.com/zgy-beep/ui-kit/issues/19) | v3.0.0 · 尺寸与命名重构（已 closed） |
 
-排期原则：**先让断言可信（A）→ 再让下游少写代码（B）→ 最后才动破坏性契约（C）**。
+排期原则：**先让断言可信（A）→ 再让下游少写代码（B）→ 最后才动破坏性契约（C）**。三条线路已全部到出口。
+
+**待立项**：v3.1.0 至少要移除 `data-nvui-legacy-size` 过渡开关（v3.0.0 发布时承诺）；`MIGRATION-v3.md` §6 已写明
+「除此之外 v3.x 内不再有破坏性变更」。另有两项无版本归属的技术债：G-07 语义层 / 社区标签（阻塞在 LLM key
+环境变量，见待办区）、ST 1.20 实机补跑（本机无环境）。
