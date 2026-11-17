@@ -815,11 +815,7 @@
      */
     function openLayer(dialogEl, overlayEl) {
         if (!dialogEl || !overlayEl) return;
-        /* NEW-44：取消尚未完成的关闭定时器，防快速重开被旧定时器意外关闭 */
-        if (overlayEl.__nvuiCloseTimer) {
-            clearTimeout(overlayEl.__nvuiCloseTimer);
-            overlayEl.__nvuiCloseTimer = null;
-        }
+        cancelLayerClose(overlayEl);
         overlayEl.classList.remove('is-closing');
         /* 打开瞬间同步一次宿主模态降级态与玻璃能力（v2.7.2：宿主可能在面板创建后才切换 Fast UI） */
         syncHostModalState();
@@ -854,22 +850,23 @@
     /**
      * 关闭浮层：先加 .is-closing 播放退场动画，animationend（或令牌派生的兜底时长）后 hidden + close。
      */
+    function cancelLayerClose(overlayEl) {
+        if (overlayEl.__nvuiCancelClose) overlayEl.__nvuiCancelClose();
+    }
+
     function closeLayer(dialogEl, overlayEl, done) {
         if (!dialogEl || !overlayEl) return;
         if (overlayEl.hidden || overlayEl.classList.contains('is-closing')) return;
         overlayEl.classList.add('is-closing');
-        var finished = false;
+        var timer;
+        function cancel() {
+            clearTimeout(timer);
+            off(overlayEl, 'animationend', onAnimEnd);
+            overlayEl.__nvuiCancelClose = null;
+        }
         function finish() {
-            if (finished) return;
-            finished = true;
-            if (overlayEl.__nvuiCloseTimer) {
-                clearTimeout(overlayEl.__nvuiCloseTimer);
-                overlayEl.__nvuiCloseTimer = null;
-            }
-            /* NEW-44：若在退场期间已被重新 open，中止关闭流程 */
+            cancel();
             if (!overlayEl.classList.contains('is-closing')) return;
-            /* 退场监听必须摘除，防止监听器累积 */
-            try { off(overlayEl, 'animationend', onAnimEnd); } catch (err) { /* 忽略 */ }
             overlayEl.hidden = true;
             overlayEl.classList.remove('is-closing');
             if (dialogEl.open) {
@@ -883,7 +880,8 @@
             finish();
         }
         on(overlayEl, 'animationend', onAnimEnd);
-        overlayEl.__nvuiCloseTimer = setTimeout(finish, animationFallbackMs(60));
+        overlayEl.__nvuiCancelClose = cancel;
+        timer = setTimeout(finish, animationFallbackMs(60));
     }
 
     /* ---------------------- 标签指示器（粘连滑动） ---------------------- */
@@ -3493,7 +3491,7 @@
                 if (nextIdx !== -1 && nextIdx !== curIdx) {
                     e.preventDefault();
                     tabCtl.switchTo(tabs[nextIdx].domKey);
-                    var targetTab = tabsNav.querySelector('#' + id + '-tab-' + tabs[nextIdx].domKey);
+                    var targetTab = document.getElementById(id + '-tab-' + tabs[nextIdx].domKey);
                     if (targetTab && typeof targetTab.focus === 'function') targetTab.focus();
                 }
             });
@@ -3576,10 +3574,8 @@
 
         persist.bootstrap();
 
-        /** 在 scope 内取第一个「焦点陷阱认可」的可聚焦元素 */
         function openPanel() {
-            opener = document.activeElement;
-            overlay.classList.remove('is-closing');
+            if (!dialog.open) opener = document.activeElement;
             openLayer(dialog, overlay);
             /* NEW-29：打开面板时提升 Esc 调度栈位置至最顶层 */
             if (escapeEntry && typeof escapeEntry.promote === 'function') {
