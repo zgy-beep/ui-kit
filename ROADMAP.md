@@ -25,10 +25,11 @@
 
 **v2.8.1 出口状态**：`npm test` 367 PASS、`test:api` 27 导出、forms 455、accordion 18、optgroup 217、focus 13、issue-16 8/8；`verify:release` 通过；CI（main + tag）绿；Release 3 产物。
 
-### 0.1 发布流水（最近四版）
+### 0.1 发布流水
 
 | 版本 | 日期 | 类型 | 内容一句话 | 出口数据 |
 | :--- | :--- | :--- | :--- | :--- |
+| v3.1.1 | 2026-11-17 | PATCH | [发布](https://github.com/zgy-beep/ui-kit/releases/tag/v3.1.1)修复布局持久化、尺寸复位、键盘焦点与销毁生命周期（GH-#23–GH-#29） | `verify:all` 10/10，静态 373/373，实机冒烟 54/54，E2E 58/58，专项回归 7/7，发布 ZIP 内 7 文件校验通过 |
 | v3.1.0 | 2026-11-16 | MINOR | 线路 D：移除 `data-nvui-legacy-size` 过渡开关，尺寸只走 CSS 变量一条路径；V2 改直接证明下游 CSS 接管、V3 改防复活断言 | `verify:all` 10/10；373/0；`test:sizevars` 8/8；实机 35+19；e2e 58/0；token / 组件类 / 导出面不变 |
 | v3.0.0 | 2026-11-16 | MAJOR | 线路 C 四项：尺寸载体换轨（内联 px → `--nvui-panel-w` / `--nvui-panel-h`）+ 状态 v2 + `migrateStateV1toV2()` + `data-nvui-legacy-size` 过渡开关；四套按钮组归一为零 specificity；`tokens.json` schema 2；兼容矩阵硬门禁 | `verify:all` 10/10；373/0；浏览器 455+18+217+12+11+10+9+8+10+11+8+8；实机 35+19；e2e 58/0；组件类 84 / 导出 29 |
 | v2.9.0 | 2026-11-16 | MINOR | 线路 B 六项（布局导入导出 / `width-only` / `diagnostics` / `setTheme('auto')` / 调尺寸手柄 / `textarea`+`hint`+`error`）+ GH-#21 剩余两条（进度可视标签、边缘渐隐） | `verify:all` 9/9；370/0；浏览器 455+18+217+15+12+11+10+9+8+10+11+8；实机 35+19；组件类 84 / 导出 28 |
