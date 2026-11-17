@@ -1,6 +1,6 @@
 # AI 协作设计指南 · 用 SillyTavern NVUI Kit 规范设计面板
 
-> 版本：**v3.1.0** · 适用对象：SillyTavern 插件开发者、其它软件项目、以及被要求「按规范生成/修改界面」的 AI 编码助手。
+> 版本：**v3.1.1** · 适用对象：SillyTavern 插件开发者、其它软件项目、以及被要求「按规范生成/修改界面」的 AI 编码助手。
 > 配套文件：[tokens.css](tokens.css)（设计令牌）、[components.css](components.css)（组件样式）、[README.md](README.md)（完整规范）、[nvui-api.js](nvui-api.js)（零依赖运行时 API）、[tokens.json](tokens.json)（令牌机器可读镜像）、[test/test-ui-kit.js](test/test-ui-kit.js)（规范守护测试）。
 
 本文档回答两个问题：
@@ -121,7 +121,7 @@ var panel = NVUI.createPanel({
 - `destroy`：面板销毁时的清理回调（解绑业务监听、清理定时器）。
 - 面板需彻底移除时调用 `panel.destroy()`：移除 DOM、注销全局 Esc 监听、触发 `destroy` 回调。
 
-> **单文件 / 酒馆助手脚本提示**：若是单文件用户脚本（不能拷贝本地文件夹），可通过 CDN 动态加载样式与 JS API（`https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v3.1.0/nvui-api.js`，完整配方见 `README.md` §2.1.3），然后同样使用 `NVUI.createPanel` 生成。令牌、样式与运行时应锁定同一个 `v3.1.0` tag。
+> **单文件 / 酒馆助手脚本提示**：若是单文件用户脚本（不能拷贝本地文件夹），可通过 CDN 动态加载样式与 JS API（`https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v3.1.1/nvui-api.js`，完整配方见 `README.md` §2.1.3），然后同样使用 `NVUI.createPanel` 生成。令牌、样式与运行时应锁定同一个 `v3.1.1` tag。
 
 > **ST 扩展直接开箱用**：`st-extension-template/` 是一份已在本机真实 ST 宿主验证过的扩展骨架
 > （`manifest.json` / `index.js` / `style.css` + `ui-kit/`）。复制到
@@ -361,7 +361,7 @@ async function checkGitHubRelease() {
     'use strict';
 
     // 1. 动态载入 Flat Glass 样式与运行时（国内高速 CDN）
-    const CDN_BASE = 'https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v3.1.0';
+    const CDN_BASE = 'https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v3.1.1';
     const appendCss = (href) => {
         const link = document.createElement('link');
         link.rel = 'stylesheet'; link.href = href;
@@ -486,7 +486,7 @@ async function checkGitHubRelease() {
 ### 4.2 审查/修改现有界面
 
 ```text
-请按「SillyTavern NVUI Kit v3.1.0」规范审查下面的插件界面代码：
+请按「SillyTavern NVUI Kit v3.1.1」规范审查下面的插件界面代码：
 - 列出违反项（类名/token/宿主红线/a11y/动效降级/布局标准），按 README 章节标注依据；
 - 给出最小 diff 修复（不要整体重写），保持既有功能；
 - 特别检查：是否用了 showModal/裸 fixed、是否双导航/双滚动层、是否有硬编码颜色或 emoji、折叠展开是否改变面板外框、标签页是否重建 DOM；
@@ -496,7 +496,7 @@ async function checkGitHubRelease() {
 ### 4.3 迁移其它软件
 
 ```text
-把项目 X 的界面迁移到 SillyTavern NVUI Kit v3.1.0：
+把项目 X 的界面迁移到 SillyTavern NVUI Kit v3.1.1：
 - 复制 tokens.css / components.css / nvui-api.js / tokens.json；
 - 将品牌色映射到 --nvui-accent*（只改 token，不改组件规则）；
 - 按「面板布局标准」重组设置页（电脑居中 / 手机底部抽屉）；
@@ -510,7 +510,7 @@ async function checkGitHubRelease() {
 
 | API | 说明 |
 | :--- | :--- |
-| `NVUI.version` | Kit/API 版本（3.1.0） |
+| `NVUI.version` | Kit/API 版本（3.1.1） |
 | `NVUI.getToken(name)` | 读取当前作用域的设计令牌值 |
 | `NVUI.setTheme('light'|'dark'|'auto', { solid })` | 切换浅色 / 深色 / **跟随系统**（v2.9.0）与实心扁平模式（只切类名）。`'auto'` = `prefers-color-scheme` 或宿主已有的 `.nvui-theme-light` 任一为浅即浅色，系统变更同帧生效；显式 light/dark 会摘掉 auto 监听 |
 | `NVUI.selfCheck({ expect })` | 运行时自检：版本 / CSS / 玻璃 / 载体 z / 宿主模态 / issues |
@@ -552,7 +552,8 @@ async function checkGitHubRelease() {
 
 ### 6.2 历史版本与兼容基准
 
-- 当前：**v3.1.0**（MINOR · 线路 D：移除 `data-nvui-legacy-size` 过渡开关，尺寸只走 CSS 变量一条路径；设了属性也完全无效。token 111 / 组件类 84 / 顶层导出 29 / `!important` 18，状态格式与导出面相对 v3.0 全不变）。
+- 当前：**v3.1.1**（PATCH：修复布局导入、异步存储、存储键隔离、Home 尺寸复位、键盘焦点和面板销毁，见 GH-#23–GH-#29）。
+- 上一版：**v3.1.0**（MINOR · 线路 D：移除 `data-nvui-legacy-size` 过渡开关，尺寸只走 CSS 变量一条路径；设了属性也完全无效。token 111 / 组件类 84 / 顶层导出 29 / `!important` 18，状态格式与导出面相对 v3.0 全不变）。
 - 上一版：**v3.0.0**（MAJOR · 线路 C 四项：C1 尺寸载体由内联 px 换到 CSS 变量 `--nvui-panel-w` / `--nvui-panel-h` + 状态格式 v2（`{ w, h, mode }`）+ `migrateStateV1toV2()` + `data-nvui-legacy-size` 过渡开关（已在 v3.1 移除）；C2 四套按钮组归一为一条零 specificity 规则、`.nvui-btn-row` 降为别名；C3 `tokens.json` schema 2（分组 / 类型 / 描述，值结构不变）；C4 兼容矩阵硬门禁 + `engines.node`。顶层导出 28 → 29。迁移见 [MIGRATION-v3.md](MIGRATION-v3.md)）。
 - 上一版：**v2.9.0**（线路 B 六项能力：布局状态导入导出 `getLayoutState`/`setLayoutState`、`persist.size: 'width-only'`、`NVUI.diagnostics()`、`setTheme('auto')` 双信号跟随、`createPanel({ resizable })` 键盘可达调尺寸手柄、`inputRow` 的 `textarea` + `hint`/`error`；含 GH-#21 的进度可视标签与溢出边缘渐隐。全为 opt-in。顶层导出 28）。
 - 上一版：**v2.8.3**（PATCH：测试基建收尾 —— 探针归档 `test/probe/`、`issue-16` 尺寸矩阵 8 → 12、`playwright-core` 进 devDependencies + `scripts/resolve-browser.js` 统一解析、新增 `npm run verify:all`。4 资产仅版本号注释同步，运行语义零变化）。

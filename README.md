@@ -1,6 +1,6 @@
 # SillyTavern 插件 UI Kit · Flat Glass 设计规范
 
-> 版本：**v3.1.0**（2026-11-16）· 设计语言 **Flat Glass（扁平玻璃）** · 零依赖 · 可整目录复用
+> 版本：**v3.1.1**（2026-11-17）· 设计语言 **Flat Glass（扁平玻璃）** · 零依赖 · 可整目录复用
 
 给 SillyTavern 插件用的自包含浮动 UI 设计系统：两个 CSS 文件接入即可获得一致的弹窗、面板、表单、反馈与动效；需要时再加一个零依赖 JS API 生成符合规范的 DOM。**样式层没有运行时；`nvui-api.js` 是可选增强。**
 
@@ -237,11 +237,11 @@ API 生成的 DOM 自动符合 [§12](#12-sillytavern-插件面板布局标准�
 
 ```html
 <!-- 设计令牌与组件样式 -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v3.1.0/tokens.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v3.1.0/components.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v3.1.1/tokens.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v3.1.1/components.css">
 
 <!-- 可选运行时 API -->
-<script src="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v3.1.0/nvui-api.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v3.1.1/nvui-api.js"></script>
 ```
 
 > 三份资源必须锁定**同一个 tag**，避免令牌、样式与运行时版本漂移；CDN 缓存刷新可能略晚于 tag 推送。
@@ -254,7 +254,7 @@ API 生成的 DOM 自动符合 [§12](#12-sillytavern-插件面板布局标准�
 async function ensureNVUI() {
     const W = window.parent || window, D = W.document;
     if (W.NVUI) return W.NVUI;
-    const CDN = 'https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v3.1.0'; // 三份资源锁同一 tag
+    const CDN = 'https://cdn.jsdelivr.net/gh/zgy-beep/ui-kit@v3.1.1'; // 三份资源锁同一 tag
 
     // v2.7.2：先等 CSS 就绪再初始化，否则玻璃探测会在 CSS 缺席时误判为「不支持模糊」
     const loadCss = (id, href) => new Promise((resolve, reject) => {
@@ -984,7 +984,7 @@ head.addEventListener('click', () => {
 | 令牌 | 值 | 用途 |
 | :--- | :--- | :--- |
 | `--nvui-z-layer` | `1000000` | 载体档：`dialog.nvui-tl` 自身（非模态 `show()` 不进 top layer，档位必须显式给） |
-| `--nvui-kit-version` | `"3.1.0"` | v2.8.0 起：纯 CSS 下游可读的 kit 版本（与 `package.json` / `NVUI.version` 一致） |
+| `--nvui-kit-version` | `"3.1.1"` | v2.8.0 起：纯 CSS 下游可读的 kit 版本（与 `package.json` / `NVUI.version` 一致） |
 | `--nvui-z-floating` | `1000010` | 悬浮入口与悬浮面板 |
 | `--nvui-z-overlay` | `1000020` | 子浮层：遮罩与弹窗层 |
 | `--nvui-z-tooltip` | `1000030` | 工具提示；吐司载体也取此档 |
@@ -1812,9 +1812,9 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 
 **升级动作**：覆盖 CSS 与 `nvui-api.js`（新 API 全部为增量，旧代码无需修改）；宿主用 `showModal()` 时 kit 自动让位，业务无需改动；运行 `npm test`。
 
-### 10.10 v2.4.0 → v3.1.0 升级速查
+### 10.10 v2.4.0 → v3.1.1 升级速查
 
-从 v2.4.0 及更早版本升到当前 v3.1.0，按版本顺序做这几件事即可。**v2.4 → v2.9 全是覆盖文件即可（无破坏性变更）；v3.0.0 是 MAJOR，有四类契约变更；v3.1.0 移除了 v3.0 的尺寸过渡开关**，最小动作是「覆盖 4 资产 + 跑一次 `downstream-check`」，完整步骤见 [MIGRATION-v3.md](MIGRATION-v3.md) 与 [UPGRADING.md](UPGRADING.md)。
+从 v2.4.0 及更早版本升到当前 v3.1.1，按版本顺序做这几件事即可。**v2.4 → v2.9 全是覆盖文件即可（无破坏性变更）；v3.0.0 是 MAJOR，有四类契约变更；v3.1.0 移除了 v3.0 的尺寸过渡开关**，最小动作是「覆盖 4 资产 + 跑一次 `downstream-check`」，完整步骤见 [MIGRATION-v3.md](MIGRATION-v3.md) 与 [UPGRADING.md](UPGRADING.md)。
 
 | 版本 | 类型 | 你需要做什么 |
 | :--- | :--- | :--- |
@@ -1829,6 +1829,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 | v2.8.3 | 补丁 | **无需改动**：只有测试与工程脚本变化（探针归档 `test/probe/`、`issue-16` 尺寸矩阵 8 → 12 项、`playwright-core` 进 devDependencies、新增 `npm run verify:all`）。4 资产仅版本号注释同步，运行语义零变化。 |
 | v2.9.0 | 小版本 | 覆盖 4 资产（**组件类 82 → 84**，新增 `diagnostics` 导出）：`panel.getLayoutState()` / `setLayoutState()` 布局导入导出、`persist.size: 'width-only'` 只记宽、`NVUI.diagnostics()` 运行时快照、`setTheme('auto')` 双信号跟随、`createPanel({ resizable: true })` 调尺寸手柄、`inputRow` 的 `textarea` / `hint` / `error`。全部 opt-in，既有调用不加参数行为不变。 |
 | **v3.0.0** | **大版本** | **必须逐条看**（见 [MIGRATION-v3.md](MIGRATION-v3.md)）：① 尺寸载体由内联 px 改为 CSS 变量 `--nvui-panel-w` / `--nvui-panel-h` —— 读 `panel.style.width` 的下游要改读变量或 `getLayoutState()`，用 CSS 覆盖面板宽度的下游**从这版起才生效**；② 布局状态升 v2（`{ version: 2, size: { w, h, mode } }`），v1 存档自动迁移、落盘写 v2；③ 四套按钮组规则归一为一条 `:where(...)`（零 specificity），`.nvui-btn-row` 在 v3.x 内是 `.nvui-actions` 的别名；④ `tokens.json` 升 schema 2（**值结构不变**，新增 `schema` / `meta` / `groupDescriptions`），遍历顶层键当 token 名的要改遍历 `dark` / `light`。另新增 `engines.node: >=18.0.0` 与 README §11.5 兼容矩阵硬门禁。**只覆盖资产、不碰上述四类的下游不用改代码。** |
+| **v3.1.1** | 补丁 | 覆盖 4 资产，修复布局导入、异步存储、存储键冲突、Home 调尺寸、键盘焦点和重复销毁（GH-#23–GH-#29）。 |
 | **v3.1.0** | 小版本（有 1 项已承诺的移除） | 覆盖 4 资产即可：v3.0 的 `data-nvui-legacy-size` 过渡开关**已移除**，设了属性也不再写内联 px / 不再告警。**唯一要动的下游**：还在靠这个开关回到内联 px 的，改用 `panel.style.setProperty('--nvui-panel-w', ...)` 或自己的 CSS 选择器（见 MIGRATION-v3 §1.4）。其它调用、DOM、状态格式、导出面全部不变。 |
 
 **高频 FAQ**
@@ -1884,6 +1885,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 
 | 版本 | 日期 | 类型 | 一句话摘要 |
 | :--- | :--- | :--- | :--- |
+| v3.1.1 | 2026-11-17 | 补丁 | 修复面板布局持久化、调尺寸、键盘可访问性与销毁生命周期（GH-#23–GH-#29）。已有布局可从旧键读取。 |
 | v3.1.0 | 2026-11-16 | 小版本 | 移除 `data-nvui-legacy-size` 过渡开关（v3.0 承诺兑现）：尺寸只走 CSS 变量一条路径，设了属性也完全无效；`v300-size-vars` V2 改为直接证明下游 CSS 接管生效、V3 改为防复活断言。token / 组件类 / 导出面 / 状态格式全不变 |
 | v3.0.0 | 2026-11-16 | 大版本 | 尺寸载体换轨（内联 px → `--nvui-panel-w` / `--nvui-panel-h`）+ 状态格式 v2（`{ w, h, mode }`）+ `migrateStateV1toV2()` + `data-nvui-legacy-size` 过渡开关；四套按钮组归一为零 specificity 的一条规则；`tokens.json` schema 2（分组 / 类型 / 描述）；兼容矩阵硬门禁 + `engines.node`。顶层导出 28 → 29 |
 | v2.9.0 | 2026-11-16 | 小版本 | 布局状态导入导出（`getLayoutState` / `setLayoutState`）；`persist.size: 'width-only'`；`NVUI.diagnostics()` 运行时快照；`setTheme('auto')` 双信号跟随；`createPanel({ resizable })` 键盘可达调尺寸手柄；`inputRow` 支持 `textarea` 伪类型与 `hint` / `error`。组件类 82 → 84、顶层导出 27 → 28 |
@@ -2245,7 +2247,7 @@ function setupPanelNav(panelEl, controller) {
 ```js
 // Node（测试 / 构建期静态生成；不触发 DOM）
 const NVUI = require('./nvui-api.js');
-console.log(NVUI.version);            // 与 package.json 一致（当前 3.1.0）
+console.log(NVUI.version);            // 与 package.json 一致（当前 3.1.1）
 console.log(typeof NVUI.createPanel); // 'function'
 ```
 
@@ -2387,7 +2389,7 @@ panel.open();
 {
   "schema": 2,
   "name": "sillytavern-nvui-kit-tokens",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "SillyTavern UI Kit 设计令牌机器可读镜像（由 tokens.css 生成，勿手改）。dark = 深色默认，light = .nvui-theme-light 覆盖。",
   "generatedFrom": "tokens.css",
   "meta": { "--nvui-bg": { "group": "表面 / 背景", "type": "color", "description": "面板底色" } },

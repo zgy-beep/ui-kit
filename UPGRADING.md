@@ -1,8 +1,17 @@
-# UPGRADING · v3.1.0
+# UPGRADING · v3.1.1
 
-本文件是**常青升级指南**：当前版本是 v3.1.0。**v3.0.0 是 MAJOR，四类破坏性变更的完整对照见
+本文件是**常青升级指南**：当前版本是 v3.1.1。**v3.0.0 是 MAJOR，四类破坏性变更的完整对照见
 [MIGRATION-v3.md](MIGRATION-v3.md)**；再往前的历史版本差异见 [MIGRATION-v2.md](MIGRATION-v2.md)。
 下文各节按版本从新到旧排列，历史小节保留其**当时**的版本号，不要拿它当当前版本。
+
+## 3.1.0 → 3.1.1
+
+用同一个 tag 下的 `tokens.css`、`components.css`、`nvui-api.js` 和 `tokens.json` 覆盖现有资产。
+现有 `createPanel()` 调用和 StorageAdapter 接口可继续使用。
+
+- 无需归一化的面板 ID 沿用原有存储键。需要归一化的 ID 采用独立编码键，旧记录可自动回读。
+- 手动清理布局请调用 `panel.clearLayoutState()` 或传入原始 ID 的 `NVUI.clearLayoutState(id, storage)`。
+- 覆盖后用 `NVUI.selfCheck({ expect: '3.1.1' })` 核对版本，并确认布局导入在下次打开时生效。
 
 ## 3.0.0 → 3.1.0
 
