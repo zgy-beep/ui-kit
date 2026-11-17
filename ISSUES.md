@@ -33,6 +33,13 @@
 | [GH-#20](https://github.com/zgy-beep/ui-kit/issues/20) | 焦点陷阱尾项误判：`tabindex="-1"` 的未激活 tab 被计入可 Tab 项，纯文本面板一次 Tab 即逃出模态（对应本文件 `#23`）。 | **CLOSED（v2.8.2，2026-11-16）**：tag `v2.8.2` + [Release](https://github.com/zgy-beep/ui-kit/releases/tag/v2.8.2) 已建，关闭评论记录了版本 / commit / 验证数据；按 `MAINTAINING.md` §3.3 第 1 条关闭。 |
 | [GH-#21](https://github.com/zgy-beep/ui-kit/issues/21) | UX 观察 3 条：移动端底部导航项 26px、进度条 `label` 仅 `aria-label` 无可视标签、长内容滚动边缘硬切。 | **CLOSED（v2.9.0，2026-11-16）**：触控 40px 已随 v2.8.2 交付（`7818192`）；进度可视标签与边缘渐隐随 v2.9.0 交付（`e37b446`，`test/issue-21-ux.spec.js` 11/11）。三条全部 additive，关闭评论含取舍说明（mask-image 而非内阴影、可视文本 `aria-hidden` 防重复播报）。 |
 | [GH-#22](https://github.com/zgy-beep/ui-kit/issues/22) | 线路 D · v3.1.0 移除 `data-nvui-legacy-size` 过渡开关（v3.0.0 承诺兑现）。 | **CLOSED（v3.1.0，2026-11-16）**：D1 代码零残留 `d6c26cc`（删 `LEGACY_SIZE_ATTR` / `usesLegacySize` / legacy 分支 + warnOnce，载体只剩 CSS 变量一条路径）；D2 `test/v300-size-vars` 8/8，V2 改直接证明下游 CSS 接管（实测 500/860px）、V3 改防复活断言（设属性后 legacyWarns=0）；D3 文档改「已移除」+ 替代方案。附带修两个夹具：`7e655f4`（v280 的 `max:'3.0.0'` 升位当天失效）、`384835f`（AI-GUIDE 漏 bump 导致 e2e T1-R3-04 红）。tag `v3.1.0` + Release 3 产物已推，milestone 4 closed。 |
+| [GH-#23](https://github.com/zgy-beep/ui-kit/issues/23) | setLayoutState 导入后重新打开同一面板未应用布局 | **已上报**（P1） |
+| [GH-#24](https://github.com/zgy-beep/ui-kit/issues/24) | 异步存储的迟到读写会恢复旧布局 | **已上报**（P2） |
+| [GH-#25](https://github.com/zgy-beep/ui-kit/issues/25) | 归一化后相同的面板 ID 共用存储键 | **已上报**（P2） |
+| [GH-#26](https://github.com/zgy-beep/ui-kit/issues/26) | Home 复位后旧存档高度被立即回填 | **已上报**（P2） |
+| [GH-#27](https://github.com/zgy-beep/ui-kit/issues/27) | 面板 ID 为 -1 时方向键切换标签抛出选择器异常 | **已上报**（P3） |
+| [GH-#28](https://github.com/zgy-beep/ui-kit/issues/28) | 退场期间重开会丢失原触发按钮的焦点归还 | **已上报**（P3） |
+| [GH-#29](https://github.com/zgy-beep/ui-kit/issues/29) | 重复 destroy 触发两次回调，销毁后 open 重挂监听 | **已上报**（P3） |
 
 > `ROADMAP.md` 于 2026-11-16 补建：此前三个 open issue 均引用该文件，但仓库从未提交过（`git log --all -- ROADMAP.md` 为空），属**死链**，现已修复。
 
@@ -98,11 +105,19 @@
 
 ## 待修复
 
+> **2026-11-17 v3.1.0 审查**。GH-#23–GH-#29 均在真实 SillyTavern 页面上用 Chromium 157 复现。宿主主路径 35/35、深水区 19/19、E2E 58/58，含此前跳过的 6 项。
+
 > **2026-10-21 系统性 Review 第一轮（NEW-25 ~ NEW-34）与第二轮多 Agent 团队深度审计（NEW-35 ~ NEW-46）**：排查出的共 22 项缺陷已**全部修复并通过实机复验**，记录已移入下方「已验证」区。
 
 | # | 类别 | 严重度 | 问题 | 影响范围 | 修复方案 | 状态 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| — | — | — | **暂无**（两轮全部闭环并经实机验证） | — | — | — |
+| [GH-#23](https://github.com/zgy-beep/ui-kit/issues/23) | 持久化 | P1 | setLayoutState 导入后重新打开同一面板未应用布局 | 同一实例关闭再开仍为 `a / 720px / 折叠`，存储已是 `b / 912px / 展开`。 | 见 GitHub issue 验收项 | 已上报 |
+| [GH-#24](https://github.com/zgy-beep/ui-kit/issues/24) | 持久化 | P2 | 异步存储的迟到读写会恢复旧布局 | 清空后迟到的读取恢复了 `b / 910px`。两笔保存逆序完成时界面是 `a`，存储是 `b`。 | 见 GitHub issue 验收项 | 已上报 |
+| [GH-#25](https://github.com/zgy-beep/ui-kit/issues/25) | 持久化 | P2 | 归一化后相同的面板 ID 共用存储键 | `plugin one` 与 `plugin_one` 获得不同 DOM ID，却共享 `nvui_state_plugin_one` 并互相覆盖标签。 | 见 GitHub issue 验收项 | 已上报 |
+| [GH-#26](https://github.com/zgy-beep/ui-kit/issues/26) | 调尺寸 | P2 | Home 复位后旧存档高度被立即回填 | 由 `810×450` 的存档启动，按 Home 后宽度回到 `720px`，`--nvui-panel-h` 仍是 `450px`。 | 见 GitHub issue 验收项 | 已上报 |
+| [GH-#27](https://github.com/zgy-beep/ui-kit/issues/27) | 可访问性 | P3 | 面板 ID 为 -1 时方向键切换标签抛出选择器异常 | `id: '-1'` 的面板切到 `b` 时，`querySelector('#-1-tab-b')` 抛异常，焦点无法随之移动。 | 见 GitHub issue 验收项 | 已上报 |
+| [GH-#28](https://github.com/zgy-beep/ui-kit/issues/28) | 可访问性 | P3 | 退场期间重开会丢失原触发按钮的焦点归还 | 退场期间取消关闭并重开后，最终关闭把焦点还给第一个按钮，原触发按钮是第二个。 | 见 GitHub issue 验收项 | 已上报 |
+| [GH-#29](https://github.com/zgy-beep/ui-kit/issues/29) | 生命周期 | P3 | 重复 destroy 触发两次回调，销毁后 open 重挂监听 | 销毁回调执行 2 次；旧控制器调用 `open()` 后，dialog 仍脱离 DOM，`resize` 监听数从 0 变 1。 | 见 GitHub issue 验收项 | 已上报 |
 
 > **历史记录（2026-10-20 系统性 Review）**：共 24 条（高 7 / 中 10 / 低 7），已全部闭环（13 条高危/中危 + 9 条中低危已修复并实机验证，2 条经实机证伪转入「已确认-不修」区）。
 
