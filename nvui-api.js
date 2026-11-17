@@ -1487,33 +1487,64 @@
         }
     };
 
-    /**
-     * 辅助清理接口：清除指定面板在存储中的历史布局记忆。
-     * 可选传入自定义 storageAdapter，默认使用 defaultStorageAdapter。
-     */
+    var storageQueues = new WeakMap();
+
+    function queuedLayoutMutation(storage, key) {
+        var queue = storageQueues.get(storage);
+        return queue && queue.get(key);
+    }
+
+    /* Synchronous adapters keep their immediate behavior. Promise adapters serialize
+       mutations for the same store and key, even across panel instances. */
+    function mutateStoredLayout(storage, key, mutate, onError) {
+        var pending = queuedLayoutMutation(storage, key);
+        try {
+            var result = pending ? pending.then(mutate) : mutate();
+            if (!result || typeof result.then !== 'function') return;
+            var queue = storageQueues.get(storage);
+            if (!queue) {
+                queue = new Map();
+                storageQueues.set(storage, queue);
+            }
+            var operation = Promise.resolve(result).catch(onError);
+            queue.set(key, operation);
+            operation.then(function () {
+                if (queue.get(key) === operation) queue.delete(key);
+            });
+        } catch (err) {
+            onError(err);
+        }
+    }
+
+    function layoutStorageKeys(id) {
+        var raw = String(id);
+        var normalized = sanitizeIdPart(raw, 'nvui-panel');
+        var legacy = 'nvui_state_' + normalized;
+        if (raw === normalized) return { key: legacy, legacy: null, owner: raw };
+        /* The colon separates encoded IDs from every legacy key. Encode by code
+           unit so even an unpaired surrogate has a stable key. */
+        var encoded = raw.replace(/[^A-Za-z0-9_-]/g, function (c) {
+            return '%' + ('000' + c.charCodeAt(0).toString(16)).slice(-4);
+        });
+        return { key: 'nvui_state_:' + encoded, legacy: legacy, owner: raw };
+    }
+
+    /** 清除指定面板的布局记忆。旧键可能属于另一个面板，不能一并删除。 */
     function clearLayoutState(id, storageAdapter) {
         if (!id) return;
-        var key = 'nvui_state_' + sanitizeIdPart(String(id), 'nvui-panel');
+        var keys = layoutStorageKeys(id);
         var storage = storageAdapter || defaultStorageAdapter;
-        try {
-            if (typeof storage.delete === 'function') {
-                var delResult = storage.delete(key);
-                if (delResult && typeof delResult.catch === 'function') {
-                    delResult.catch(function (err) {
-                        warn('clearLayoutState(): 异步清除存储状态失败', err);
-                    });
-                }
-            } else if (typeof storage.set === 'function') {
-                var sResult = storage.set(key, null);
-                if (sResult && typeof sResult.catch === 'function') {
-                    sResult.catch(function (err) {
-                        warn('clearLayoutState(): 异步清除存储状态失败', err);
-                    });
-                }
+        mutateStoredLayout(storage, keys.key, function () {
+            if (keys.legacy && typeof storage.set === 'function') {
+                /* An empty record prevents an ambiguous legacy value from
+                   restoring a layout after the encoded ID was cleared. */
+                return storage.set(keys.key, {
+                    version: 2, size: null, tab: null, accordion: null, storageOwner: keys.owner,
+                });
             }
-        } catch (e) {
-            warn('clearLayoutState(): 清理存储状态失败', e);
-        }
+            if (typeof storage.delete === 'function') return storage.delete(keys.key);
+            if (typeof storage.set === 'function') return storage.set(keys.key, null);
+        }, function (err) { warn('clearLayoutState(): 清理存储状态失败', err); });
     }
 
     /** 读取当前视口尺寸，优先以 window.innerWidth/innerHeight 为准以适配移动端模拟与缩放 */
@@ -2072,7 +2103,7 @@
 
     /* ---------------------- 面板持久化子系统（G-01 第二步） ---------------------- */
     /*
-     * 从 createPanel() 抽出的持久化 / 视口钳制子系统（7 个函数、约 330 行）。
+     * 从 createPanel() 抽出的持久化与视口钳制子系统。
      * ctx 只暴露能力，不捕获 createPanel 的局部变量：
      *   panel / overlay       DOM 宿主
      *   opts / id             createPanel 原始配置与已解析的 DOM id（storageKey 兜底）
@@ -2087,7 +2118,7 @@
      *   warn                  日志
      *
      * 生命周期：bootstrap()（读存储 + 装 ResizeObserver）→ onOpen()/onClose()
-     * 每次开合绑定/解绑 resize → cleanup()（**先 flush 再收尾**）→ 调用方置 disposed。
+     * 每次开合绑定/解绑 resize，销毁时 cleanup() 冲刷布局并断开观察器。
      * 顺序不能反：先关门会让最后一次状态被 isDisposed 拦掉。
      */
     function createPersistence(ctx) {
@@ -2119,14 +2150,23 @@
         } else if (opts.persist) {
             ctx.warn('createPanel(): 无效 persist 配置，已忽略');
         }
-        var storageKey = 'nvui_state_' + sanitizeIdPart(opts.id || id, 'nvui-panel');
+        var storageId = opts.id || id;
+        var keys = layoutStorageKeys(storageId);
+        var storageKey = keys.key;
         var storage = persistConfig ? persistConfig.storage : null;
         var loadedState = null;
         var isRestoring = false;
         var isInitialized = false;
-        var hasSaved = false;
+        var lastSavedState = null;
+        var readGeneration = 0;
+        /* An import can finish writing before it takes effect on the next open. */
+        var viewPending = null;
+        /* Avoid writing the DOM snapshot produced by an import or a reset until it changes. */
+        var transientBaseline = null;
+        var useCssHeight = false;
         var persistTimer = null;
         var resizeRaf = null;
+        var resizeBound = false;
         var resizeObserver = null;
         /* setLayoutState() 导入的状态：下一次 flush 按它原样写，不用 DOM 反解覆盖 */
         var pendingState = null;
@@ -2141,8 +2181,11 @@
             return !!(persistConfig && (persistConfig.size || persistConfig.tab || persistConfig.accordion));
         }
 
-        function schedulePersistSave() {
+        function schedulePersistSave(automatic) {
             if (!persistConfig || isRestoring || ctx.isDisposed() || !anyPersistEnabled()) return;
+            if (!automatic) transientBaseline = null;
+            readGeneration += 1;
+            isInitialized = true;
             if (persistTimer) clearTimeout(persistTimer);
             persistTimer = setTimeout(function () {
                 persistTimer = null;
@@ -2182,9 +2225,9 @@
                     var vh = readPanelSize(panel, 'height');
                     if (vh !== null) {
                         currentH = vh;
-                    } else if (panel.offsetHeight > 0 && !isMobile) {
+                    } else if (!useCssHeight && panel.offsetHeight > 0 && !isMobile) {
                         currentH = panel.offsetHeight;
-                    } else if (loadedState && loadedState.size && typeof loadedState.size.h === 'number') {
+                    } else if (!useCssHeight && loadedState && loadedState.size && typeof loadedState.size.h === 'number') {
                         currentH = loadedState.size.h;
                     }
                 }
@@ -2239,8 +2282,8 @@
                 };
         }
 
-        function flushPersistSave(force) {
-            if (!persistConfig || ctx.isDisposed() || !anyPersistEnabled()) {
+        function flushPersistSave(force, disposing) {
+            if (!persistConfig || (ctx.isDisposed() && !disposing) || !anyPersistEnabled()) {
                 return;
             }
             var hadTimer = !!persistTimer;
@@ -2248,31 +2291,29 @@
                 clearTimeout(persistTimer);
                 persistTimer = null;
             }
-            try {
-                /* setLayoutState() 导入的状态优先：它表达的是「下次打开复原成什么样」，
-                   可能故意与当前视图不同，不能被 DOM 反解覆盖。写完即弃。 */
-                var toSave = pendingState || collectState();
-                pendingState = null;
+            if (!pendingState && (!isInitialized || viewPending)) return;
+            var wasImported = !!pendingState;
+            var toSave = pendingState || collectState();
+            pendingState = null;
+            if (!wasImported && isStateEqual(toSave, transientBaseline)) return;
+            if (!wasImported) transientBaseline = null;
+            if (!hadTimer && !force && isStateEqual(toSave, lastSavedState)) return;
 
-                if (!hadTimer && hasSaved && !force && isStateEqual(toSave, loadedState)) {
-                    return;
+            if (!wasImported) loadedState = toSave;
+            lastSavedState = toSave;
+            var record = Object.assign({}, toSave, { storageOwner: keys.owner });
+            mutateStoredLayout(storage, storageKey, function () {
+                return storage.set(storageKey, record);
+            }, function (err) {
+                if (lastSavedState === toSave) {
+                    lastSavedState = null;
+                    if (wasImported && !pendingState) pendingState = toSave;
                 }
-
-                loadedState = toSave;
-                hasSaved = true;
-                var saveResult = storage.set(storageKey, toSave);
-                if (saveResult && typeof saveResult.catch === 'function') {
-                    saveResult.catch(function (err) {
-                        ctx.warn('flushPersistSave(): 异步保存状态失败', err);
-                    });
-                }
-                debug('flushPersistSave(): 已保存面板状态 key=' + storageKey);
-            } catch (e) {
-                ctx.warn('flushPersistSave(): 保存布局状态失败', e);
-            }
+                ctx.warn('flushPersistSave(): 保存布局状态失败', err);
+            });
         }
 
-        function applyLoadedState(saved) {
+        function applyLoadedState(saved, resetMissing) {
             if (!saved || typeof saved !== 'object') {
                 isInitialized = true;
                 return;
@@ -2280,6 +2321,7 @@
             /* v3.0.0：存档可能是 v1（v2.9.0 及更早写下的）。统一迁移到 v2 再读，
                写回时自然落成 v2 —— 下游不需要为迁移做任何事。 */
             saved = migrateStateV1toV2(saved) || saved;
+            loadedState = saved;
             isRestoring = true;
             try {
                 /* Issue #16：persist.size:false 时，「不恢复尺寸」还不够 ——
@@ -2303,6 +2345,7 @@
                     var widthOnly = persistConfig.size === 'width-only';
                     var maximized = !widthOnly && saved.size.mode === 'maximized';
                     panel.classList.toggle('is-maximized', maximized);
+                    useCssHeight = saved.size.h === null && !maximized;
                     var clamped = clampPanelLayout({ width: saved.size.w, height: saved.size.h }, saved.position, opts);
                     if (clamped.isMobile) {
                         clearPanelSize(panel);
@@ -2312,6 +2355,10 @@
                         writePanelSize(panel, clamped.styleWidth || null,
                             (!widthOnly && clamped.styleHeight) ? clamped.styleHeight : null);
                     }
+                } else if (resetMissing && persistConfig.size) {
+                    panel.classList.remove('is-maximized');
+                    useCssHeight = true;
+                    clearPanelSize(panel);
                 }
 
                 // 2. 恢复 Tab（支持数值 0 及失效/删除 key 优雅回退）
@@ -2333,16 +2380,21 @@
                         ctx.warn('applyLoadedState(): 存储中的标签 key "' + rawSavedKey + '" 不存在或已失效，已回退到首个可用标签');
                         ctx.setTabByDom(tabList[0].domKey);
                     }
+                } else if (resetMissing && persistConfig.tab && ctx.tabs().length) {
+                    ctx.setTabByDom(ctx.tabs()[0].domKey);
                 }
 
                 // 3. 恢复 Accordion
-                if (persistConfig && persistConfig.accordion && saved.accordion) {
+                if (persistConfig.accordion && (saved.accordion || resetMissing)) {
                     var registry = ctx.accordion();
                     for (var a = 0; a < registry.list.length; a++) {
                         var item = registry.list[a];
-                        if (Object.prototype.hasOwnProperty.call(saved.accordion, item.id)
+                        if (!registry.isLive(item)) continue;
+                        if (saved.accordion && Object.prototype.hasOwnProperty.call(saved.accordion, item.id)
                             && typeof saved.accordion[item.id] === 'boolean') {
                             item.node.setOpen(saved.accordion[item.id]);
+                        } else if (resetMissing) {
+                            item.node.setOpen(false);
                         }
                     }
                 }
@@ -2372,7 +2424,7 @@
             /* B3：宽/高分别判定 —— 'width-only' 只读存档宽度，高度一律交给下游 CSS。 */
             var mode = sizeMode();
             var useSavedW = mode !== 'off';
-            var useSavedH = mode === 'full';
+            var useSavedH = mode === 'full' && !useCssHeight;
 
             var targetW = readPanelSize(panel, 'width');
             if (targetW === null) {
@@ -2401,6 +2453,12 @@
             }
         }
 
+        function setPanelSize(w, h) {
+            useCssHeight = h === null;
+            writePanelSize(panel, w, h);
+            applyClamping();
+        }
+
         var onWindowResize = function () {
             if (overlay.hidden || overlay.classList.contains('is-closing')) return;
             if (resizeRaf) cancelAnimationFrame(resizeRaf);
@@ -2412,22 +2470,33 @@
             });
         };
 
-        function bindWindowResize() {
+        function bindWindowResize(opening) {
             if (!persistConfig) return;
+            var layout = opening ? viewPending : null;
+            if (layout) {
+                viewPending = null;
+                applyLoadedState(layout, true);
+            }
             applyClamping();
-            on(window, 'resize', onWindowResize);
+            if (opening && (layout || transientBaseline)) transientBaseline = collectState();
+            if (!resizeBound) {
+                on(window, 'resize', onWindowResize);
+                resizeBound = true;
+            }
         }
 
         function unbindWindowResize() {
-            try { off(window, 'resize', onWindowResize); } catch (e) {}
+            if (resizeBound) {
+                off(window, 'resize', onWindowResize);
+                resizeBound = false;
+            }
             if (resizeRaf) { cancelAnimationFrame(resizeRaf); resizeRaf = null; }
         }
 
         function cleanup() {
             if (persistConfig) {
                 unbindWindowResize();
-                /* 先冲刷最后一次状态，再让调用方置 disposed —— 顺序不能反 */
-                flushPersistSave();
+                flushPersistSave(false, true);
                 if (resizeObserver) {
                     try { resizeObserver.disconnect(); } catch (e) {}
                     resizeObserver = null;
@@ -2439,7 +2508,7 @@
            布局态是「宽高 + 标签 + 折叠」，时间戳属于存储记录，带上就破坏了
            `get → set → get` 的深相等。 */
         function getLayoutState() {
-            var snapshot = cloneLayoutState(pendingState || collectState());
+            var snapshot = cloneLayoutState(viewPending || collectState());
             /* 时间戳是存储记录元数据，不属于布局本身：留着会让两次 get 天然不等 */
             if (snapshot) delete snapshot.timestamp;
             return snapshot;
@@ -2452,6 +2521,7 @@
          * #16 的「尺寸隔离」就被绕过了。 */
         function setLayoutState(state, options) {
             var silent = !!(options && options.silent);
+            if (ctx.isDisposed()) return null;
             if (!persistConfig || !anyPersistEnabled()) {
                 ctx.warn('setLayoutState(): 本面板未启用持久化，已忽略');
                 return null;
@@ -2482,62 +2552,92 @@
             if (!persistConfig.tab) normalized.tab = loadedState ? loadedState.tab : null;
             if (!persistConfig.accordion) normalized.accordion = loadedState ? loadedState.accordion : null;
 
-            loadedState = normalized;
-            if (silent) {
-                /* 只动内存：下一次由真实交互触发的落盘仍以 DOM 为准 */
-                debug('setLayoutState(): silent，仅更新内存态');
-                return cloneLayoutState(normalized);
+            viewPending = normalized;
+            readGeneration += 1;
+            isInitialized = true;
+            if (!silent) {
+                pendingState = normalized;
+                schedulePersistSave();
             }
-            pendingState = normalized;
-            schedulePersistSave();
-            debug('setLayoutState(): 已导入布局并调度落盘');
             return cloneLayoutState(normalized);
         }
 
         function panelClearLayoutState() {
+            if (ctx.isDisposed()) return;
             if (persistTimer) {
                 clearTimeout(persistTimer);
                 persistTimer = null;
             }
-            /* 导入中的状态一并作废，否则清空后的第一次 flush 又把它写回去 */
+            viewPending = null;
             pendingState = null;
-            clearLayoutState(opts.id || id, storage);
+            readGeneration += 1;
+            isInitialized = true;
+            clearLayoutState(storageId, storage);
             loadedState = null;
-            hasSaved = false;
+            lastSavedState = null;
             clearPanelSize(panel);
+            useCssHeight = false;
             panel.classList.remove('is-maximized');
-            var tabList = ctx.tabs();
-            if (tabList.length) {
-                ctx.setTabByDom(tabList[0].domKey);
+            isRestoring = true;
+            try {
+                var tabList = ctx.tabs();
+                if (tabList.length) ctx.setTabByDom(tabList[0].domKey);
+                var registry = ctx.accordion();
+                for (var a = 0; a < registry.list.length; a++) {
+                    if (registry.isLive(registry.list[a])) registry.list[a].node.setOpen(false);
+                }
+                var nav = ctx.tabsNav();
+                if (nav) ctx.syncTabsIndicator(nav, false);
+            } finally {
+                isRestoring = false;
             }
-            var registry = ctx.accordion();
-            for (var a = 0; a < registry.list.length; a++) {
-                if (registry.isLive(registry.list[a])) registry.list[a].node.setOpen(false);
-            }
-            var nav = ctx.tabsNav();
-            if (nav) ctx.syncTabsIndicator(nav, false);
+            transientBaseline = collectState();
         }
 
         /* 读存储 + 装 ResizeObserver：createPanel 构建完 DOM 后调用一次 */
         function bootstrap() {
             if (!persistConfig) return;
-            try {
-                var raw = storage.get(storageKey);
-                if (raw && typeof raw.then === 'function') {
-                    raw.then(function (val) {
-                        loadedState = val;
-                        applyLoadedState(loadedState);
-                    }).catch(function (err) {
-                        ctx.warn('createPanel(): 异步读取存储失败', err);
-                        isInitialized = true;
-                    });
-                } else {
-                    loadedState = raw;
-                    applyLoadedState(loadedState);
+            var generation = readGeneration;
+            function current() {
+                return !ctx.isDisposed() && generation === readGeneration;
+            }
+            function read(key) {
+                if (!current()) return null;
+                var pending = queuedLayoutMutation(storage, key);
+                return pending ? pending.then(function () { return current() ? storage.get(key) : null; })
+                    : storage.get(key);
+            }
+            function accept(state) {
+                if (current()) applyLoadedState(state);
+            }
+            function resolvePrimary(state) {
+                if (!current()) return;
+                if (state != null || !keys.legacy) {
+                    accept(state);
+                    return;
                 }
-            } catch (err) {
-                ctx.warn('createPanel(): 读取存储异常', err);
+                var legacy = read(keys.legacy);
+                function acceptLegacy(value) {
+                    /* New records identify their owner. An old unmarked key
+                       is ambiguous and may be imported as a legacy fallback. */
+                    accept(value && (!value.storageOwner || value.storageOwner === keys.owner) ? value : null);
+                }
+                if (legacy && typeof legacy.then === 'function') return Promise.resolve(legacy).then(acceptLegacy);
+                acceptLegacy(legacy);
+            }
+            function readFailed(err) {
+                if (!current()) return;
+                ctx.warn('createPanel(): 读取存储失败', err);
                 isInitialized = true;
+            }
+            try {
+                var raw = read(storageKey);
+                var loading = raw && typeof raw.then === 'function'
+                    ? Promise.resolve(raw).then(resolvePrimary)
+                    : resolvePrimary(raw);
+                if (loading) loading.catch(readFailed);
+            } catch (err) {
+                readFailed(err);
             }
 
             var lastObservedW = null;
@@ -2565,7 +2665,7 @@
                         if (curW === lastObservedW && curH === lastObservedH) return;
                         lastObservedW = curW;
                         lastObservedH = curH;
-                        schedulePersistSave();
+                        schedulePersistSave(true);
                     });
                     resizeObserver.observe(panel);
                 } catch (e) {
@@ -2587,8 +2687,9 @@
             scheduleIfSize: function () {
                 if (persistConfig && persistConfig.size) schedulePersistSave();
             },
-            flush: flushPersistSave,
+            flush: function (force) { flushPersistSave(force); },
             applyClamping: applyClamping,
+            setSize: setPanelSize,
             bootstrap: bootstrap,
             onOpen: bindWindowResize,
             onClose: function () {
@@ -3170,10 +3271,9 @@
             if (isDisposed()) return;
             /* 手柄不自己算边界，也不自己选载体：一律「落目标尺寸 → applyClamping()」，
                钳制 / 移动端 / 持久化 / legacy 开关的语义才和 setSize() 完全一致。 */
-            writePanelSize(panel,
+            persist.setSize(
                 (typeof w === 'number' && isFinite(w)) ? w : null,
                 (typeof h === 'number' && isFinite(h)) ? h : null);
-            persist.applyClamping();
             persist.scheduleIfSize();
             syncValue();
         }
@@ -3188,7 +3288,10 @@
             else if (event.key === 'ArrowRight') write(w + step, h);
             else if (event.key === 'ArrowUp') write(w, h - step);
             else if (event.key === 'ArrowDown') write(w, h + step);
-            else if (event.key === 'Home') write(defaultWidth(), null);
+            else if (event.key === 'Home') {
+                panel.classList.remove('is-maximized');
+                write(defaultWidth(), null);
+            }
             else handled = false;
             if (!handled) return;
             /* 阻止滚动 / 宿主快捷键，并让 Esc 之外的方向键留在手柄上 */
@@ -3434,8 +3537,7 @@
             tabs.push({ key: origKey, domKey: domKey, label: t.label, icon: t.icon });
         });
 
-        /* 标签控制器（G-01 第四步）：activeDom 从此由它独占。
-           ctx 全部 getter —— 此处 tabsNav / bottomNav 还没建出来。 */
+        /* 标签控制器独占 activeDom，导航节点初始化后由 getter 读取。 */
         tabCtl = createTabController({
             id: id,
             persist: persist,
@@ -3575,6 +3677,8 @@
         persist.bootstrap();
 
         function openPanel() {
+            if (disposed) return;
+            var opening = !dialog.open || overlay.classList.contains('is-closing');
             if (!dialog.open) opener = document.activeElement;
             openLayer(dialog, overlay);
             /* NEW-29：打开面板时提升 Esc 调度栈位置至最顶层 */
@@ -3584,7 +3688,7 @@
             if (hasThemeToggle && themeToggleBtn && typeof updateThemeToggleUi === 'function') {
                 updateThemeToggleUi(isCurrentLight());
             }
-            persist.onOpen();
+            persist.onOpen(opening);
             focusChain.focusBody();
             if (tabsNav) {
                 setTimeout(function () { syncTabsIndicator(tabsNav, false); }, 0);
@@ -3592,6 +3696,7 @@
         }
 
         function closePanel() {
+            if (disposed) return;
             persist.onClose();
             closeLayer(dialog, overlay, function () {
                 focusChain.restoreFocus();
@@ -3667,6 +3772,10 @@
          * 摘除动作本身幂等（removed 标志），重复触发无害。
          */
         function destroy() {
+            if (disposed) return;
+            disposed = true;
+            persist.cleanup();
+            cancelLayerClose(overlay);
             glassCtl.dispose();
             restoreForeignNodes(dialog);
             unregisterEscapeHandler(closePanel);
@@ -3688,9 +3797,6 @@
                 updateCtl.clear();
             }
             opener = null;
-            /* 先冲刷最后一次状态，再置 disposed —— 顺序不能反，否则 flush 会被拦掉 */
-            persist.cleanup();
-            disposed = true;
             acc.unbindAll();
             scrollFade.dispose(); if (resizeGrip) resizeGrip.dispose();
             if (typeof opts.destroy === 'function') opts.destroy();
@@ -3739,9 +3845,8 @@
             setLayoutState: persist.setLayout,
             flushPersistSave: persist.flush,
             setSize: function (w, h) {
-                /* 载体由 writePanelSize 决定（变量 / legacy 内联） */
-                writePanelSize(panel, (typeof w === 'number') ? w : null, (typeof h === 'number') ? h : null);
-                persist.applyClamping();
+                if (disposed) return;
+                persist.setSize(Number.isFinite(w) ? w : null, Number.isFinite(h) ? h : null);
                 persist.scheduleIfSize();
             },
             setMaximized: function (v) {

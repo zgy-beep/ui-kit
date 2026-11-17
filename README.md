@@ -1833,7 +1833,7 @@ v2.4.0 是**小版本**：新增宿主模态共存机制与 3 个可选 API，�
 
 **高频 FAQ**
 
-- **多个插件用同一个 panel id 会冲突吗？** 不会。持久化键是 `nvui_state_<归一化后的 id>`，`createPanel` 内部会归一化并为重复 id 附加唯一后缀。仍建议 id 带插件命名空间（如 `translator_panel`）。
+- **多个插件用同一个 panel id 会冲突吗？** `createPanel` 会为 DOM ID 去重，使用同一个显式原始 ID 的面板仍共享布局记忆。请为不同插件使用不同的 ID（如 `translator_panel`）。原始 ID 无需归一化时沿用 `nvui_state_<id>`。需要归一化的 ID 使用独立编码键，旧存档可从历史键回退读取。
 - **4K 大屏调大的面板换到手机会飞出屏幕吗？** 不会。v2.5.0 起有视口钳制：手机 ≤600px 强制回退到底部抽屉；桌面按视口边界（留 16px 安全边距）钳制，标题栏与关闭按钮始终可达。可用 `NVUI.clearLayoutState(id)` 或 `panel.clearLayoutState()` 重置。
 - **频繁拖拽 / 切 tab 会不会狂写存储？** 不会。内部 250ms 防抖合并写入，面板关闭与 `destroy()` 时安全冲刷。
 

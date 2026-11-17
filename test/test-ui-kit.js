@@ -2350,8 +2350,8 @@ check('nvui-api: clampPanelLayout 离线/Node 安全（无 DOM 时返回默认�
 check('nvui-api: 状态持久化由 createPersistence 封装，内置 250ms 防抖与生命周期 flush 冲刷',
     /function createPersistence\(ctx\)/.test(apiSrc)
     && /PERSIST_DEBOUNCE_MS/.test(apiSrc)
-    && /function schedulePersistSave\(\)/.test(apiSrc)
-    && /function flushPersistSave\(force\)/.test(apiSrc)
+    && /function schedulePersistSave\b/.test(apiSrc)
+    && /function flushPersistSave\b/.test(apiSrc)
     && /function cleanup\(\)/.test(apiSrc)
     && /persist\.bootstrap\(\)/.test(apiSrc)
     && /persist\.cleanup\(\)/.test(apiSrc));
